@@ -1,0 +1,20 @@
+The goal of this first step of formalization was to get a clear idea
+of the path followed in the PatrignaniASJCP15 paper mentioned below,
+and to play a bit with Coq and SSReflect.
+
+I formalized (a notion of) contextual equivalence, defined full
+abstraction out of it, and proved simple properties.
+
+Some comments in the code mention papers from the list below:
+
+PatrignaniASJCP15:
+  Secure Compilation to Protected Module Architectures
+  http://people.cs.kuleuven.be/~marco.patrignani/Publications_files/scoo-j.pdf
+
+PatrignaniC15:
+  Fully Abstract Trace Semantics for Protected Module Architectures
+  http://people.cs.kuleuven.be/~marco.patrignani/Publications_files/llfatr-j.pdf
+
+JeffreyR05:
+  Java Jr.: Fully abstract trace semantics for a core Java language
+  http://ect.bell-labs.com/who/ajeffrey/papers/esop05.pdf
