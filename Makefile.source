@@ -1,7 +1,0 @@
--R . FullAbstraction
-
-samerelation.v
-language.v
-contextualequivalence.v
-fullabstraction.v
-patrignani.v
