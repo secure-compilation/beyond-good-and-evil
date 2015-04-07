@@ -1,0 +1,129 @@
+================================================================================
+| Syntax
+================================================================================
+
+C - class name -- mapped to class declarations L (CT)
+f - field name
+m - method name
+o - object names -- mapped to object declarations O (OT)
+
+L ::=                        class declaration
+  class {C1 f1, ..., Cn fn;    field declarations
+            M1, ...,    Mm}    method declarations
+
+O ::=                        object declaration
+  obj C {o1, ..., on}
+
+M ::=                        method declaration
+  Cr m (Ca)                    result and arg type
+    { e }                      method body
+
+x ::=
+  | this
+  | arg
+
+e ::=                        expressions
+  | x                          variables
+  | o                          object reference
+  | e.f                        field selection
+  | e.m(e)                     method call
+
+================================================================================
+| Operational semantics
+================================================================================
+
+OT(o) = obj C {o1, ..., on}
+CT(C) = class {C1 f1, ..., Cn fn; ...}
+i in [1,n]
+--------------------------------------
+o.fi --> oi
+
+
+OT(o) = obj C {o1, ..., on}
+CT(C) = class {...; M1, ..., Mm }
+Mi = Cr mi(Ca) { e }
+i in [1,m]
+--------------------------------
+o.mi(oa) --> e[oa/arg][o/this]
+
+
+e1 --> e1'
+------------------------
+e1.mi(e2) --> e1'.mi(e2)
+
+
+e --> e'
+--------------------
+o.mi(e) --> o.mi(e')
+
+================================================================================
+| Type system
+================================================================================
+
+Object declaration typing:
+
+classof(o) = C   if OT(o) = obj C {...}
+
+CT(C) = class {C1 f1, ..., Cn fn; ...}
+forall i. classof(oi) = Ci
+--------------------------------------
+|- obj C {o1, ..., on} ok
+
+--------------------------------------------------------------------------------
+
+Expression typing:
+
+G ::= {this:Ct, arg:Ca}
+
+G |- x : G(x)
+
+G |- o : classof(o)
+
+G |- e : C
+CT(C) = class {C1 f1, ..., Cn fn; ...}
+i in [1,n]
+--------------------------------------
+G |- e.fi : Ci
+
+G |- e : C
+CT(C) = class {...; M1, ..., Mm}
+i in [1,m]
+Mi = Cr mi(Ca) { ... }
+G |- ea : Ca
+--------------------------------
+G |- e.m(ea) : Cr
+
+--------------------------------------------------------------------------------
+
+Method typing:
+
+CT(C) = class {...; M1, ..., Mm}
+i in [1,m]
+Mi = Cr mi(Ca) { e }
+{this:C, arg:Ca} |- e : Cr
+--------------------------
+C |- Cr mi(Ca) { e } ok
+
+--------------------------------------------------------------------------------
+
+Class typing:
+
+CT(C) = class {C1 f1, ..., Cn fn; M1, ..., Mm}
+forall i. C |- Mi ok
+----------------------------------------------
+|- C ok
+
+================================================================================
+| Encoding tuples
+================================================================================
+
+For each tuple type T=(C1, ..., Cn)
+
+class Unit {}
+
+class Tuple_T {C1 f_1, ..., Cn f_n,
+               C1 get_1(Unit) { this.f_1 },
+               ...
+               C1 get_n(Unit) { this.f_n },
+}
+
