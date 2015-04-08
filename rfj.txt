@@ -277,18 +277,24 @@ c_expr(e1 == e2 ? e3 : e4) =
 LST:c_expr(e3);
 END:Nop
 
-Q: How to represent the auxiliary stack?
+Q: How to represent the auxiliary stack of saved registers?
 - globally, accessed via system calls
   - could be merged with global call stack:
     - stack frames between return addresses
     - Pop can't affect return addresses, only Return can
 - locally, each compartment keeps its own stack
+  - would work well with all alts below
 
 --------------------------------------------------------------------------------
 
   Variant #2: - everything directly via instructions
                 - monitor call only for index_to_addr (later object allocation)
               - fine-grained micro-policy
+              - TODO: still unclear what to do with the stack(s)
+                - alt1: keep using monitor service for call stack
+                - alt2: protected call stack outside the monitor
+                        (micro-policy for call-stack protection)
+                - alt3: lightweight return addr protection + only local stacks
 
 c_expr(e.f) =
     c_expr(e);
