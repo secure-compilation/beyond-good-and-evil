@@ -27,6 +27,7 @@ e ::=                        expressions
   | o                          object reference
   | e.f                        field selection
   | e.m(e)                     method call
+  | e == e ? e : e             object identity test
 
 ================================================================================
 | Operational semantics
@@ -46,6 +47,12 @@ i in [1,m]
 --------------------------------
 o.mi(oa) --> e[oa/arg][o/this]
 
+---------------------
+o == o ? e : e' --> e
+
+o <> o'
+-----------------------
+o == o' ? e : e' --> e'
 
 e1 --> e1'
 ------------------------
@@ -55,6 +62,15 @@ e1.mi(e2) --> e1'.mi(e2)
 e --> e'
 --------------------
 o.mi(e) --> o.mi(e')
+
+e1 --> e1'
+------------------------------------------
+e1 == e2 ? e3 : e4 --> e1' == e2 ? e3 : e4
+
+e2 --> e2'
+------------------------------------------
+o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
+
 
 ================================================================================
 | Type system
@@ -73,13 +89,14 @@ forall i. classof(oi) = Ci
 
 Expression typing:
 
-G ::= {this:Ct, arg:Ca}
+G ::= {} | {this:Ct, arg:Ca}
 
 G |- x : G(x)
 
 G |- o : classof(o)
 
 G |- e : C
+G(this) = C                                     ensure privacy of fields
 CT(C) = class {C1 f1, ..., Cn fn; ...}
 i in [1,n]
 --------------------------------------
@@ -92,6 +109,13 @@ Mi = Cr mi(Ca) { ... }
 G |- ea : Ca
 --------------------------------
 G |- e.m(ea) : Cr
+
+G |- e1 : C'
+G |- e2 : C'
+G |- e3 : C
+G |- e4 : C
+---------------------------
+G |- (e1 == e2 ? e3 : e4) : C
 
 --------------------------------------------------------------------------------
 
@@ -114,8 +138,10 @@ forall i. C |- Mi ok
 |- C ok
 
 ================================================================================
-| Encoding tuples
+| Encodings
 ================================================================================
+
+Tuples:
 
 For each tuple type T=(C1, ..., Cn)
 
@@ -127,3 +153,122 @@ class Tuple_T {C1 f_1, ..., Cn f_n,
                C1 get_n(Unit) { this.f_n },
 }
 
+--------------------------------------------------------------------------------
+
+Booleans:
+
+class Bool {}
+
+obj true : Bool {}
+obj false : Bool {}
+
+If then else via identity test (== operator).
+
+================================================================================
+| Compilation scheme
+================================================================================
+
+Define two tables:
+
+  CIT (Class Index Table): maps classes to a number
+  OIT (Object Index Table): maps objects to a number
+
+And for each class:
+
+  fieldoffset(C, f)
+  methodoffset(C, m)
+
+--------------------------------------------------------------------------------
+
+New instructions in the abstract machine:
+
+mem[pc] = i
+decode[i] = Push r
+reg[r] = w
+---------------------------------------------
+(mem, reg, pc, s) -> (mem, reg, pc+1, w :: s)
+
+mem[pc] = i
+decode[i] = Pop r
+reg' = reg[r <- w]
+----------------------------------------------
+(mem, reg, pc, w :: s) -> (mem, reg', pc+1, s)
+
+mem[pc] = i
+decode[i] = Call rc rm ro rp
+reg[rc] = c
+reg[rm] = m
+reg[ro] = o
+reg[rp] = p
+
+----------------------------
+(mem, reg, pc, s) -> (mem, reg', pc', s)
+
+mem[pc] = i
+decode[i] = Ret
+??
+---------------
+??
+
+mem[pc] = i
+decode[i] = Get ro rd
+??
+-----------------------
+??
+
+--------------------------------------------------------------------------------
+
+Compilation of well-typed expressions:
+
+
+Fix four distinct registers: r_this, r_arg, r_res, r_aux.
+
+G = {this:Ct, arg:Ca} when compiling a method body.
+G = {} when compiling the main expression.
+
+c_expr(this) = Mov r_this r_res
+  (G(this) is defined in this case)
+
+c_expr(arg) = Mov r_arg r_res
+  (G(arg) is defined in this case)
+
+c_expr(o) = Const k r_res
+  if k = OAT(o)
+
+c_expr(e.f) =
+    c_expr(e);
+    Const a r_aux;
+    Binop_+ r_res r_aux r_aux;
+    Load r_aux r_res
+  if G |- e : C (deterministic)
+  and a = fieldoffset(C, f)
+
+c_expr(e.m(e')) =
+    c_expr(e);
+    Push r_res;
+    c_expr(e');
+    Pop r_aux;
+    Push r_this;
+    Push r_arg;
+    Mov r_aux r_this;
+    Mov r_res r_arg;
+    Const a r_aux;
+    Jal r_aux;
+    Pop r_arg;
+    Pop r_this
+  if G |- e : C (deterministic)
+  and a = CAT(C) + methodoffset(C, m)
+
+c_expr(e1 == e2 ? e3 : e4) =
+    c_expr(e1);
+    Push r_res;
+    c_expr(e2);
+    Pop r_aux;
+    Binop_- r_aux r_res r_aux;
+    Bnz r_aux k;
+    c_expr(e3);
+    Const 1 r_aux;                        } ugly relative jump
+    Bnz k' r_aux;                         } ^^^^^^^^^^^^^^^^^^
+    c_expr(e4)
+  if k = |c_expr(e3)| + 2
+  and k' = |c_expr(e4)|
