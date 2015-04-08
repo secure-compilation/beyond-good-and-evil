@@ -150,7 +150,7 @@ class Unit {}
 class Tuple_T {C1 f_1, ..., Cn f_n,
                C1 get_1(Unit) { this.f_1 },
                ...
-               C1 get_n(Unit) { this.f_n },
+               Cn get_n(Unit) { this.f_n },
 }
 
 --------------------------------------------------------------------------------
@@ -180,7 +180,7 @@ And for each class:
 
 --------------------------------------------------------------------------------
 
-New instructions in the abstract machine:
+Monitor services in the abstract machine:
 
 mem[pc] = i
 decode[i] = Push r
@@ -219,12 +219,20 @@ decode[i] = Get ro rd
 --------------------------------------------------------------------------------
 
 Compilation of well-typed expressions:
+  Variant #1: - doing everything via system calls
+              - protection via compartmentalization micro-policy
 
-
-Fix four distinct registers: r_this, r_arg, r_res, r_aux.
+Fix four distinct registers: r_this, r_arg, r_arg1, r_arg2, r_arg3, r_res (=r_ret), r_aux.
 
 G = {this:Ct, arg:Ca} when compiling a method body.
 G = {} when compiling the main expression.
+
+Properties of c_expr:
+- invariant: r_arg and r_this are preserved
+            (they can change internally, but are restored at the end)
+- can overwrite all other registers
+- writes result to r_res
+- finishes with same stack as it was called (restores the original stack)
 
 c_expr(this) = Mov r_this r_res
   (G(this) is defined in this case)
@@ -232,8 +240,55 @@ c_expr(this) = Mov r_this r_res
 c_expr(arg) = Mov r_arg r_res
   (G(arg) is defined in this case)
 
-c_expr(o) = Const k r_res
-  if k = OAT(o)
+c_expr(o) = Const o r_res
+
+c_expr(e.f) =
+    c_expr(e);
+    Mov r_res r_arg1;
+    Cons i_f r_arg2;
+    Jal SELECT
+  if G |- e : C (deterministic)
+  and i_f = fieldoffset(C, f)
+
+c_expr(e.m(e')) =
+    c_expr(e);
+    Push r_res;
+    c_expr(e');
+    Pop r_arg1;
+    Mov r_res r_arg2;
+    Const i_m r_arg3;
+    Push r_this;
+    Push r_arg;
+    Jal CALL
+    Pop r_arg;
+    Pop r_this
+  if G |- e : C (deterministic)
+  and i_m = methodoffset(C, m)
+
+c_expr(e1 == e2 ? e3 : e4) =
+    c_expr(e1);
+    Push r_res;
+    c_expr(e2);
+    Pop r_aux;
+    Binop_= r_aux r_res r_aux;
+    Bnz r_aux LST;
+    c_expr(e4);
+    Jump END;
+LST:c_expr(e3);
+END:Nop
+
+Q: How to represent the auxiliary stack?
+- globally, accessed via system calls
+  - could be merged with global call stack:
+    - stack frames between return addresses
+    - Pop can't affect return addresses, only Return can
+- locally, each compartment keeps its own stack
+
+--------------------------------------------------------------------------------
+
+  Variant #2: - everything directly via instructions
+                - monitor call only for index_to_addr (later object allocation)
+              - fine-grained micro-policy
 
 c_expr(e.f) =
     c_expr(e);
