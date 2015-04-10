@@ -349,6 +349,13 @@ Note: allowing returns to forged ra addresses seem ok because:
 - for select we preserve the same compartment id, so if the original
   value of ra was outside the compartment, the machine will stop on
   the next instruction fetch
+- generally, our impression is that a return to an arbitrary place in
+  the malicious component that invoked the service doesn't give the
+  attacker additional power (the malicious component can already jump
+  to any of its addresses); making this intuition formal in the full
+  abstraction proof might be hard (or impossible if the intuition
+  happens to be wrong), in which case we should require that monitor
+  services are only reached via Jal
 
 ================================================================================
 | Compilation scheme (old)
