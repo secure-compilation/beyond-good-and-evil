@@ -185,6 +185,7 @@ Syntax:
  | Copy (i | r) r                   copy register content
  | Select (i | r) f r               field selection
  | Call (i | r) m (i | r) r         method call
+ | Return ...                       TODO
  | Beq (i | r) (i | r) n            equality test with forward jump
                                     (skip n instructions if equal)
 
@@ -204,7 +205,11 @@ Syntax:
  stack ::= [] | o :: stack
  stacks ::= [] | stack :: stacks
 
- state ::= (program, stacks)
+ state ::= (program, stacks, call_stack, ?pc?)
+
+At this level we make no distinction between inter- and intra-
+compartment calls. If we were to need this distinction it would anyway
+be lower level.
 
 --------------------------------------------------------------------------------
 
@@ -246,9 +251,107 @@ c_expr(e1 == e2 ? e3 : e4) =
 EQ:  c_expr(e3);
 END: Nop
 
+================================================================================
+| Symbolic micro-policy (compartmentalization variant)
+================================================================================
+
+Many differences with respect to Oakland 2015 policy:
+  - Simplifications:
+    - static compartments, no way to split things
+    - no jump and write targets
+      (just a way for all compartments to call all monitor services)
+  - Extensions:
+    - prohibiting all intra-compartment reads
+    - protected call stack in monitor space
+    - monitor services for call, return, and select
+  - Differences:
+    - monitor services that return in a different compartment (call and return)
+
+--------------------------------------------------------------------------------
+
+Symbolic tags
+
+Tm  ::= c | _|_         once we have allocation, _|_ would be unallocated space
+Tr  ::= ()
+Tpc ::= c            Q: do we need to switch to <F,c> where F in {Jal,NoJal}?
+Ts  ::= ()
+
+--------------------------------------------------------------------------------
+
+Symbolic rules
+
+Nop: {tpc=c, tci=c} -> {tpc'=c}
+
+Const: {tpc=c, tci=c} -> {tpc'=c, trd'=()}
+
+Mov: {tpc=c, tci=c, trs=(), trd=()} -> {tpc'=c, trd'=()}
+
+Binop: {tpc=c, tci=c, tr1=(), tr2=()} -> {tpc'=c, trd'=()}
+
+Load: {tpc=c, tci=c, trp=(), tm=c, trd=()} -> {tpc'=c, trd'=()}
+
+Store: {tpc=c, tci=c, trp=(), trs=(), tm=c} -> {tpc'=c, tm'=c}
+
+Jump: {tpc=c, tci=c, tr=()} -> {tpc'=c}
+
+Jal: {tpc=c, tci=c, tr=(), tra=()} -> {tpc'=c, tra=()}
+
+Bnz: {tpc=c, tci=c, tr=()} -> {tpc'=c}
+
+Service: {tpc=c, tci=()} -> {}
+
+--------------------------------------------------------------------------------
+
+Extra state
+
+call_stack : list (word, word, word)
+
+lookup_method : obj -> nat -> option addr
+
+lookup_field : obj -> nat -> option addr
+
+--------------------------------------------------------------------------------
+
+Monitor services
+
+call(mem, reg, pc@c, (call_stack, obj_to_maddr, obj_to_faddr)) =
+  let o = reg[r_arg1] in
+  let arg = reg[r_arg2] in
+  let m = reg[r_arg3] in
+  ma <- lookup_method o m;
+  if tag mem[reg[ra]] = c then
+    let call_stack' = (reg[ra], reg[r_this], reg[r_arg]) :: call_stack in
+    let reg' = (clear_registers reg)[r_this := o, r_arg := arg] in
+    let c' = mem[ma] in
+    Some (mem, reg', ma@c', (call_stack', obj_to_maddr, obj_to_faddr))
+  else None
+
+return(mem, reg, pc@c, (call_stack, obj_to_maddr, obj_to_faddr)) =
+  match call_stack with
+  | (ret, this, arg) :: call_stack' ->
+    let reg' = (clear_registers reg)[r_ret := reg[r_ret],
+                                     r_this := this, r_arg := arg] in
+    let c' = mem[ret] in
+    Some (mem, reg', ret@c', (call_stack', obj_to_maddr, obj_to_faddr))
+  | [] -> None
+
+select(mem, reg, pc@c, (call_stack, obj_to_maddr, obj_to_faddr)) =
+  let o = reg[r_arg1] in
+  let f = reg[r_arg2] in
+  fa <- lookup_field o f;
+  let reg' = reg[r_ret := (val mem[fa])@()]
+  Some (mem, reg', ra@c, (call_stack, obj_to_maddr, obj_to_faddr))
+
+Note: allowing returns to forged ra addresses seem ok because:
+- for call we enforce that ra points to the caller's compartment
+  - alternatively, we could store the caller's compartment on the call
+    stack and restore it on return
+- for select we preserve the same compartment id, so if the original
+  value of ra was outside the compartment, the machine will stop on
+  the next instruction fetch
 
 ================================================================================
-| Compilation scheme
+| Compilation scheme (old)
 ================================================================================
 
 Define two tables:
