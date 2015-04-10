@@ -165,6 +165,89 @@ obj false : Bool {}
 If then else via identity test (== operator).
 
 ================================================================================
+| "Really" abstract machine
+================================================================================
+
+Syntax:
+
+ i ::= this | arg                   immutable registers
+ r ::= res | aux                    mutable registers
+ c ::= n                            class index (where n is a natural number)
+ o ::= n                            object index (where n is a natural number)
+ f ::= n                            field index (where n is a natural number)
+ m ::= n                            method index (where n is a natural number)
+
+ instr ::=
+ | Nop
+ | Push (i | r)                     push a register's value on top of the stack
+ | Pop r                            pop the value on top of the stack to a register
+ | Ref o r                          put an object reference into a register
+ | Copy (i | r) r                   copy register content
+ | Select (i | r) f r               field selection
+ | Call (i | r) m (i | r) r         method call
+ | Beq (i | r) (i | r) n            equality test with forward jump
+                                    (skip n instructions if equal)
+
+ code ::= [] | instr :: code
+
+ methods ::= [] | code :: methods
+ fields ::= [] | o :: fields
+
+ class ::= methods
+ classes ::= [] | class :: classes
+
+ object ::= fields
+ objects ::= [] | object :: objects
+
+ program ::= (classes, objects, code)
+
+ stack ::= [] | o :: stack
+ stacks ::= [] | stack :: stacks
+
+ state ::= (program, stacks)
+
+--------------------------------------------------------------------------------
+
+Reduction:
+
+  ((classes, objects, Nop :: code), stacks) -> ((classes, objects, code), stacks)
+
+--------------------------------------------------------------------------------
+
+Compilation:
+
+c_expr(this) = Copy this res
+  (G(this) is defined in this case)
+
+c_expr(arg) = Copy arg res
+  (G(arg) is defined in this case)
+
+c_expr(o) = Ref o res
+
+c_expr(e.f) =
+     c_expr(e);
+     Select res f res
+
+c_expr(e.m(e')) =
+     c_expr(e);
+     Push res;
+     c_expr(e');
+     Pop aux;
+     Call aux m res res
+
+c_expr(e1 == e2 ? e3 : e4) =
+     c_expr(e1);
+     Push res;
+     c_expr(e1);
+     Pop aux;
+     Beq res aux EQ;                 note: these are indeed relative forward jumps (so this works)
+     c_expr(e4);
+     Beq res res END;                <--- a way to encode unconditional forward jump
+EQ:  c_expr(e3);
+END: Nop
+
+
+================================================================================
 | Compilation scheme
 ================================================================================
 
@@ -182,20 +265,32 @@ And for each class:
 
 Monitor services in the abstract machine:
 
-mem[pc] = i
-decode[i] = Push r
-reg[r] = w
----------------------------------------------
-(mem, reg, pc, s) -> (mem, reg, pc+1, w :: s)
+* the idea: one stack per component ;
+* two design choices:
+    - a global stack handled by the monitor ;
+    - or each stack located within the compartment of the component ;
+* here: abstract machine, so we can manage them in the state for the moment.
+
+/!\ need to forbid Jump-ing between compartements (e.g. for calling monitor services)
+    --> only Jal
+    (otherwise, we don't know who did the call, r_a may have been maliciously set by the attacker
+     e.g. the stack of a component could be compromised by calling PUSH)
+
+reg[r_arg1] = w
+reg[r_a] = pc'
+pc' in C_i
+pc' - 1 in C_i                                   forbid jumps between distinct compartments
+-----------------------------------------------------------------------------------------------
+(mem, reg, push_addr, s_1, ..., s_i, ..., s_n) -> (mem, reg, pc', s_1, ..., w :: s_i, ..., s_n)
+
+pc' in C_i
+pc' - 1 in C_i                                   forbid jumps between distinct compartments
+reg' = reg[r_ret <- w]
+----------------------------------------------------------------------------------------------
+(mem, reg, pop_addr, s_1, ..., w :: s_i, ..., s_n) -> (mem, reg', pc', s1, ..., s_i, ..., s_n)
 
 mem[pc] = i
-decode[i] = Pop r
-reg' = reg[r <- w]
-----------------------------------------------
-(mem, reg, pc, w :: s) -> (mem, reg', pc+1, s)
-
-mem[pc] = i
-decode[i] = Call rc rm ro rp
+decode i = CALL rc rm ro rp
 reg[rc] = c
 reg[rm] = m
 reg[ro] = o
@@ -205,7 +300,7 @@ reg[rp] = p
 (mem, reg, pc, s) -> (mem, reg', pc', s)
 
 mem[pc] = i
-decode[i] = Ret
+decode i = 
 ??
 ---------------
 ??
@@ -252,7 +347,7 @@ c_expr(e.f) =
 
 c_expr(e.m(e')) =
     c_expr(e);
-    Push r_res;
+    Jal PUSH r_res;
     c_expr(e');
     Pop r_arg1;
     Mov r_res r_arg2;
