@@ -165,47 +165,68 @@ obj false : Bool {}
 If then else via identity test (== operator).
 
 ================================================================================
-| "Really" abstract machine
+| "Really abstract" machine
 ================================================================================
+
+Here we present an abstract machine. The goal is to capture exactly the
+properties of the source language, while offering a lower-level view. In
+particular, we present a compilation scheme for which full abstraction should
+be easy to show. Here full abstraction should be unconditional ; in
+particular there is no notion of resource exhaustion: execution works
+with infinite stacks.
+
+The hope is that this lower-level view will help when moving to other
+machines. Actually, the other machines that we will present may be
+seen as implementations of this one.
 
 Syntax:
 
- i ::= this | arg                   immutable registers
- r ::= res | aux                    mutable registers
  c ::= n                            class index (where n is a natural number)
- o ::= n                            object index (where n is a natural number)
+ o ::= (c, n)                       object index (where n is a natural number)
  f ::= n                            field index (where n is a natural number)
  m ::= n                            method index (where n is a natural number)
 
  instr ::=
  | Nop
- | Push (i | r)                     push a register's value on top of the stack
- | Pop r                            pop the value on top of the stack to a register
- | Ref o r                          put an object reference into a register
- | Copy (i | r) r                   copy register content
- | Select (i | r) f r               field selection
- | Call (i | r) m (i | r) r         method call
- | Return ...                       TODO
- | Beq (i | r) (i | r) n            equality test with forward jump
+ | This                             copy current object
+ | Arg                              copy current argument object
+ | Push                             push current result
+ | Ref o                            assign current result
+ | Select f                         select a field in current result
+ | Call m                           call a method of the object on top of the stack
+                                    (which gets removed from the stack in the process)
+                                    (current result is used as argument)
+ | Beq n                            equality test with forward jump
                                     (skip n instructions if equal)
+                                    (compares current result with top value on the stack)
+                                    (the top value gets removed in the process)
 
  code ::= [] | instr :: code
 
  methods ::= [] | code :: methods
  fields ::= [] | o :: fields
 
- class ::= methods
- classes ::= [] | class :: classes
+ class = methods
+ object = fields
 
- object ::= fields
  objects ::= [] | object :: objects
 
- program ::= (classes, objects, code)
+ user_stack ::= [] | o :: user_stack
 
- stack ::= [] | o :: stack
- stacks ::= [] | stack :: stacks
+ compartment ::= (class, objects, user_stack)
+ compartments ::= [] | compartment :: compartments
 
- state ::= (program, stacks, call_stack, ?pc?)
+ reg ::= (o, o, o)
+
+    used as a mapping from {this, arg, res} to object indices (o)
+    Notations: (o,_,_)[this]=o ; (_,o,_)[arg]=o ; (_,_,o)[res]=o
+
+ call_stack ::= [] | (o, o, code) :: call_stack
+
+    at call time, we store the current object and argument
+    together with a continuation
+
+ state ::= (compartments, reg, call_stack, code)
 
 At this level we make no distinction between inter- and intra-
 compartment calls. If we were to need this distinction it would anyway
@@ -215,39 +236,137 @@ be lower level.
 
 Reduction:
 
-  ((classes, objects, Nop :: code), stacks) -> ((classes, objects, code), stacks)
+  A common (implicit) premise to _all_ rules below is :
+    reg[this] = (c, n)
+    compartments[c] = (_, objects, _)
+    n <= |objects|
+
+
+  Now the rules:
+
+  -------------------------------------------------------------------------------------
+  (compartments, reg, call_stack, Nop :: code) -> (compartments, reg, call_stack, code)
+
+  reg[res] = o
+  reg[this] = (c, _)
+  compartments[c] = (class, objects, user_stack)
+  compartments' = compartements[c -> (class, objects, o :: user_stack)]
+  ---------------------------------------------------------------------------------------
+  (compartments, reg, call_stack, Push :: code) -> (compartments', reg, call_stack, code)
+
+  o = (co, no)
+  compartments[co] = (_, objects, _)                     } what if we do
+  no <= |objects|                                        } not check this?
+                         (probably: harder proofs but nothing bad happens)
+  reg' = reg[res <- o]
+  ----------------------------------------------------------------------------------------
+  (compartments, reg, call_stack, Ref o :: code) -> (compartments, reg', call_stack, code)
+
+  reg[this] = o
+  reg' = reg[res <- o]
+  ---------------------------------------------------------------------------------------
+  (compartments, reg, call_stack, This :: code) -> (compartments, reg', call_stack, code)
+
+  reg[arg] = o
+  reg' = reg[res <- o]
+  --------------------------------------------------------------------------------------
+  (compartments, reg, call_stack, Arg :: code) -> (compartments, reg', call_stack, code)
+
+  reg[res] = (co, no)
+  reg[this] = (co, _)         same compartment side condition
+                              (--> to encode private fields)
+  compartments[co] = (_, objects, _)
+  objects[no] = fields
+  fields[f] = of
+  reg' = reg[res <- of]
+  -------------------------------------------------------------------------------------------
+  (compartments, reg, call_stack, Select f :: code) -> (compartments, reg', call_stack, code)
+
+  reg[this] = othis
+  reg[arg] = oarg
+  othis = (c, _)
+  compartments[c] = (class, objects, o :: s)
+  compartments' = compartments[c -> (class, objects, s)]
+  o = (co, no)
+  compartments[co] = (class, _, _)
+  class[m] = code'
+  reg[res] = oa
+  reg' = reg[this <- o, arg <- oa,
+             res <- o]    fix a default return value (the object itself)
+                          / overwrite caller stuff
+  -----------------------------------------------------------------
+  (compartments, reg, call_stack, Call m :: code) ->
+    (compartments', reg', (othis, oarg, code) :: call_stack, code')
+
+                                                     return from call
+  reg' = reg[this <- othis, arg <- oarg]
+  ----------------------------------------------------------------------
+  (compartments, reg, (othis, oarg, code) :: call_stack, []) ->
+                                  (compartments, reg', call_stack, code)
+
+  reg[this] = (c, _)
+  compartments[c] = (class, objects, o :: s)
+  compartments' = compartments[c <- (class, objects, s)]
+  reg[res] = o  
+  code' = drop n code
+  -----------------------------------------------------------------
+  (compartments, reg, Beq n :: code) -> (compartments, reg, code')
+
+  reg[this] = (c, _)
+  compartments[c] = (class, objects, o :: s)
+  compartments' = compartments[c <- (class, objects, s)]
+  reg[res] = or
+  o <> or
+  ---------------------------------------------------------------
+  (compartments, reg, Beq n :: code) -> (compartments, reg, code)
 
 --------------------------------------------------------------------------------
 
-Compilation:
+Initial states of the machine:
 
-c_expr(this) = Copy this res
+   ((code :: _, _ :: _, _) :: _, ((0,0), (0,0), (0,0)), [], code)
+
+   (like a call to the first method of the first object of the first class,
+    which would be "method 'main' of the object 'main' of class 'Main'"
+    in a Java world)
+
+Final states of the machine (with result o):
+
+   ((_ :: _, _ :: _, _) :: _, ((0,0), (0,0), o), [], [])
+
+--------------------------------------------------------------------------------
+
+Compilation of expressions:
+
+TODO should we use typed syntax trees for clarity? here they are
+somehow assumed. Not clear.
+
+c_expr(this) = This
   (G(this) is defined in this case)
 
-c_expr(arg) = Copy arg res
+c_expr(arg) = Arg
   (G(arg) is defined in this case)
 
-c_expr(o) = Ref o res
+c_expr(o) = Ref obj_id(o)
 
 c_expr(e.f) =
      c_expr(e);
-     Select res f res
+     Select field_id(f)
 
 c_expr(e.m(e')) =
      c_expr(e);
-     Push res;
+     Push;
      c_expr(e');
-     Pop aux;
-     Call aux m res res
+     Call m
 
 c_expr(e1 == e2 ? e3 : e4) =
      c_expr(e1);
-     Push res;
-     c_expr(e1);
-     Pop aux;
-     Beq res aux EQ;                 note: these are indeed relative forward jumps (so this works)
+     Push;
+     c_expr(e2);
+     Beq EQ;       (note: these are indeed relative forward jumps, so this works)
      c_expr(e4);
-     Beq res res END;                <--- a way to encode unconditional forward jump
+     Push;         }  <--- a way to encode unconditional forward jump
+     Beq END;      }
 EQ:  c_expr(e3);
 END: Nop
 
