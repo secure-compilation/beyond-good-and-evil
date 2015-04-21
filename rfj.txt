@@ -1,74 +1,124 @@
 ================================================================================
+| Names for class and object declarations
+================================================================================
+
+In the language definition we will use the notion of names. Names will
+be considered to be integers. When compiling to a realistic
+architecture, we will require that these integers are word-sized.
+
+One could get a user-friendly variant of our language by using
+strings for names, and a hash algorithm to map these strings to
+word-sized integers -- e.g. asking the user to give new names in case
+of collision. The properties one would get on such a variant of our
+language would be the same as the ones we will describe.
+
+--------------------------------------------------------------------------------
+| Q: Could we get rid of names?
+--------------------------------------------------------------------------------
+
+A:
+
+When looking at a complete program (i.e. a program that defines all of
+its dependencies), it looks like names are useless. One could just use
+the order of definitions instead of names, to get an index for each
+declaration, and use that index everytime we refer to the
+corresponding declaration.
+
+When we consider *partial* programs, however, names are very
+handy. They allow us to have a very straightforward definition of the
+linking of two partial programs. In a realistic setting, partial
+programs could allow separate compilation.
+
+Here, we want to consider partial programs for formal reasons: it
+allows us to have a clear notion of *context* (or *attacker*). Indeed,
+we want a program to be able to refer to attacker definitions, and a
+context to program definitions. Names provide an easy solution to this
+problem.
+
+================================================================================
 | Syntax
 ================================================================================
 
 C - class name -- mapped to class declarations L (CT)
-f - field name
-m - method name
+f - field index (integer)
+m - method index (integer)
 o - object names -- mapped to object declarations O (OT)
 
-L ::=                        class declaration
-  class {C1 f1, ..., Cn fn;    field declarations
-            M1, ...,    Mm}    method declarations
+P ::= (CT, OT)                   (partial) program
 
-O ::=                        object declaration
-  obj C {o1, ..., on}
+CT ::= partial map from C to L   class table
 
-M ::=                        method declaration
-  Cr m (Ca)                    result and arg type
-    { e }                      method body
+OT ::= partial map from o to O   object table
+
+L ::=                            class declaration
+  class {
+    C1, ..., Cn;                   field declarations
+    M1, ..., Mp                    method declarations
+  }
+
+O ::=                            object declaration
+  obj C { o1, ..., on }
+
+M ::=                            method declaration
+  Cr (Ca) {                        result and arg type
+    e                              method body
+  }
 
 x ::=
   | this
   | arg
 
-e ::=                        expressions
-  | x                          variables
-  | o                          object reference
-  | e.f                        field selection
-  | e.m(e)                     method call
-  | e == e ? e : e             object identity test
+e ::=                            expressions
+  | x                              variables
+  | o                              object reference
+  | e.f                            field selection
+  | e.m(e)                         method call
+  | e == e ? e : e                 object identity test
 
 ================================================================================
 | Operational semantics
 ================================================================================
 
-OT(o) = obj C {o1, ..., on}
-CT(C) = class {C1 f1, ..., Cn fn; ...}
-i in [1,n]
---------------------------------------
-o.fi --> oi
+We assumes given CT and OT. Thus, formally, the relation that we
+define should be understood as:    (CT, OT) |- e --> e'
 
 
 OT(o) = obj C {o1, ..., on}
-CT(C) = class {...; M1, ..., Mm }
-Mi = Cr mi(Ca) { e }
-i in [1,m]
---------------------------------
-o.mi(oa) --> e[oa/arg][o/this]
+f = i in [1,n]
+--------------------------- SEL
+o.f --> oi
 
----------------------
+
+OT(o) = obj C {o1, ..., on}
+CT(C) = class {...; M1, ..., Mp }
+Mj = Cr (Ca) { e }
+m = j in [1,p]
+--------------------------------- CALL
+o.m(oa) --> e[oa/arg][o/this]
+
+
+--------------------- TESTEQ
 o == o ? e : e' --> e
 
 o <> o'
------------------------
+----------------------- TESTNEQ
 o == o' ? e : e' --> e'
 
 e1 --> e1'
-------------------------
+------------------------ CONGRLCALL
 e1.mi(e2) --> e1'.mi(e2)
 
 
 e --> e'
---------------------
+-------------------- CONGRRCALL
 o.mi(e) --> o.mi(e')
 
 e1 --> e1'
-------------------------------------------
+------------------------------------------ CONGRLTEST
 e1 == e2 ? e3 : e4 --> e1' == e2 ? e3 : e4
 
 e2 --> e2'
-------------------------------------------
+------------------------------------------ CONGRRTEST
 o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
 
 
@@ -76,66 +126,89 @@ o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
 | Type system
 ================================================================================
 
-Object declaration typing:
+We give a type system that allows to typecheck *complete* programs. A
+program that depends on classes (resp. objects) that are not in the
+domain of CT (resp. OT) will *not* typecheck.
 
-classof(o) = C   if OT(o) = obj C {...}
-
-CT(C) = class {C1 f1, ..., Cn fn; ...}
-forall i. classof(oi) = Ci
---------------------------------------
-|- obj C {o1, ..., on} ok
+We define: classof(o) = C   if OT(o) = obj C {...}
 
 --------------------------------------------------------------------------------
 
-Expression typing:
+Object declaration typing: CT, OT are assumed.
 
-G ::= {} | {this:Ct, arg:Ca}
+OT(o) = obj C {o1, ..., on}
+CT(C) = class {C1, ..., Cn; ...}
+forall i in [1,n]. classof(oi) = Ci
+----------------------------------- OBJOK
+|- o ok
 
+--------------------------------------------------------------------------------
+
+Expression typing: CT, OT are assumed.
+
+G ::= {this:Cr, arg:Ca}
+
+
+------------- TVAR
 G |- x : G(x)
 
+
+------------------- TOBJ
 G |- o : classof(o)
 
-G |- e : C
-G(this) = C                                     ensure privacy of fields
-CT(C) = class {C1 f1, ..., Cn fn; ...}
-i in [1,n]
---------------------------------------
-G |- e.fi : Ci
 
 G |- e : C
-CT(C) = class {...; M1, ..., Mm}
-i in [1,m]
-Mi = Cr mi(Ca) { ... }
+G(this) = C                                   ensures field privacy
+CT(C) = class {C1, ..., Cn; ...}
+f = i in [1,n]
+-------------------------------- TSEL
+G |- e.f : Ci
+
+
+G |- e : C
+CT(C) = class {...; M1, ..., Mp}
+m = j in [1,p]
+Mj = Cr (Ca) { ... }
 G |- ea : Ca
---------------------------------
+-------------------------------- TCALL
 G |- e.m(ea) : Cr
+
 
 G |- e1 : C'
 G |- e2 : C'
 G |- e3 : C
 G |- e4 : C
----------------------------
+----------------------------- TTEST
 G |- (e1 == e2 ? e3 : e4) : C
 
 --------------------------------------------------------------------------------
 
-Method typing:
+Method typing: CT, OT are assumed (used for typing e).
 
-CT(C) = class {...; M1, ..., Mm}
-i in [1,m]
-Mi = Cr mi(Ca) { e }
 {this:C, arg:Ca} |- e : Cr
---------------------------
-C |- Cr mi(Ca) { e } ok
+-------------------------- METHOK
+C |- Cr (Ca) { e } ok
 
 --------------------------------------------------------------------------------
 
-Class typing:
+Class typing: CT, OT are assumed.
 
-CT(C) = class {C1 f1, ..., Cn fn; M1, ..., Mm}
-forall i. C |- Mi ok
-----------------------------------------------
+CT(C) = class {C1, ..., Cn; M1, ..., Mp}
+forall i in [1,n]. Ci in dom(CT)
+forall j in [1,p]. C |- Mj ok
+---------------------------------------- CLASSOK
 |- C ok
+
+--------------------------------------------------------------------------------
+
+Complete program typing:
+
+P = (CT, OT)
+forall C in dom(CT). |- C ok (with CT, OT)
+forall o in dom(OT). |- o ok (with CT, OT)
+------------------------------------------ PROGOK
+|- P ok
+
 
 ================================================================================
 | Encodings
@@ -147,10 +220,11 @@ For each tuple type T=(C1, ..., Cn)
 
 class Unit {}
 
-class Tuple_T {C1 f_1, ..., Cn f_n,
-               C1 get_1(Unit) { this.f_1 },
-               ...
-               Cn get_n(Unit) { this.f_n },
+class Tuple_T {
+  C1, ..., Cn;
+  C1 get_1(Unit) { this.1 },
+  ...
+  Cn get_n(Unit) { this.n },
 }
 
 --------------------------------------------------------------------------------
@@ -162,7 +236,7 @@ class Bool {}
 obj true : Bool {}
 obj false : Bool {}
 
-If then else via identity test (== operator).
+If then else via identity test (e.g. (b == true ? e1 : e2)).
 
 ================================================================================
 | "Really abstract" machine
@@ -257,7 +331,12 @@ Reduction:
   o = (co, no)
   compartments[co] = (_, objects, _)                     } what if we do
   no <= |objects|                                        } not check this?
-                         (probably: harder proofs but nothing bad happens)
+                         (probably: harder proofs but nothing bad happens?
+                          actually: would break full abstraction?
+                            if this is attacker code, then instead of failing here we would
+                            fail only when this object becomes "this", so this could allow
+                            to learn if a given class performs calls on a given argument
+                            or not)
   reg' = reg[res <- o]
   ----------------------------------------------------------------------------------------
   (compartments, reg, call_stack, Ref o :: code) -> (compartments, reg', call_stack, code)
@@ -357,7 +436,7 @@ c_expr(e.m(e')) =
      c_expr(e);
      Push;
      c_expr(e');
-     Call m
+     Call meth_id(m)
 
 c_expr(e1 == e2 ? e3 : e4) =
      c_expr(e1);
@@ -433,7 +512,7 @@ lookup_field : obj -> nat -> option addr
 
 Monitor services
 
-call(mem, reg, pc@c, (call_stack, obj_to_maddr, obj_to_faddr)) =
+call(mem, reg, pc@c, (call_stack, lookup_method, lookup_field)) =
   let o = reg[r_arg1] in
   let arg = reg[r_arg2] in
   let m = reg[r_arg3] in
@@ -442,24 +521,32 @@ call(mem, reg, pc@c, (call_stack, obj_to_maddr, obj_to_faddr)) =
     let call_stack' = (reg[ra], reg[r_this], reg[r_arg]) :: call_stack in
     let reg' = (clear_registers reg)[r_this := o, r_arg := arg] in
     let c' = mem[ma] in
-    Some (mem, reg', ma@c', (call_stack', obj_to_maddr, obj_to_faddr))
+    Some (mem, reg', ma@c', (call_stack', lookup_method, lookup_field))
   else None
 
-return(mem, reg, pc@c, (call_stack, obj_to_maddr, obj_to_faddr)) =
+return(mem, reg, pc@c, (call_stack, lookup_method, lookup_field)) =
   match call_stack with
   | (ret, this, arg) :: call_stack' ->
     let reg' = (clear_registers reg)[r_ret := reg[r_ret],
                                      r_this := this, r_arg := arg] in
     let c' = mem[ret] in
-    Some (mem, reg', ret@c', (call_stack', obj_to_maddr, obj_to_faddr))
+    Some (mem, reg', ret@c', (call_stack', lookup_method, lookup_field))
   | [] -> None
 
-select(mem, reg, pc@c, (call_stack, obj_to_maddr, obj_to_faddr)) =
+  is this useful??
+    |
+    |
+    v
+
+select(mem, reg, pc@c, (call_stack, lookup_method, lookup_field)) =
   let o = reg[r_arg1] in
   let f = reg[r_arg2] in
   fa <- lookup_field o f;
-  let reg' = reg[r_ret := (val mem[fa])@()]
-  Some (mem, reg', ra@c, (call_stack, obj_to_maddr, obj_to_faddr))
+  if tag mem[fa] = c then      <---- private fields
+    let reg' = reg[r_ret := (val mem[fa])@()] in
+    Some (mem, reg', ra@c, (call_stack, lookup_method, lookup_field))
+  else
+    None
 
 Note: allowing returns to forged ra addresses seem ok because:
 - for call we enforce that ra points to the caller's compartment
@@ -548,7 +635,7 @@ Compilation of well-typed expressions:
 
 Fix four distinct registers: r_this, r_arg, r_arg1, r_arg2, r_arg3, r_res (=r_ret), r_aux.
 
-G = {this:Ct, arg:Ca} when compiling a method body.
+G = {this:Cr, arg:Ca} when compiling a method body.
 G = {} when compiling the main expression.
 
 Properties of c_expr:
