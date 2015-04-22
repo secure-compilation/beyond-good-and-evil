@@ -6,11 +6,6 @@ In the language definition we will use the notion of names. Names will
 be considered to be integers. When compiling to a realistic
 architecture, we will require that these integers are word-sized.
 
-One could get a user-friendly variant of our language by using
-strings for names, and a hash algorithm to map these strings to
-word-sized integers -- e.g. asking the user to give new names in case
-of collision. The properties one would get on such a variant of our
-language would be the same as the ones we will describe.
 
 --------------------------------------------------------------------------------
 | Q: Could we get rid of names?
@@ -18,22 +13,54 @@ language would be the same as the ones we will describe.
 
 A:
 
-When looking at a complete program (i.e. a program that defines all of
-its dependencies), it looks like names are useless. One could just use
-the order of definitions instead of names, to get an index for each
-declaration, and use that index everytime we refer to the
-corresponding declaration.
+When looking at a *complete* program (i.e. a program that provides all
+the definitions it relies on), it looks like names are useless. One
+could just use the order of definitions instead of names, to get an
+index for each declaration, and use that index everytime we refer to
+the corresponding declaration.
 
 When we consider *partial* programs, however, names are very
 handy. They allow us to have a very straightforward definition of the
-linking of two partial programs. In a realistic setting, partial
-programs could allow separate compilation.
+linking of two partial programs.
 
 Here, we want to consider partial programs for formal reasons: it
 allows us to have a clear notion of *context* (or *attacker*). Indeed,
-we want a program to be able to refer to attacker definitions, and a
-context to program definitions. Names provide an easy solution to this
-problem.
+we want a program to be able to refer to attacker definitions, and the
+other way (a context to refer to program definitions). Names provide
+an easy solution to this problem. They allow us to have a symmetry
+between programs and contexts, and to consider mutually distrustful
+programs, each being part of the context for the others.
+
+
+--------------------------------------------------------------------------------
+| Q: Could we have e.g. strings for names?
+--------------------------------------------------------------------------------
+
+A:
+
+One could get a user-friendly variant of our language by using strings
+for names. Then we could easily translate programs by using e.g. :
+
+* a hash algorithm to map these strings to word-sized integers, asking
+the user to give new names in case of collision, this approach would
+be interesting if we want to translate partial programs (or contexts),
+which would allow reusing the linking defined in the language with
+integers as names ;
+
+* the order of declarations, this approach would be interesting if we
+only care about translating complete programs, that is, it requires to
+define a new notion of linking at the level of the language with
+strings if we want to talk about partial programs (or contexts) at
+this level.
+
+In both cases the main object (which would presumably have name
+"main") should be a special case which is necessarily mapped to
+integer 0 (the only fixed name in the language with integers as name).
+
+The properties one would get on such a variant of our
+language would be the same as the ones we will describe (maybe with
+some extra assumptions to prevent name clashes). From now on, we go
+back to the integer as names variant.
 
 ================================================================================
 | Syntax
@@ -56,8 +83,12 @@ L ::=                            class declaration
     M1, ..., Mp                    method declarations
   }
 
+  where n, p >= 0
+
 O ::=                            object declaration
   obj C { o1, ..., on }
+
+  where n >= 0
 
 M ::=                            method declaration
   Cr (Ca) {                        result and arg type
@@ -75,21 +106,50 @@ e ::=                            expressions
   | e.m(e)                         method call
   | e == e ? e : e                 object identity test
 
+
+--------------------------------------------------------------------------------
+| Q: Could we have a real syntax? Partial maps are not syntax.
+--------------------------------------------------------------------------------
+
+A:
+
+Sure.
+
+Q ::= [] | D :: Q                (partial) program
+
+D ::=                            declaration
+  | C => L                         named class declaration
+  | o => O                         named object declaration
+
+This definition trivially erases to the previous definition. The only
+tricky point is name clashes, which we do not want to care about
+here. That's why we will use the definition with partial maps from now
+on.
+
+We could also have a more Java-like syntax that would very simply
+translate to the previous one.
+
 ================================================================================
 | Operational semantics
 ================================================================================
 
+--------------------------------------------------------------------------------
+| Def.: Reduction relation on expressions.
+--------------------------------------------------------------------------------
+
 We assumes given CT and OT. Thus, formally, the relation that we
-define should be understood as:    (CT, OT) |- e --> e'
+define should be understood as:
+
+                       (CT, OT) |- e --> e'
 
 
-OT(o) = obj C {o1, ..., on}
+OT(o) = obj C { o1, ..., on }
 f = i in [1,n]
 --------------------------- SEL
 o.f --> oi
 
 
-OT(o) = obj C {o1, ..., on}
+OT(o) = obj C { o1, ..., on }
 CT(C) = class {...; M1, ..., Mp }
 Mj = Cr (Ca) { e }
 m = j in [1,p]
@@ -118,8 +178,62 @@ e1 --> e1'
 e1 == e2 ? e3 : e4 --> e1' == e2 ? e3 : e4
 
 e2 --> e2'
------------------------------------------- CONGRRTEST
+---------------------------------------- CONGRRTEST
 o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
+
+
+--------------------------------------------------------------------------------
+| Def.: Values
+--------------------------------------------------------------------------------
+
+A value is an object name.
+
+
+--------------------------------------------------------------------------------
+| Prop.: Values do not reduce
+--------------------------------------------------------------------------------
+| forall (v:value) (e:expr), v -/-> e.
+|-------------------------------------------------------------------------------
+
+Proof: No rule applies when we have an object name in the left hand side.
+
+
+--------------------------------------------------------------------------------
+| Prop.: Equality on values is decidable
+--------------------------------------------------------------------------------
+| forall v v', {v = v'} + {v <> v'}.
+|-------------------------------------------------------------------------------
+
+Proof: Object names are integers.
+
+--------------------------------------------------------------------------------
+| Prop.: Determinism of our reduction relation
+--------------------------------------------------------------------------------
+| forall e e', e --> e'  ->  (forall e'', e --> e''  ->  e' = e'')
+--------------------------------------------------------------------------------
+
+Proof: Corollary of the fact that values (hence object names) do not
+reduce.
+
+By induction on the size of the derivation tree for e --> e'. By case
+on the last rule applied in this tree. Only this rule applies with e
+as a the left-hand side, because object names do not reduce and
+equality on values is decidable. This gives the shape of e'', and is
+sufficient to conclude in the base case. In the inductive case,
+applying the induction hypothesis ends the proof.
+
+
+--------------------------------------------------------------------------------
+| Def.: Evaluation
+--------------------------------------------------------------------------------
+
+Given a program P = (CT, OT), evaluation starts with the expression:
+
+                 o.m(o)     with o = 0 and m = 0
+
+Hence, only programs that define object 0 with a class C such that C
+has at least one method will have a non-stuck initial expression. This
+will be part of the notion of complete programs in our type system.
 
 
 ================================================================================
@@ -128,13 +242,20 @@ o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
 
 We give a type system that allows to typecheck *complete* programs. A
 program that depends on classes (resp. objects) that are not in the
-domain of CT (resp. OT) will *not* typecheck.
-
-We define: classof(o) = C   if OT(o) = obj C {...}
+domain of CT (resp. OT) will *not* typecheck. Similarly, programs that
+do not define a main object will *not* typecheck.
 
 --------------------------------------------------------------------------------
+| Def.: Class of an object
+--------------------------------------------------------------------------------
 
-Object declaration typing: CT, OT are assumed.
+  classof(o) = C   if OT(o) = obj C {...}
+
+--------------------------------------------------------------------------------
+| Def.: Object declaration typing
+--------------------------------------------------------------------------------
+
+CT, OT are assumed.
 
 OT(o) = obj C {o1, ..., on}
 CT(C) = class {C1, ..., Cn; ...}
@@ -143,10 +264,14 @@ forall i in [1,n]. classof(oi) = Ci
 |- o ok
 
 --------------------------------------------------------------------------------
+| Def.: Expression typing
+--------------------------------------------------------------------------------
 
-Expression typing: CT, OT are assumed.
+CT, OT are assumed.
 
-G ::= {this:Cr, arg:Ca}
+We define environments as:
+
+                           G ::= {this:Cr, arg:Ca}
 
 
 ------------- TVAR
@@ -182,16 +307,22 @@ G |- e4 : C
 G |- (e1 == e2 ? e3 : e4) : C
 
 --------------------------------------------------------------------------------
+| Def.: Method typing
+--------------------------------------------------------------------------------
 
-Method typing: CT, OT are assumed (used for typing e).
+CT, OT are assumed (used for typing e).
+
 
 {this:C, arg:Ca} |- e : Cr
 -------------------------- METHOK
 C |- Cr (Ca) { e } ok
 
 --------------------------------------------------------------------------------
+| Def.: Class typing
+--------------------------------------------------------------------------------
 
-Class typing: CT, OT are assumed.
+CT, OT are assumed.
+
 
 CT(C) = class {C1, ..., Cn; M1, ..., Mp}
 forall i in [1,n]. Ci in dom(CT)
@@ -200,21 +331,78 @@ forall j in [1,p]. C |- Mj ok
 |- C ok
 
 --------------------------------------------------------------------------------
-
-Complete program typing:
+| Def.: (Complete) program typing
+--------------------------------------------------------------------------------
 
 P = (CT, OT)
-forall C in dom(CT). |- C ok (with CT, OT)
-forall o in dom(OT). |- o ok (with CT, OT)
------------------------------------------- PROGOK
-|- P ok
+forall C' in dom(CT). |- C' ok (using CT, OT)
+forall o in dom(OT). |- o ok (using CT, OT)
+let o = 0 and m = 0 in
+  {this: -, arg: -} |- o.m(o) : C (using CT, OT)             main object
+------------------------------------------------ PROGOK
+|- P : C
 
+
+More explicit, equivalent alternative:
+
+P = (CT, OT)
+forall C' in dom(CT). |- C' ok (using CT, OT)
+forall o in dom(OT). |- o ok (using CT, OT)
+OT(0) = obj C'' { ... }
+CT(C'') = { ...; M1, ..., Mp }
+p >= 1
+M1 = C (C'') { e }
+------------------------------------------------ PROGOK'
+|- P : C
+
+
+--------------------------------------------------------------------------------
+| Q: Should also have partial programs typing?
+--------------------------------------------------------------------------------
+
+If we want to state full abstraction for (partial) programs, it goes
+by:
+               P ~ Q  <->  compile(P) ~ compile(Q)
+
+So we would need to define a compilation for partial programs. We
+would also need typing, since we don't want to say anything about
+ill-formed programs.
+
+
+================================================================================
+| Properties of our type system
+================================================================================
+
+(To be proved)
+
+--------------------------------------------------------------------------------
+| Progress
+--------------------------------------------------------------------------------
+| forall e C, |- e : C ->
+|               is_value e \/ exists e', e --> e'
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+| Subject reduction
+--------------------------------------------------------------------------------
+| forall e e' C, e --> e' /\ |- e : C ->
+|                  |- e' : C
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+| Type safety
+--------------------------------------------------------------------------------
+| forall e C, |- e : C ->
+|               is_value e \/ (exists e', e --> e' /\ |- e' : C)
+--------------------------------------------------------------------------------
 
 ================================================================================
 | Encodings
 ================================================================================
 
-Tuples:
+--------------------------------------------------------------------------------
+| Tuples
+--------------------------------------------------------------------------------
 
 For each tuple type T=(C1, ..., Cn)
 
@@ -228,8 +416,8 @@ class Tuple_T {
 }
 
 --------------------------------------------------------------------------------
-
-Booleans:
+| Booleans
+--------------------------------------------------------------------------------
 
 class Bool {}
 
