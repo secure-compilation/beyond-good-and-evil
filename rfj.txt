@@ -121,7 +121,7 @@ D ::=                            declaration
   | C => L                         named class declaration
   | o => O                         named object declaration
 
-This definition trivially erases to the previous definition. The only
+This definition trivially translates to the previous definition. The only
 tricky point is name clashes, which we do not want to care about
 here. That's why we will use the definition with partial maps from now
 on.
@@ -137,50 +137,46 @@ translate to the previous one.
 | Def.: Reduction relation on expressions.
 --------------------------------------------------------------------------------
 
-We assumes given CT and OT. Thus, formally, the relation that we
-define should be understood as:
-
-                       (CT, OT) |- e --> e'
-
-
 OT(o) = obj C { o1, ..., on }
 f = i in [1,n]
---------------------------- SEL
-o.f --> oi
+----------------------------- SEL
+(CT, OT) |- o.f --> oi
 
 
 OT(o) = obj C { o1, ..., on }
 CT(C) = class {...; M1, ..., Mp }
 Mj = Cr (Ca) { e }
 m = j in [1,p]
---------------------------------- CALL
-o.m(oa) --> e[oa/arg][o/this]
+--------------------------------------- CALL
+(CT, OT) |- o.m(oa) --> e[oa/arg][o/this]
 
 
---------------------- TESTEQ
-o == o ? e : e' --> e
+------------------------------- TESTEQ
+(CT, OT) |- o == o ? e : e' --> e
 
 o <> o'
------------------------ TESTNEQ
-o == o' ? e : e' --> e'
+--------------------------------- TESTNEQ
+(CT, OT) |- o == o' ? e : e' --> e'
 
 e1 --> e1'
------------------------- CONGRLCALL
-e1.mi(e2) --> e1'.mi(e2)
+---------------------------------- CONGRLCALL
+(CT, OT) |- e1.mi(e2) --> e1'.mi(e2)
 
 
-e --> e'
--------------------- CONGRRCALL
-o.mi(e) --> o.mi(e')
+(CT, OT) |- e --> e'
+------------------------------ CONGRRCALL
+(CT, OT) |- o.mi(e) --> o.mi(e')
 
-e1 --> e1'
------------------------------------------- CONGRLTEST
-e1 == e2 ? e3 : e4 --> e1' == e2 ? e3 : e4
+(CT, OT) |- e1 --> e1'
+---------------------------------------------------- CONGRLTEST
+(CT, OT) |- e1 == e2 ? e3 : e4 --> e1' == e2 ? e3 : e4
 
-e2 --> e2'
----------------------------------------- CONGRRTEST
-o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
+(CT, OT) |- e2 --> e2'
+-------------------------------------------------- CONGRRTEST
+(CT, OT) |- o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
 
+
+We sometimes use the notation e --> e', where CT and OT are implicitly assumed.
 
 --------------------------------------------------------------------------------
 | Def.: Values
@@ -192,8 +188,8 @@ A value is an object name.
 --------------------------------------------------------------------------------
 | Prop.: Values do not reduce
 --------------------------------------------------------------------------------
-| forall (v:value) (e:expr), v -/-> e.
-|-------------------------------------------------------------------------------
+| forall (v:value) (e: expr), v -/-> e.
+--------------------------------------------------------------------------------
 
 Proof: No rule applies when we have an object name in the left hand side.
 
@@ -202,7 +198,7 @@ Proof: No rule applies when we have an object name in the left hand side.
 | Prop.: Equality on values is decidable
 --------------------------------------------------------------------------------
 | forall v v', {v = v'} + {v <> v'}.
-|-------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 Proof: Object names are integers.
 
@@ -255,146 +251,115 @@ do not define a main object will *not* typecheck.
 | Def.: Object declaration typing
 --------------------------------------------------------------------------------
 
-CT, OT are assumed.
-
 OT(o) = obj C {o1, ..., on}
 CT(C) = class {C1, ..., Cn; ...}
 forall i in [1,n]. classof(oi) = Ci
 ----------------------------------- OBJOK
-|- o ok
+(CT, OT) |- o ok
 
 --------------------------------------------------------------------------------
 | Def.: Expression typing
 --------------------------------------------------------------------------------
-
-CT, OT are assumed.
 
 We define environments as:
 
                            G ::= {this:Cr, arg:Ca}
 
 
-------------- TVAR
-G |- x : G(x)
+----------------------- TVAR
+(CT, OT); G |- x : G(x)
 
 
-------------------- TOBJ
-G |- o : classof(o)
+----------------------------- TOBJ
+(CT, OT); G |- o : classof(o)
 
 
-G |- e : C
+(CT, OT); G |- e : C
 G(this) = C                                   ensures field privacy
 CT(C) = class {C1, ..., Cn; ...}
 f = i in [1,n]
 -------------------------------- TSEL
-G |- e.f : Ci
+(CT, OT); G |- e.f : Ci
 
 
-G |- e : C
+(CT, OT); G |- e : C
 CT(C) = class {...; M1, ..., Mp}
 m = j in [1,p]
 Mj = Cr (Ca) { ... }
-G |- ea : Ca
+(CT, OT); G |- ea : Ca
 -------------------------------- TCALL
-G |- e.m(ea) : Cr
+(CT, OT); G |- e.m(ea) : Cr
 
 
-G |- e1 : C'
-G |- e2 : C'
-G |- e3 : C
-G |- e4 : C
------------------------------ TTEST
-G |- (e1 == e2 ? e3 : e4) : C
+(CT, OT); G |- e1 : C'
+(CT, OT); G |- e2 : C'
+(CT, OT); G |- e3 : C
+(CT, OT); G |- e4 : C
+--------------------------------------- TTEST
+(CT, OT); G |- (e1 == e2 ? e3 : e4) : C
+
 
 --------------------------------------------------------------------------------
 | Def.: Method typing
 --------------------------------------------------------------------------------
 
-CT, OT are assumed (used for typing e).
+(CT, OT); {this:C, arg:Ca} |- e : Cr
+------------------------------------ METHOK
+(CT, OT); C |- Cr (Ca) { e } ok
 
-
-{this:C, arg:Ca} |- e : Cr
--------------------------- METHOK
-C |- Cr (Ca) { e } ok
 
 --------------------------------------------------------------------------------
 | Def.: Class typing
 --------------------------------------------------------------------------------
 
-CT, OT are assumed.
-
-
 CT(C) = class {C1, ..., Cn; M1, ..., Mp}
 forall i in [1,n]. Ci in dom(CT)
-forall j in [1,p]. C |- Mj ok
+forall j in [1,p]. (CT, OT); C |- Mj ok
 ---------------------------------------- CLASSOK
-|- C ok
+(CT, OT) |- C ok
 
 --------------------------------------------------------------------------------
 | Def.: (Complete) program typing
 --------------------------------------------------------------------------------
 
 P = (CT, OT)
-forall C' in dom(CT). |- C' ok (using CT, OT)
-forall o in dom(OT). |- o ok (using CT, OT)
+forall C' in dom(CT). (CT, OT) |- C' ok
+forall o in dom(OT). (CT, OT) |- o ok
 let o = 0 and m = 0 in
-  {this: -, arg: -} |- o.m(o) : C (using CT, OT)             main object
------------------------------------------------- PROGOK
+  (CT, OT); {this: -, arg: -} |- o.m(o) : C             main object
+------------------------------------------- TPROG
 |- P : C
 
+|- P : C
+-------- PROGOK
+|- P ok
 
 More explicit, equivalent alternative:
 
 P = (CT, OT)
-forall C' in dom(CT). |- C' ok (using CT, OT)
-forall o in dom(OT). |- o ok (using CT, OT)
+forall C' in dom(CT). (CT, OT) |- C' ok
+forall o in dom(OT). (CT, OT) |- o ok
 OT(0) = obj C'' { ... }
 CT(C'') = { ...; M1, ..., Mp }
 p >= 1
 M1 = C (C'') { e }
------------------------------------------------- PROGOK'
+--------------------------------------- TPROG'
 |- P : C
 
 
 --------------------------------------------------------------------------------
-| Q: Should also have partial programs typing?
+| Q: Should we also have partial programs typing?
 --------------------------------------------------------------------------------
 
 If we want to state full abstraction for (partial) programs, it goes
 by:
-               P ~ Q  <->  compile(P) ~ compile(Q)
+                 P ~ Q  <->  compile(P) ~ compile(Q)
 
-So we would need to define a compilation for partial programs. We
-would also need typing, since we don't want to say anything about
-ill-formed programs.
+So we would need to define at least compilation for partial
+programs. But we don't necessarily need partial program typing,
+although it could be interesting to study. See our notion of
+observational equivalence below to understand why we don't need it.
 
-
-================================================================================
-| Properties of our type system
-================================================================================
-
-(To be proved)
-
---------------------------------------------------------------------------------
-| Progress
---------------------------------------------------------------------------------
-| forall e C, |- e : C ->
-|               is_value e \/ exists e', e --> e'
---------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
-| Subject reduction
---------------------------------------------------------------------------------
-| forall e e' C, e --> e' /\ |- e : C ->
-|                  |- e' : C
---------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
-| Type safety
---------------------------------------------------------------------------------
-| forall e C, |- e : C ->
-|               is_value e \/ (exists e', e --> e' /\ |- e' : C)
---------------------------------------------------------------------------------
 
 ================================================================================
 | Encodings
@@ -425,6 +390,149 @@ obj true : Bool {}
 obj false : Bool {}
 
 If then else via identity test (e.g. (b == true ? e1 : e2)).
+
+
+================================================================================
+| Properties of our type system
+================================================================================
+
+(To be proved)
+
+--------------------------------------------------------------------------------
+| Progress
+--------------------------------------------------------------------------------
+| forall e C P G, |- P ok ->
+|                 P; G |- e : C ->
+|                   is_value e \/ exists e', P |- e --> e'
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+| Subject reduction
+--------------------------------------------------------------------------------
+| forall e e' C P G, P; G |- e : C ->
+|                    P |- e --> e' ->
+|                      P; G |- e' : C
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+| Type safety
+--------------------------------------------------------------------------------
+| forall e C P G, P; G |- e : C ->
+|                      is_value e \/ (exists e', e --> e' /\ |- e' : C)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+| High-level programs, high-Level contexts
+================================================================================
+
+--------------------------------------------------------------------------------
+| Def.: Linkability
+--------------------------------------------------------------------------------
+
+Two (partial) programs P = (CT, OT) and Q = (CT', OT') are linkable if
+their domains are disjoint, that is:
+
+  linkable (CT, OT) (CT', OT') ::=
+    dom(CT) inter dom(CT') = empty_set /\
+      dom(OT) inter dom(OT') = empty_set
+
+
+--------------------------------------------------------------------------------
+| Def.: Linking
+--------------------------------------------------------------------------------
+
+Two linkable (partial) programs P = (CT, OT) and Q = (CT', OT') can be
+linked to get a new (partial) program P /\/\ Q.
+
+     P /\/\ Q ::= (CT disjoint_union CT', OT disjoint_union OT')
+
+Note that linking happens "before" typing: we do not require any
+wellformedness property on P and Q.
+
+
+--------------------------------------------------------------------------------
+| Def.: High-level context
+--------------------------------------------------------------------------------
+
+A high-level context c is a partial program. A program can only be
+inserted in a linkable context. Inserting a program P in a context c
+is linking:
+
+     c[P] ::= P /\/\ c       when linkable c P
+
+--------------------------------------------------------------------------------
+| Def.: Closing contexts
+--------------------------------------------------------------------------------
+
+Given a program P, a context c, a class name C, we say that c closes P
+with type C when c is linkable with P and inserting P in c gives a
+well-typed program of type C, that is:
+
+                  linkable c P  /\  |- c[P] : C
+
+We define the set of closing contexts at type C for a program P by:
+
+     closing_contexts P C ::= {c | linkable c P  /\  |- c[P] : C}
+
+
+--------------------------------------------------------------------------------
+| Def.: Interface equivalence
+--------------------------------------------------------------------------------
+
+We say that two programs P and Q are interface equivalent, or have the
+same interface, when they have the same closing contexts at every
+type, that is:
+
+  same_interface P Q := forall C. closing_contexts P C = closing_contexts Q C
+
+
+--------------------------------------------------------------------------------
+| Def.: Observational equivalence
+--------------------------------------------------------------------------------
+
+Two programs P and Q are observationnally equivalent if they are
+interface equivalent and, for any context c that closes them, when
+separately placing the two in c, the two resulting programs reduce to
+the same value. That is:
+
+  P ~ Q ::= same_iterface P Q /\
+            forall C. forall c in closing_contexts P C. forall v.
+            let o = 0 and m = 0 in
+            c[P] |- o.m(o) -->* v  <->  c[P] |- o.m(o) -->* v
+
+
+--------------------------------------------------------------------------------
+| Def.: Observational order
+--------------------------------------------------------------------------------
+
+We define the observational order on programs as follows:
+
+  P ~< Q ::=
+    forall C. forall c in closing_contexts P C.
+    c in closing_contexts Q C /\ forall v.
+                                 let o = 0 and m = 0 in
+                                 c[P] |- o.m(o) -->* v  ->
+                                   c[Q] |- o.m(o) -->* v
+
+When we have P ~< Q, this means that Q captures all the behaviors of P.
+
+--------------------------------------------------------------------------------
+| Prop.: Decomposition of observational equivalence
+--------------------------------------------------------------------------------
+| forall P Q. P ~ Q <-> (P ~< Q and Q ~< P)
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+| Q: Is our notion of observational equivalence relevant?
+--------------------------------------------------------------------------------
+
+This definition considers that only the final result of a program is
+observable. This looks reasonable as long as *we do not have side
+effects* (in particular: printing). Every time we update the source
+language, we should check very carefully if this definition is still
+relevant or should be updated.
+
 
 ================================================================================
 | "Really abstract" machine
