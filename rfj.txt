@@ -423,7 +423,7 @@ If then else via identity test (e.g. (b == true ? e1 : e2)).
 
 
 ================================================================================
-| High-level programs, high-Level contexts
+| High-level programs, high-level contexts
 ================================================================================
 
 --------------------------------------------------------------------------------
@@ -517,11 +517,13 @@ We define the observational order on programs as follows:
 
 When we have P ~< Q, this means that Q captures all the behaviors of P.
 
+
 --------------------------------------------------------------------------------
 | Prop.: Decomposition of observational equivalence
 --------------------------------------------------------------------------------
 | forall P Q. P ~ Q <-> (P ~< Q and Q ~< P)
 --------------------------------------------------------------------------------
+
 
 --------------------------------------------------------------------------------
 | Q: Is our notion of observational equivalence relevant?
@@ -549,7 +551,10 @@ The hope is that this lower-level view will help when moving to other
 machines. Actually, the other machines that we will present may be
 seen as implementations of this one.
 
-Syntax:
+
+--------------------------------------------------------------------------------
+| Syntax
+--------------------------------------------------------------------------------
 
  c ::= n                            class index (where n is a natural number)
  o ::= (c, n)                       object index (where n is a natural number)
@@ -602,17 +607,18 @@ At this level we make no distinction between inter- and intra-
 compartment calls. If we were to need this distinction it would anyway
 be lower level.
 
+
+--------------------------------------------------------------------------------
+| Def.: Reduction
 --------------------------------------------------------------------------------
 
-Reduction:
-
-  A common (implicit) premise to _all_ rules below is :
-    reg[this] = (c, n)
-    compartments[c] = (_, objects, _)
-    n <= |objects|
+A common (implicit) premise to _all_ rules below is:
+  reg[this] = (c, n)
+  compartments[c] = (_, objects, _)
+  n <= |objects|
 
 
-  Now the rules:
+Now the rules:
 
   -------------------------------------------------------------------------------------
   (compartments, reg, call_stack, Nop :: code) -> (compartments, reg, call_stack, code)
@@ -695,55 +701,86 @@ Reduction:
   ---------------------------------------------------------------
   (compartments, reg, Beq n :: code) -> (compartments, reg, code)
 
---------------------------------------------------------------------------------
-
-Initial states of the machine:
-
-   ((code :: _, _ :: _, _) :: _, ((0,0), (0,0), (0,0)), [], code)
-
-   (like a call to the first method of the first object of the first class,
-    which would be "method 'main' of the object 'main' of class 'Main'"
-    in a Java world)
-
-Final states of the machine (with result o):
-
-   ((_ :: _, _ :: _, _) :: _, ((0,0), (0,0), o), [], [])
 
 --------------------------------------------------------------------------------
+| Def.: Compilation of expressions
+--------------------------------------------------------------------------------
 
-Compilation of expressions:
+Define:
 
-TODO should we use typed syntax trees for clarity? here they are
-somehow assumed. Not clear.
+  class_id(CT, C) = n
+    if C in dom(CT)
+    and n = |{C' in dom(CT) | C' < C}|
 
-c_expr(this) = This
+  obj_id(CT, OT, o) = (n, m)
+    if OT(o) = obj C { ... }
+    and n = class_id(CT, C)
+    and m = |{o' in dom(OT) | OT(o) = obj C { ... } and o' < o}|
+
+c_expr(CT, OT, this) = This
   (G(this) is defined in this case)
 
-c_expr(arg) = Arg
+c_expr(CT, OT, arg) = Arg
   (G(arg) is defined in this case)
 
-c_expr(o) = Ref obj_id(o)
+c_expr(CT, OT, o) = Ref obj_id(CT, OT, o)
 
-c_expr(e.f) =
-     c_expr(e);
-     Select field_id(f)
+c_expr(CT, OT, e.f) =
+     c_expr(CT, OT, e);
+     Select f
 
-c_expr(e.m(e')) =
-     c_expr(e);
+c_expr(CT, OT, e.m(e')) =
+     c_expr(CT, OT, e);
      Push;
-     c_expr(e');
-     Call meth_id(m)
+     c_expr(CT, OT, e');
+     Call m
 
-c_expr(e1 == e2 ? e3 : e4) =
-     c_expr(e1);
+c_expr(CT, OT, e1 == e2 ? e3 : e4) =
+     c_expr(CT, OT, e1);
      Push;
-     c_expr(e2);
+     c_expr(CT, OT, e2);
      Beq EQ;       (note: these are indeed relative forward jumps, so this works)
-     c_expr(e4);
+     c_expr(CT, OT, e4);
      Push;         }  <--- a way to encode unconditional forward jump
      Beq END;      }
-EQ:  c_expr(e3);
+EQ:  c_expr(CT, OT, e3);
 END: Nop
+
+
+--------------------------------------------------------------------------------
+| Def.: Compilation of (complete) programs
+--------------------------------------------------------------------------------
+
+Compiling a complete program is quite straightforward once we know how
+to compile expressions. We can get a list of class out of CT by
+skipping "holes" in the domain, and a list of objects for each class
+by skipping "holes" in the domain and using one counter per class.
+
+
+--------------------------------------------------------------------------------
+| Problems & questions
+--------------------------------------------------------------------------------
+
+* We only define a compilation for complete programs. How can we state
+full abstraction in such a setting?
+
+                   P ~ Q  <->  compile P ~ compile Q
+
+At the high level, we said that P and Q might be partial, so we should
+have a compilation for partial programs, and a notion of observational
+equivalence for the result of compiling high-level partial programs (=
+low-level partial programs?).
+
+* Can we still have something as simple as lists of classes &
+per-compartment lists of objects? In particular, our definition for
+obj_id will not be usable in this setting. Should we update the source
+language to have object indices represented as (C, n) at the source
+level already? Would this help?
+
+----> Maybe we should think about what happens on more concrete
+      machines wrt compiling partial programs, before trying to answer
+      these questions.
+
 
 ================================================================================
 | Symbolic micro-policy (compartmentalization variant)
