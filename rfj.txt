@@ -605,23 +605,20 @@ seen as implementations of this one.
  | Nop
  | This                     copy from this to res
  | Arg                      copy from arg to res
- | Push                     push res to compartment stack
+ | Push                     push res to current compartment's "user stack"
  | Ref o                    load constant o to res
- | Select f                 select a field of object in res
+ | Select f                 select a field of the object in res
  | Call m                   call a method of the object on top of the stack
                             (which gets removed from the stack in the process)
-                            current result is used as argument)
- | Beq n                            equality test with forward jump
+                            (current result is used as argument)
+ | Beq n                    equality test with forward jump
                             (skip n instructions if equal)
-                            (compares current result with top value on the stack)
-                            (the top value gets removed in the process)
+                            (compares res with top value on the stack)
+                            (the stack top value gets removed in the process)
 
 
 CH: Descriptions above are not understandable without some more
-    high-level intuition Might display all this in reverse order.
-CH: Seems to me that on top of this the descriptions themselves were
-    simply bad, tried to improve them
-
+    high-level intuition. Display all this in reverse order.
 
  code ::= [] | instr :: code
 
@@ -705,8 +702,7 @@ Now the rules:
   (comps, reg, call_stack, Arg :: code) -> (comps, reg', call_stack, code)
 
   reg[res] = (co, no)
-  reg[this] = (co, _)         same compartment side condition
-                              (--> to encode private fields)
+  reg[this] = (co, _)       (same compartment side condition; private fields)
   comps[co] = (_, objects, _)
   objects[no] = fields
   fields[f] = of
