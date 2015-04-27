@@ -6,6 +6,7 @@ In the language definition we will use the notion of names. Names will
 be considered to be integers. When compiling to a realistic
 architecture, we will require that these integers are word-sized.
 
+CH: Integers or naturals? I think natural should do.
 
 --------------------------------------------------------------------------------
 | Q: Could we get rid of names?
@@ -218,6 +219,8 @@ equality on values is decidable. This gives the shape of e'', and is
 sufficient to conclude in the base case. In the inductive case,
 applying the induction hypothesis ends the proof.
 
+CH: sketchy, in Coq a simpler proof is to build an interpreter and
+    prove it correct (that interpreter is then useful on its own right)
 
 --------------------------------------------------------------------------------
 | Def.: Evaluation
@@ -261,7 +264,7 @@ forall i in [1,n]. classof(oi) = Ci
 | Def.: Expression typing
 --------------------------------------------------------------------------------
 
-We define environments as:
+We define typing environments as:
 
                            G ::= {this:Cr, arg:Ca}
 
@@ -317,6 +320,9 @@ forall i in [1,n]. Ci in dom(CT)
 forall j in [1,p]. (CT, OT); C |- Mj ok
 ---------------------------------------- CLASSOK
 (CT, OT) |- C ok
+
+CH: Should make sure that one can build finite derivations using this
+    even when classes are mutually dependent. I'm a bit worried actually.
 
 --------------------------------------------------------------------------------
 | Def.: (Complete) program typing
@@ -407,7 +413,7 @@ If then else via identity test (e.g. (b == true ? e1 : e2)).
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-| Subject reduction
+| Preservation (Subject reduction)
 --------------------------------------------------------------------------------
 | forall e e' C P G, P; G |- e : C ->
 |                    P |- e --> e' ->
@@ -475,6 +481,8 @@ We define the set of closing contexts at type C for a program P by:
 
      closing_contexts P C ::= {c | linkable c P  /\  |- c[P] : C}
 
+CH: TODO: These seem both syntactically broken.
+    Programs are not given types, they are not expressions.
 
 --------------------------------------------------------------------------------
 | Def.: Interface equivalence
@@ -499,7 +507,7 @@ the same value. That is:
   P ~ Q ::= same_iterface P Q /\
             forall C. forall c in closing_contexts P C. forall v.
             let o = 0 and m = 0 in
-            c[P] |- o.m(o) -->* v  <->  c[P] |- o.m(o) -->* v
+            c[P] |- o.m(o) -->* v  <->  c[Q] |- o.m(o) -->* v
 
 
 --------------------------------------------------------------------------------
@@ -517,13 +525,13 @@ We define the observational order on programs as follows:
 
 When we have P ~< Q, this means that Q captures all the behaviors of P.
 
+CH: Missing same_interface here?
 
 --------------------------------------------------------------------------------
 | Prop.: Decomposition of observational equivalence
 --------------------------------------------------------------------------------
 | forall P Q. P ~ Q <-> (P ~< Q and Q ~< P)
 --------------------------------------------------------------------------------
-
 
 --------------------------------------------------------------------------------
 | Q: Is our notion of observational equivalence relevant?
@@ -535,6 +543,9 @@ effects* (in particular: printing). Every time we update the source
 language, we should check very carefully if this definition is still
 relevant or should be updated.
 
+CH: There are other sanity checks we could try; one can for instance
+    prove this observational equivalence equivalent with other
+    definitions, e.g. observing only termination behavior
 
 ================================================================================
 | "Really abstract" machine
@@ -542,8 +553,9 @@ relevant or should be updated.
 
 Here we present an abstract machine. The goal is to capture exactly the
 properties of the source language, while offering a lower-level view. In
-particular, we present a compilation scheme for which full abstraction should
-be easy to show. Here full abstraction should be unconditional ; in
+particular, we present a compilation scheme to this abstract machine
+for which full abstraction should be easy to show.
+Here full abstraction should be unconditional ; in
 particular there is no notion of resource exhaustion: execution works
 with infinite stacks.
 
@@ -567,7 +579,7 @@ seen as implementations of this one.
  | Arg                              copy current argument object
  | Push                             push current result
  | Ref o                            assign current result
- | Select f                         select a field in current result
+ | Select f                         select a field in current result register
  | Call m                           call a method of the object on top of the stack
                                     (which gets removed from the stack in the process)
                                     (current result is used as argument)
@@ -575,6 +587,9 @@ seen as implementations of this one.
                                     (skip n instructions if equal)
                                     (compares current result with top value on the stack)
                                     (the top value gets removed in the process)
+
+CH: Descriptions above are not understandable without some more high-level intuition
+    Might display all this in reverse order.
 
  code ::= [] | instr :: code
 
