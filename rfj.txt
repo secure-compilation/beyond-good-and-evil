@@ -596,28 +596,32 @@ seen as implementations of this one.
 | Syntax
 --------------------------------------------------------------------------------
 
- c ::= n                            class index (where n is a natural number)
- o ::= (c, n)                       object index (where n is a natural number)
- f ::= n                            field index (where n is a natural number)
- m ::= n                            method index (where n is a natural number)
+ c ::= n                    class index (where n is a natural number)
+ o ::= (c, n)               object index (where n is a natural number)
+ f ::= n                    field index (where n is a natural number)
+ m ::= n                    method index (where n is a natural number)
 
  instr ::=
  | Nop
- | This                             copy current object
- | Arg                              copy current argument object
- | Push                             push current result
- | Ref o                            assign current result
- | Select f                         select a field in current result register
- | Call m                           call a method of the object on top of the stack
-                                    (which gets removed from the stack in the process)
-                                    (current result is used as argument)
+ | This                     copy from this to res
+ | Arg                      copy from arg to res
+ | Push                     push res to compartment stack
+ | Ref o                    load constant o to res
+ | Select f                 select a field of object in res
+ | Call m                   call a method of the object on top of the stack
+                            (which gets removed from the stack in the process)
+                            current result is used as argument)
  | Beq n                            equality test with forward jump
-                                    (skip n instructions if equal)
-                                    (compares current result with top value on the stack)
-                                    (the top value gets removed in the process)
+                            (skip n instructions if equal)
+                            (compares current result with top value on the stack)
+                            (the top value gets removed in the process)
 
-CH: Descriptions above are not understandable without some more high-level intuition
-    Might display all this in reverse order.
+
+CH: Descriptions above are not understandable without some more
+    high-level intuition Might display all this in reverse order.
+CH: Seems to me that on top of this the descriptions themselves were
+    simply bad, tried to improve them
+
 
  code ::= [] | instr :: code
 
@@ -631,8 +635,8 @@ CH: Descriptions above are not understandable without some more high-level intui
 
  user_stack ::= [] | o :: user_stack
 
- compartment ::= (class, objects, user_stack)
- compartments ::= [] | compartment :: compartments
+ comp ::= (class, objects, user_stack)
+ comps ::= [] | comp :: comps
 
  reg ::= (o, o, o)
 
@@ -650,6 +654,10 @@ At this level we make no distinction between inter- and intra-
 compartment calls. If we were to need this distinction it would anyway
 be lower level.
 
+CH: This abstract machine is fine for now, but bakes in an inefficient
+    compilation strategy with only 3 registers in use and lots of
+    stack fiddling. At some point we might think about compilation
+    schemes that use all the registers.
 
 --------------------------------------------------------------------------------
 | Def.: Reduction
@@ -657,92 +665,92 @@ be lower level.
 
 A common (implicit) premise to _all_ rules below is:
   reg[this] = (c, n)
-  compartments[c] = (_, objects, _)
+  comps[c] = (_, objects, _)
   n <= |objects|
 
 
 Now the rules:
 
-  -------------------------------------------------------------------------------------
-  (compartments, reg, call_stack, Nop :: code) -> (compartments, reg, call_stack, code)
+  -----------------------------------------------------------------------
+  (comps, reg, call_stack, Nop :: code) -> (comps, reg, call_stack, code)
 
   reg[res] = o
   reg[this] = (c, _)
-  compartments[c] = (class, objects, user_stack)
-  compartments' = compartements[c -> (class, objects, o :: user_stack)]
-  ---------------------------------------------------------------------------------------
-  (compartments, reg, call_stack, Push :: code) -> (compartments', reg, call_stack, code)
+  comps[c] = (class, objects, user_stack)
+  comps' = comps[c -> (class, objects, o :: user_stack)]
+  -------------------------------------------------------------------------
+  (comps, reg, call_stack, Push :: code) -> (comps', reg, call_stack, code)
 
   o = (co, no)
-  compartments[co] = (_, objects, _)                     } what if we do
-  no <= |objects|                                        } not check this?
-                         (probably: harder proofs but nothing bad happens?
-                          actually: would break full abstraction?
-                            if this is attacker code, then instead of failing here we would
-                            fail only when this object becomes "this", so this could allow
-                            to learn if a given class performs calls on a given argument
-                            or not)
+  comps[co] = (_, objects, _)                 } what if we do
+  no <= |objects|                             } not check this?
+            (probably: harder proofs but nothing bad happens?
+             actually: would break full abstraction?
+               if this is attacker code, then instead of failing here we would
+               fail only when this object becomes "this", so this could allow
+               to learn if a given class performs calls on a given argument
+               or not)
   reg' = reg[res <- o]
-  ----------------------------------------------------------------------------------------
-  (compartments, reg, call_stack, Ref o :: code) -> (compartments, reg', call_stack, code)
+  --------------------------------------------------------------------------
+  (comps, reg, call_stack, Ref o :: code) -> (comps, reg', call_stack, code)
 
   reg[this] = o
   reg' = reg[res <- o]
-  ---------------------------------------------------------------------------------------
-  (compartments, reg, call_stack, This :: code) -> (compartments, reg', call_stack, code)
+  -------------------------------------------------------------------------
+  (comps, reg, call_stack, This :: code) -> (comps, reg', call_stack, code)
 
   reg[arg] = o
   reg' = reg[res <- o]
-  --------------------------------------------------------------------------------------
-  (compartments, reg, call_stack, Arg :: code) -> (compartments, reg', call_stack, code)
+  ------------------------------------------------------------------------
+  (comps, reg, call_stack, Arg :: code) -> (comps, reg', call_stack, code)
 
   reg[res] = (co, no)
   reg[this] = (co, _)         same compartment side condition
                               (--> to encode private fields)
-  compartments[co] = (_, objects, _)
+  comps[co] = (_, objects, _)
   objects[no] = fields
   fields[f] = of
   reg' = reg[res <- of]
-  -------------------------------------------------------------------------------------------
-  (compartments, reg, call_stack, Select f :: code) -> (compartments, reg', call_stack, code)
+  -----------------------------------------------------------------------------
+  (comps, reg, call_stack, Select f :: code) -> (comps, reg', call_stack, code)
 
   reg[this] = othis
   reg[arg] = oarg
   othis = (c, _)
-  compartments[c] = (class, objects, o :: s)
-  compartments' = compartments[c -> (class, objects, s)]
+  comps[c] = (class, objects, o :: s)
+  comps' = comps[c -> (class, objects, s)]
   o = (co, no)
-  compartments[co] = (class, _, _)
+  comps[co] = (class, _, _)
   class[m] = code'
   reg[res] = oa
   reg' = reg[this <- o, arg <- oa,
              res <- o]    fix a default return value (the object itself)
                           / overwrite caller stuff
-  -----------------------------------------------------------------
-  (compartments, reg, call_stack, Call m :: code) ->
-    (compartments', reg', (othis, oarg, code) :: call_stack, code')
+  ---------------------------------------------------------------------
+  (comps, reg, call_stack, Call m :: code) ->
+    (comps', reg', (othis, oarg, code) :: call_stack, code')
 
                                                      return from call
   reg' = reg[this <- othis, arg <- oarg]
-  ----------------------------------------------------------------------
-  (compartments, reg, (othis, oarg, code) :: call_stack, []) ->
-                                  (compartments, reg', call_stack, code)
+  -------------------------------------------------------------------
+  (comps, reg, (othis, oarg, code) :: call_stack, []) ->
+                                  (comps, reg', call_stack, code)
 
   reg[this] = (c, _)
-  compartments[c] = (class, objects, o :: s)
-  compartments' = compartments[c <- (class, objects, s)]
+  comps[c] = (class, objects, o :: s)
+  comps' = comps[c <- (class, objects, s)]
   reg[res] = o  
   code' = drop n code
-  -----------------------------------------------------------------
-  (compartments, reg, Beq n :: code) -> (compartments, reg, code')
+  --------------------------------------------------
+  (comps, reg, Beq n :: code) -> (comps, reg, code')
 
   reg[this] = (c, _)
-  compartments[c] = (class, objects, o :: s)
-  compartments' = compartments[c <- (class, objects, s)]
+  comps[c] = (class, objects, o :: s)
+  comps' = comps[c <- (class, objects, s)]
   reg[res] = or
   o <> or
-  ---------------------------------------------------------------
-  (compartments, reg, Beq n :: code) -> (compartments, reg, code)
+  -------------------------------------------------
+  (comps, reg, Beq n :: code) -> (comps, reg, code)
 
 
 --------------------------------------------------------------------------------
