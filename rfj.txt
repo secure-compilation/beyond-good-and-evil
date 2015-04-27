@@ -3,10 +3,13 @@
 ================================================================================
 
 In the language definition we will use the notion of names. Names will
-be considered to be integers. When compiling to a realistic
-architecture, we will require that these integers are word-sized.
+be considered to be naturals. When compiling to a realistic
+architecture, we will require that these naturals are word-sized.
 
 CH: Integers or naturals? I think natural should do.
+
+YJ: Yes, that's what I meant by integers actually, my mistake.
+    Updated everywhere.
 
 --------------------------------------------------------------------------------
 | Q: Could we get rid of names?
@@ -42,11 +45,11 @@ A:
 One could get a user-friendly variant of our language by using strings
 for names. Then we could easily translate programs by using e.g. :
 
-* a hash algorithm to map these strings to word-sized integers, asking
+* a hash algorithm to map these strings to word-sized naturals, asking
 the user to give new names in case of collision, this approach would
 be interesting if we want to translate partial programs (or contexts),
 which would allow reusing the linking defined in the language with
-integers as names ;
+naturals as names ;
 
 * the order of declarations, this approach would be interesting if we
 only care about translating complete programs, that is, it requires to
@@ -56,20 +59,21 @@ this level.
 
 In both cases the main object (which would presumably have name
 "main") should be a special case which is necessarily mapped to
-integer 0 (the only fixed name in the language with integers as name).
+natural 0 (the only fixed name in the language with naturals as
+names).
 
 The properties one would get on such a variant of our
 language would be the same as the ones we will describe (maybe with
 some extra assumptions to prevent name clashes). From now on, we go
-back to the integer as names variant.
+back to the naturals as names variant.
 
 ================================================================================
 | Syntax
 ================================================================================
 
 C - class name -- mapped to class declarations L (CT)
-f - field index (integer)
-m - method index (integer)
+f - field index (natural)
+m - method index (natural)
 o - object names -- mapped to object declarations O (OT)
 
 P ::= (CT, OT)                   (partial) program
@@ -201,7 +205,7 @@ Proof: No rule applies when we have an object name in the left hand side.
 | forall v v', {v = v'} + {v <> v'}.
 --------------------------------------------------------------------------------
 
-Proof: Object names are integers.
+Proof: Object names are naturals.
 
 --------------------------------------------------------------------------------
 | Prop.: Determinism of our reduction relation
@@ -484,6 +488,16 @@ We define the set of closing contexts at type C for a program P by:
 CH: TODO: These seem both syntactically broken.
     Programs are not given types, they are not expressions.
 
+YJ: In the first approach, we had a main expression that was distinct
+    from the program.
+    I have changed things so that now, their is no main expression,
+    but a main object which is part of the program: object 0. Then,
+    evaluation begins by calling the first method of this object.
+    In the latest set of rules (see TPROG, TPROG'), programs are given
+    a type which would be the one of their "result value", that is,
+    the result type of calling the first method on the first object.
+    Is this bad practice?
+
 --------------------------------------------------------------------------------
 | Def.: Interface equivalence
 --------------------------------------------------------------------------------
@@ -527,6 +541,18 @@ When we have P ~< Q, this means that Q captures all the behaviors of P.
 
 CH: Missing same_interface here?
 
+YJ: For this definition I only need one way of same_interface, that is:
+      forall C. forall c in closing_contexts P C.
+        c in closing_contexts Q C.
+    It could indeed be obtained directly from same_interface, and I
+    don't know what definition would be the most interesting. I'm not
+    sure how much this order is useful anyway. It looks a bit
+    artificial, but some people seem to like it (e.g. in the Java
+    Jr. paper, contextual equivalence is defined in terms of such an
+    order).
+    We can think more about what definition looks more relevant when
+    we start to use ~< (if we ever use it).
+
 --------------------------------------------------------------------------------
 | Prop.: Decomposition of observational equivalence
 --------------------------------------------------------------------------------
@@ -546,6 +572,8 @@ relevant or should be updated.
 CH: There are other sanity checks we could try; one can for instance
     prove this observational equivalence equivalent with other
     definitions, e.g. observing only termination behavior
+
+YJ: Good idea.
 
 ================================================================================
 | "Really abstract" machine
@@ -796,6 +824,11 @@ level already? Would this help?
       machines wrt compiling partial programs, before trying to answer
       these questions.
 
+If we have partial programs and linking at the low level, then linking
+should be associative at both levels, and an interesting property of
+the compilation scheme would be:
+
+ compile (P1 /\/\ ... /\/\ Pn) = compile P1 /\/\ ... /\/\ compile Pn
 
 ================================================================================
 | Symbolic micro-policy (compartmentalization variant)
@@ -814,8 +847,8 @@ Many differences with respect to Oakland 2015 policy:
     - monitor services that return in a different compartment (call and return)
 
 --------------------------------------------------------------------------------
-
-Symbolic tags
+| Symbolic tags
+--------------------------------------------------------------------------------
 
 Tm  ::= c | _|_         once we have allocation, _|_ would be unallocated space
 Tr  ::= ()
@@ -823,8 +856,8 @@ Tpc ::= c            Q: do we need to switch to <F,c> where F in {Jal,NoJal}?
 Ts  ::= ()
 
 --------------------------------------------------------------------------------
-
-Symbolic rules
+| Symbolic rules
+--------------------------------------------------------------------------------
 
 Nop: {tpc=c, tci=c} -> {tpc'=c}
 
@@ -847,8 +880,8 @@ Bnz: {tpc=c, tci=c, tr=()} -> {tpc'=c}
 Service: {tpc=c, tci=()} -> {}
 
 --------------------------------------------------------------------------------
-
-Extra state
+| Extra state
+--------------------------------------------------------------------------------
 
 call_stack : list (word, word, word)
 
@@ -857,8 +890,8 @@ lookup_method : obj -> nat -> option addr
 lookup_field : obj -> nat -> option addr
 
 --------------------------------------------------------------------------------
-
-Monitor services
+| Monitor services
+--------------------------------------------------------------------------------
 
 call(mem, reg, pc@c, (call_stack, lookup_method, lookup_field)) =
   let o = reg[r_arg1] in
@@ -882,8 +915,8 @@ return(mem, reg, pc@c, (call_stack, lookup_method, lookup_field)) =
   | [] -> None
 
   is this useful??
-    |
-    |
+    |   if we remove it, then lookup_field shouldn't be extra state,
+    |   we should have a fixed scheme instead
     v
 
 select(mem, reg, pc@c, (call_stack, lookup_method, lookup_field)) =
@@ -910,6 +943,7 @@ Note: allowing returns to forged ra addresses seem ok because:
   abstraction proof might be hard (or impossible if the intuition
   happens to be wrong), in which case we should require that monitor
   services are only reached via Jal
+
 
 ================================================================================
 | Compilation scheme (old)
