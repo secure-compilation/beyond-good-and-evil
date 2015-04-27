@@ -6,11 +6,6 @@ In the language definition we will use the notion of names. Names will
 be considered to be naturals. When compiling to a realistic
 architecture, we will require that these naturals are word-sized.
 
-CH: Integers or naturals? I think natural should do.
-
-YJ: Yes, that's what I meant by integers actually, my mistake.
-    Updated everywhere.
-
 --------------------------------------------------------------------------------
 | Q: Could we get rid of names?
 --------------------------------------------------------------------------------
@@ -370,6 +365,8 @@ programs. But we don't necessarily need partial program typing,
 although it could be interesting to study. See our notion of
 observational equivalence below to understand why we don't need it.
 
+CH: Typing partial problems seems easy.
+    Isn't avoiding this more complex than necessary?
 
 ================================================================================
 | Encodings
@@ -497,6 +494,8 @@ YJ: In the first approach, we had a main expression that was distinct
     a type which would be the one of their "result value", that is,
     the result type of calling the first method on the first object.
     Is this bad practice?
+
+CH: Maybe not bad, just uselessly complicating things?
 
 --------------------------------------------------------------------------------
 | Def.: Interface equivalence
@@ -793,13 +792,15 @@ c_expr(CT, OT, e1 == e2 ? e3 : e4) =
 EQ:  c_expr(CT, OT, e3);
 END: Nop
 
+CH: How about writing down the main invariants of this compiler
+    (e.g. in terms of register usage)?
 
 --------------------------------------------------------------------------------
 | Def.: Compilation of (complete) programs
 --------------------------------------------------------------------------------
 
 Compiling a complete program is quite straightforward once we know how
-to compile expressions. We can get a list of class out of CT by
+to compile expressions. We can get a list of classes out of CT by
 skipping "holes" in the domain, and a list of objects for each class
 by skipping "holes" in the domain and using one counter per class.
 
