@@ -365,7 +365,7 @@ programs. But we don't necessarily need partial program typing,
 although it could be interesting to study. See our notion of
 observational equivalence below to understand why we don't need it.
 
-CH: Typing partial problems seems easy.
+CH: Typing partial programs seems easy.
     Isn't avoiding this more complex than necessary?
 
 ================================================================================
@@ -381,10 +381,10 @@ For each tuple type T=(C1, ..., Cn)
 class Unit {}
 
 class Tuple_T {
-  C1, ..., Cn;
-  C1 get_1(Unit) { this.1 },
+  C1 f1, ..., Cn fn;
+  C1 get_1(Unit) { this.f1 },
   ...
-  Cn get_n(Unit) { this.n },
+  Cn get_n(Unit) { this.fn },
 }
 
 --------------------------------------------------------------------------------
