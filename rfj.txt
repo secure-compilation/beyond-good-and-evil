@@ -636,7 +636,7 @@ Rules:
   RF(this) = (l, _)
   RF'(this) = (l, _)
   ------------------------------------------------------ RETURN-INTRA
-  (RF, GS, LT, Return :: code) -> (RF', GS', LT', code')
+  (RF, GS, LT, Return :: code) -> (RF', GS', LT, code')
 
 
   RF(this) = (l, _)
