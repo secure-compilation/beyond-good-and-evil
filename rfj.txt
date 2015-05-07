@@ -136,6 +136,30 @@ translate to the previous one.
 --------------------------------------------------------------------------------
 | Def.: Reduction relation on expressions.
 --------------------------------------------------------------------------------
+CH: we want this side-condition:
+
+OT(this) = obj C { ... }
+
+CH: for this we need to remember "this" instead of substituting it
+    (environmental instead of substitution semantics)
+
+CH: Andrew also wonders if packages are a better notion of modules
+    - I don't disagree with this, but we're trying to keep things simple
+
+CH: Andrew wonders whether we should have a stronger variant of private,
+    which requires that object selection is always done on this
+    - somehow related to the next proposal
+
+CH: Andrew idea: object-based calculus, with all the current simplicity
+    (conflate objects and classes)
+    - classes were our types, what do we do when they are gone:
+      - everything becomes untyped?
+      - structural object types a la Abadi and Cardelli
+    - everything easily becomes higher-order
+      - with dynamic allocation we get higher-order store
+      - with real variables and object creation we would probably
+        have to create closures
+      - Andrew: cloning based system?
 
 OT(o) = obj C { o1, ..., on }
 f = i in [1,n]
@@ -450,6 +474,12 @@ their domains are disjoint, that is:
 | Def.: Linking
 --------------------------------------------------------------------------------
 
+TODO: Support separate type-checking and compilation
+
+CH: To keep our corruption property simple it seems we should stick to
+    programs that correspond to low-level components, or to sets of
+    low-level components.
+
 Two linkable (partial) programs P = (CT, OT) and Q = (CT', OT') can be
 linked to get a new (partial) program P /\/\ Q.
 
@@ -508,6 +538,8 @@ type, that is:
 
   same_interface P Q := forall C. closing_contexts P C = closing_contexts Q C
 
+CH: There might be a more direct (equivalent) way of defining this:
+    same classes, same fields, same methods, same types for everything
 
 --------------------------------------------------------------------------------
 | Def.: Observational equivalence
