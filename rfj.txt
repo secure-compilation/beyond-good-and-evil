@@ -147,7 +147,7 @@ OT(o) = obj C { o1, ..., on }
 CT(C) = class {...; M1, ..., Mp }
 Mj = Cr (Ca) { e }
 m = j in [1,p]
---------------------------------------- CALL
+----------------------------------------- CALL
 (CT, OT) |- o.m(oa) --> e[oa/arg][o/this]
 
 
@@ -175,6 +175,7 @@ e1 --> e1'
 -------------------------------------------------- CONGRRTEST
 (CT, OT) |- o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
 
+(CT, OT) |- (user_stacks, reg, call_stack, code) -->
 
 We sometimes use the notation e --> e', where CT and OT are implicitly assumed.
 
@@ -582,56 +583,153 @@ Here we present an abstract machine. The goal is to capture exactly the
 properties of the source language, while offering a lower-level view. In
 particular, we present a compilation scheme to this abstract machine
 for which full abstraction should be easy to show.
-Here full abstraction should be unconditional ; in
-particular there is no notion of resource exhaustion: execution works
-with infinite stacks.
+Here full abstraction should be unconditional ; in particular there is
+no notion of resource exhaustion: execution works with infinite
+stacks.
 
 The hope is that this lower-level view will help when moving to other
 machines. Actually, the other machines that we will present may be
 seen as implementations of this one.
+
+At this level of abstraction, we still want a clear distinction
+between code and data -- and between the program and the state of the
+machine. This allows us to keep a clear definition of programs and
+contexts at this level, when we want to talk about full abstraction:
+the attacker may only corrupt (parts of) the program.
+
+Hence we define states and programs, and then a relation:
+
+  program |- state -> state'
+
+This is very close to the high-level language. The main interesting
+distinction is that all derivation trees will have null depth, that
+is, there is no rule of the following shape:
+
+  ... program' |- state'' -> state''' ...
+  ---------------------------------------
+  program |- state -> state'
+
+In other words, going from one state of the machine to another state
+does not involve "running another machine", whereas in the high-level
+language reducing an expression may involve reducing another
+expression. This is why this system can be seen as a "machine", and
+the high-level one cannot.
 
 
 --------------------------------------------------------------------------------
 | Syntax
 --------------------------------------------------------------------------------
 
- c ::= n                    class index (where n is a natural number)
- o ::= (c, n)               object index (where n is a natural number)
- f ::= n                    field index (where n is a natural number)
- m ::= n                    method index (where n is a natural number)
+  c ::= n                    class index (where n is a natural number)
+  o ::= n                    object index (where n is a natural number)
+  f ::= n                    field index (where n is a natural number)
+  m ::= n                    method index (where n is a natural number)
 
- instr ::=
- | Nop
- | This                     copy from this to res
- | Arg                      copy from arg to res
- | Push                     push res to current compartment's "user stack"
- | Ref o                    load constant o to res
- | Select f                 select a field of the object in res
- | Call m                   call a method of the object on top of the stack
-                            (which gets removed from the stack in the process)
-                            (current result is used as argument)
- | Beq n                    equality test with forward jump
-                            (skip n instructions if equal)
-                            (compares res with top value on the stack)
-                            (the stack top value gets removed in the process)
 
+Machine states
+==============
+
+  state ::= (
+    reg,                    a register file
+    user_stacks,            stacks used for computations (one per class)
+    call_stack,             stack used for calls handling
+    code                    running code
+  )
+
+Registers
+---------
+
+We have two registers, both read-only: this and arg. They are set when
+performing a call, and restored when returning from a call.
+
+  reg ::= (
+    o,                      this register value (notation: reg[this])
+    o'                      arg register value (notation: reg[arg])
+  )
+
+User stacks
+-----------
+
+We have user stacks of values, one for each class:
+
+  user_stack ::= [] | o :: user_stack
+
+  user_stacks ::= partial map, mapping a class index to a user_stack
+
+The running code can only use (i.e. pop from / push to) the user stack
+owned by the class of the object that is currently referenced by
+register this. This prevents methods of a given class from
+compromising the user stack used by a caller of a different
+class. Hence, an attacker compromising a given class won't be able to
+damage an uncompromised caller's user stack before control gets back
+to this caller.
+
+Call stack
+----------
+
+We have a call stack which, at call time, will store the caller's
+register file and continuation ; that is, the values of registers this
+and arg, and the code to execute upon return from the callee.
+
+  call_stack ::= [] | (reg, code) :: call_stack
+
+Code
+----
+
+Finally, the syntax of our assembly-like language is as follows. A
+code fragment is a sequence of instructions, described hereafter.
+
+  code ::= [] | instr :: code
+
+  instr ::=
+  | Nop
+  | This                     push reg[this] on top of the user stack
+  | Arg                      push reg[arg] on top of the user stack
+  | Ref o                    push constant o on top of the user stack
+  | Dup                      duplicate top value of the user stack
+  | Select f                 select field f of the object currently
+                             referenced by the top value of the user
+                             stack (the value of this field replaces
+                             the top value of the user stack)
+  | Call m                   call method m of the object currently
+                             referenced by the top value of the user
+                             stack, using the second topmost value as
+                             the argument for this call (both values
+                             get removed from the user stack before the
+                             call, and the result of the call will be
+                             pushed on top of the user stack after the
+                             call)
+  | Return                   return from a call, with user stack top
+                             value as a result (the user stack top
+                             value gets removed in the process)
+  | Beq n                    test for equality between the two topmost
+                             values on the user stack, skipping n
+                             instructions (forward jump) if they are
+                             equal (these two values get removed from
+                             the user stack in the process)
 
 CH: Descriptions above are not understandable without some more
     high-level intuition. Display all this in reverse order.
 
- code ::= [] | instr :: code
+
+Programs
+========
+
+Like in the high-level language, programs are defined by a class table
+and an object table. However, code is written in our assembly-like
+language instead of being high-level expressions.
 
  methods ::= [] | code :: methods
  fields ::= [] | o :: fields
 
  class = methods
- object = fields
+ object = (c, fields)
 
  objects ::= [] | object :: objects
 
  user_stack ::= [] | o :: user_stack
 
- comp ::= (class, objects, user_stack)
+ comp ::= (class, user_stack)
  comps ::= [] | comp :: comps
 
  reg ::= (o, o, o)
@@ -639,12 +737,11 @@ CH: Descriptions above are not understandable without some more
     used as a mapping from {this, arg, res} to object indices (o)
     Notations: (o,_,_)[this]=o ; (_,o,_)[arg]=o ; (_,_,o)[res]=o
 
- call_stack ::= [] | (o, o, code) :: call_stack
 
     at call time, we store the current object and argument
     together with a continuation
 
- state ::= (compartments, reg, call_stack, code)
+
 
 At this level we make no distinction between inter- and intra-
 compartment calls. If we were to need this distinction it would anyway
@@ -660,7 +757,8 @@ CH: This abstract machine is fine for now, but bakes in an inefficient
 --------------------------------------------------------------------------------
 
 A common (implicit) premise to _all_ rules below is:
-  reg[this] = (c, n)
+  reg[this] = o
+  objects[o] = (c, n)
   comps[c] = (_, objects, _)
   n <= |objects|
 
