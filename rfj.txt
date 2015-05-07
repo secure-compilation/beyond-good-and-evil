@@ -45,7 +45,6 @@ e ::=                            expressions
   | e.m(e)                         method call
   | e == e ? e : e                 object identity test
 
-
 ================================================================================
 | Operational semantics
 ================================================================================
@@ -92,7 +91,6 @@ e1 --> e1'
 -------------------------------------------------- CONGRRTEST
 (LT, OT) |- o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
 
-(LT, OT) |- (user_stacks, reg, call_stack, code) -->
 
 We sometimes use the notation e --> e', where LT and OT are implicitly assumed.
 
@@ -420,175 +418,131 @@ When we have P ~< Q, this means that Q captures all the behaviors of P.
 --------------------------------------------------------------------------------
 
 ================================================================================
-| "Really abstract" machine
+| "Really abstract" intermediate machine
 ================================================================================
 
-Here we present an abstract machine. The goal is to capture exactly the
-properties of the source language, while offering a lower-level view. In
-particular, we present a compilation scheme to this abstract machine
-for which full abstraction should be easy to show.
-Here full abstraction should be unconditional ; in particular there is
-no notion of resource exhaustion: execution works with infinite
+Here we present an abstract machine. The goal is to have an
+intermediate language which offers a lower-level view, while still
+being abstract (e.g. we allow unbounded stacks).
+
+--------------------------------------------------------------------------------
+| Informal overview
+--------------------------------------------------------------------------------
+
+A machine state is formed by:
+
+* the currently running code;
+
+* two read-only registers, this and arg, one holding a reference to
+  the current object, the other holding a reference to the current
+  argument;
+
+* a call stack that will allow storing the current environment before
+  performing a call, so that it can be restored afterwards;
+
+* compartments, each corresponding to a high-level class, storing the
+  code for its methods, all its instances, and a local
+  stack used when executing a method of this compartment.
+
+The running code can only use (i.e. pop from / push to) the local
+stack owned by the class of the object that is currently referenced by
+register this. Upon call, we may switch compartments, and thus local
 stacks.
 
-The hope is that this lower-level view will help when moving to other
-machines. Actually, the other machines that we will present may be
-seen as implementations of this one.
-
-At this level of abstraction, we still want a clear distinction
-between code and data -- and between the program and the state of the
-machine. This allows us to keep a clear definition of programs and
-contexts at this level, when we want to talk about full abstraction:
-the attacker may only corrupt (parts of) the program.
-
-Hence we define states and programs, and then a relation:
-
-  program |- state -> state'
-
-This is very close to the high-level language. The main interesting
-distinction is that all derivation trees will have null depth, that
-is, there is no rule of the following shape:
-
-  ... program' |- state'' -> state''' ...
-  ---------------------------------------
-  program |- state -> state'
-
-In other words, going from one state of the machine to another state
-does not involve "running another machine", whereas in the high-level
-language reducing an expression may involve reducing another
-expression. This is why this system can be seen as a "machine", and
-the high-level one cannot.
+This prevents low-level methods from compromising the local stack used by a
+caller of a different compartment. An attacker compromising a given
+class won't be able to damage an uncompromised caller's user stack
+before control gets back to this caller.
 
 --------------------------------------------------------------------------------
 | Syntax
 --------------------------------------------------------------------------------
 
-  c ::= n                    class index (where n is a natural number)
-  o ::= n                    object index (where n is a natural number)
-  f ::= n                    field index (where n is a natural number)
-  m ::= n                    method index (where n is a natural number)
+At this level only compartments have names. Objects are indexed
+compartement-wise.
+
+l ::= n                    compartment name (where n is natural)
+o ::= n                    object index (where n is natural)
+f ::= n                    field index (where n is natural)
+m ::= n                    method index (where n is natural)
+
+r ::= (l, o)               object reference
+
+s ::= (                    machine state
+  RF,                        a register file
+  GS,                        a global call stack
+  LT,                        compartments table
+  code                       the running code
+)
+
+RF ::= (                   register file of immutable registers
+  this => r,                 current instance
+  arg => r                   current argument
+)
+
+GS ::= [] | (              call stack: to restore execution after a call
+  RF,                        register file to be restored
+  code                       code to be executed (will pop the result
+                             value from the local stack)
+) :: GS
+
+LT ::= partial map from l to L
+
+L ::= {                    compartment
+  M1, ..., Mp;               methods
+  O1, ..., Oq;               instances
+  LS                         local stack
+}
+
+  where p, q >= 0
+
+O ::= (r1, ..., rn)        object
+
+  where n >= 0
+
+M ::=                      method
+  code
+
+LS ::=                     local stack storing object references
+  [] | r :: local_stack
+
+code ::=                   code
+  [] | instr :: code         list of instructions
 
 
-Machine states
-==============
+Note: "stack" always means "current local stack" when describing an
+instruction hereafter, similarly "push" and "pop" always refer to
+operations on the current local stack.
 
-  state ::= (
-    reg,                    a register file
-    user_stacks,            stacks used for computations (one per class)
-    call_stack,             stack used for calls handling
-    code                    running code
-  )
 
-Registers
----------
-
-We have two registers, both read-only: this and arg. They are set when
-performing a call, and restored when returning from a call.
-
-  reg ::= (
-    o,                      this register value (notation: reg[this])
-    o'                      arg register value (notation: reg[arg])
-  )
-
-User stacks
------------
-
-We have user stacks of values, one for each class:
-
-  user_stack ::= [] | o :: user_stack
-
-  user_stacks ::= partial map, mapping a class index to a user_stack
-
-The running code can only use (i.e. pop from / push to) the user stack
-owned by the class of the object that is currently referenced by
-register this. This prevents methods of a given class from
-compromising the user stack used by a caller of a different
-class. Hence, an attacker compromising a given class won't be able to
-damage an uncompromised caller's user stack before control gets back
-to this caller.
-
-Call stack
-----------
-
-We have a call stack which, at call time, will store the caller's
-register file and continuation ; that is, the values of registers this
-and arg, and the code to execute upon return from the callee.
-
-  call_stack ::= [] | (reg, code) :: call_stack
-
-Code
-----
-
-Finally, the syntax of our assembly-like language is as follows. A
-code fragment is a sequence of instructions, described hereafter.
-
-  code ::= [] | instr :: code
-
-  instr ::=
+instr ::=                  instruction
   | Nop
-  | This                     push reg[this] on top of the user stack
-  | Arg                      push reg[arg] on top of the user stack
-  | Ref o                    push constant o on top of the user stack
-  | Dup                      duplicate top value of the user stack
-  | Select f                 select field f of the object currently
-                             referenced by the top value of the user
-                             stack (the value of this field replaces
-                             the top value of the user stack)
-  | Call m                   call method m of the object currently
-                             referenced by the top value of the user
-                             stack, using the second topmost value as
-                             the argument for this call (both values
-                             get removed from the user stack before the
-                             call, and the result of the call will be
-                             pushed on top of the user stack after the
-                             call)
-  | Return                   return from a call, with user stack top
-                             value as a result (the user stack top
-                             value gets removed in the process)
-  | Beq n                    test for equality between the two topmost
-                             values on the user stack, skipping n
-                             instructions (forward jump) if they are
-                             equal (these two values get removed from
-                             the user stack in the process)
+  | This                     push reg[this]
+  | Arg                      push reg[arg]
+  | Ref r                    push reference r
+  | Dup                      duplicate top value
+  | Select f                 field selection
+                               pop, then push the value of field f of
+                               the popped object
+  | Call m                   method call
+                               pop twice, then call method m of the
+                               first popped object, using the second
+                               popped object as argument
+  | Return                   return from call (with result)
+                               pop, then resume execution to the
+			       caller after pushing popped value to
+			       its local stack
+  | Beq n                    object identity test
+                               pop twice, then skip n instructions
+			       (forward jump) if the two references
+			       refer to the same object
 
-
-Programs
-========
-
-Like in the high-level language, programs are defined by a class table
-and an object table. However, code is written in our assembly-like
-language instead of being high-level expressions.
-
- methods ::= [] | code :: methods
- fields ::= [] | o :: fields
-
- class = methods
- object = (c, fields)
-
- objects ::= [] | object :: objects
-
- user_stack ::= [] | o :: user_stack
-
- comp ::= (class, user_stack)
- comps ::= [] | comp :: comps
-
- reg ::= (o, o, o)
-
-    used as a mapping from {this, arg, res} to object indices (o)
-    Notations: (o,_,_)[this]=o ; (_,o,_)[arg]=o ; (_,_,o)[res]=o
-
-
-    at call time, we store the current object and argument
-    together with a continuation
-
-
-
-At this level we make no distinction between inter- and intra-
+Note: At this level we make no distinction between inter- and intra-
 compartment calls. If we were to need this distinction it would anyway
 be lower level.
 
 --------------------------------------------------------------------------------
-| Def.: Reduction
+| Def.: Reduction (old)
 --------------------------------------------------------------------------------
 
 A common (implicit) premise to _all_ rules below is:
@@ -682,7 +636,7 @@ Now the rules:
 
 
 --------------------------------------------------------------------------------
-| Def.: Compilation of expressions
+| Def.: Compilation of expressions (old)
 --------------------------------------------------------------------------------
 
 Define:
@@ -726,7 +680,7 @@ EQ:  c_expr(LT, OT, e3);
 END: Nop
 
 --------------------------------------------------------------------------------
-| Def.: Compilation of (complete) programs
+| Def.: Compilation of (complete) programs (old)
 --------------------------------------------------------------------------------
 
 Compiling a complete program is quite straightforward once we know how
@@ -734,36 +688,6 @@ to compile expressions. We can get a list of classes out of LT by
 skipping "holes" in the domain, and a list of objects for each class
 by skipping "holes" in the domain and using one counter per class.
 
-
---------------------------------------------------------------------------------
-| Problems & questions
---------------------------------------------------------------------------------
-
-* We only define a compilation for complete programs. How can we state
-full abstraction in such a setting?
-
-                   P ~ Q  <->  compile P ~ compile Q
-
-At the high level, we said that P and Q might be partial, so we should
-have a compilation for partial programs, and a notion of observational
-equivalence for the result of compiling high-level partial programs (=
-low-level partial programs?).
-
-* Can we still have something as simple as lists of classes &
-per-compartment lists of objects? In particular, our definition for
-obj_id will not be usable in this setting. Should we update the source
-language to have object indices represented as (l, n) at the source
-level already? Would this help?
-
-----> Maybe we should think about what happens on more concrete
-      machines wrt compiling partial programs, before trying to answer
-      these questions.
-
-If we have partial programs and linking at the low level, then linking
-should be associative at both levels, and an interesting property of
-the compilation scheme would be:
-
- compile (P1 /\/\ ... /\/\ Pn) = compile P1 /\/\ ... /\/\ compile Pn
 
 ================================================================================
 | Symbolic micro-policy (compartmentalization variant)
