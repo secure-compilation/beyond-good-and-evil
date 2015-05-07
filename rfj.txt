@@ -541,140 +541,164 @@ Note: At this level we make no distinction between inter- and intra-
 compartment calls. If we were to need this distinction it would anyway
 be lower level.
 
---------------------------------------------------------------------------------
-| Def.: Reduction (old)
---------------------------------------------------------------------------------
-
-A common (implicit) premise to _all_ rules below is:
-  reg[this] = o
-  objects[o] = (c, n)
-  comps[c] = (_, objects, _)
-  n <= |objects|
-
-
-Now the rules:
-
-  -----------------------------------------------------------------------
-  (comps, reg, call_stack, Nop :: code) -> (comps, reg, call_stack, code)
-
-  reg[res] = o
-  reg[this] = (c, _)
-  comps[c] = (class, objects, user_stack)
-  comps' = comps[c -> (class, objects, o :: user_stack)]
-  -------------------------------------------------------------------------
-  (comps, reg, call_stack, Push :: code) -> (comps', reg, call_stack, code)
-
-  o = (co, no)
-  comps[co] = (_, objects, _)                 } what if we do
-  no <= |objects|                             } not check this?
-            (probably: harder proofs but nothing bad happens?
-             actually: would break full abstraction?
-               if this is attacker code, then instead of failing here we would
-               fail only when this object becomes "this", so this could allow
-               to learn if a given class performs calls on a given argument
-               or not)
-  reg' = reg[res <- o]
-  --------------------------------------------------------------------------
-  (comps, reg, call_stack, Ref o :: code) -> (comps, reg', call_stack, code)
-
-  reg[this] = o
-  reg' = reg[res <- o]
-  -------------------------------------------------------------------------
-  (comps, reg, call_stack, This :: code) -> (comps, reg', call_stack, code)
-
-  reg[arg] = o
-  reg' = reg[res <- o]
-  ------------------------------------------------------------------------
-  (comps, reg, call_stack, Arg :: code) -> (comps, reg', call_stack, code)
-
-  reg[res] = (co, no)
-  reg[this] = (co, _)       (same compartment side condition; private fields)
-  comps[co] = (_, objects, _)
-  objects[no] = fields
-  fields[f] = of
-  reg' = reg[res <- of]
-  -----------------------------------------------------------------------------
-  (comps, reg, call_stack, Select f :: code) -> (comps, reg', call_stack, code)
-
-  reg[this] = othis
-  reg[arg] = oarg
-  othis = (c, _)
-  comps[c] = (class, objects, o :: s)
-  comps' = comps[c -> (class, objects, s)]
-  o = (co, no)
-  comps[co] = (class, _, _)
-  class[m] = code'
-  reg[res] = oa
-  reg' = reg[this <- o, arg <- oa,
-             res <- o]    fix a default return value (the object itself)
-                          / overwrite caller stuff
-  ---------------------------------------------------------------------
-  (comps, reg, call_stack, Call m :: code) ->
-    (comps', reg', (othis, oarg, code) :: call_stack, code')
-
-                                                     return from call
-  reg' = reg[this <- othis, arg <- oarg]
-  -------------------------------------------------------------------
-  (comps, reg, (othis, oarg, code) :: call_stack, []) ->
-                                  (comps, reg', call_stack, code)
-
-  reg[this] = (c, _)
-  comps[c] = (class, objects, o :: s)
-  comps' = comps[c <- (class, objects, s)]
-  reg[res] = o  
-  code' = drop n code
-  --------------------------------------------------
-  (comps, reg, Beq n :: code) -> (comps, reg, code')
-
-  reg[this] = (c, _)
-  comps[c] = (class, objects, o :: s)
-  comps' = comps[c <- (class, objects, s)]
-  reg[res] = or
-  o <> or
-  -------------------------------------------------
-  (comps, reg, Beq n :: code) -> (comps, reg, code)
-
+Note: Now we actually have two rules for inter and intra, but they
+could be merged into one, following the intuition described
+above. They look cleaner when separated (otherwise we would be popping
+a value, then pushing it again to the very same stack, which looks a
+bit silly; the rule would also be longer to state).
 
 --------------------------------------------------------------------------------
-| Def.: Compilation of expressions (old)
+| Def.: Reduction
+--------------------------------------------------------------------------------
+
+Macro:
+
+  PointsToSomething(r) ::=
+    r = (l, o)
+    LT(l) = { ...; O1, ..., Oq; ... }
+    o <= q
+
+TODO: Add sanity checks in the rules, which should hopefully be
+*proved* useless e.g. because they are invariants. Having them around
+when stating the rules looks good. Is this a good idea? Would it be
+too strong to add everywhere the following premisse?
+
+    PointsToSomething(RF(this))
+    PointsToSomething(RF(arg))
+    forall l in dom(LT),
+      match LT(l) with
+      | { ...; ...; LS} =>
+            for every r in LS,
+            PointsToSomething(r)
+
+Rules:
+
+  ----------------------------------------------- NOP
+  (RF, GS, LT, Nop :: code) -> (RF, GS, LT, code)
+
+  RF(this) = (l, _)
+  LT(l) = { M1, ..., Mp; O1, ..., Oq; r :: LS }
+  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; r :: r :: LS }
+  ------------------------------------------------------------- DUP
+  (RF, GS, LT, Dup :: code) -> (RF, GS, LT', code)
+
+  RF(this) = (l, _)
+  LT(l) = { M1, ..., Mp; O1, ..., Oq; LS }
+  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; r :: LS }
+  -------------------------------------------------------- REF
+  (RF, GS, LT, Ref r :: code) -> (RF, GS, LT', code)
+
+  RF(this) = (l, _)
+  LT(l) = { M1, ..., Mp; O1, ..., Oq; LS }
+  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; RF(this) :: LS }
+  --------------------------------------------------------------- THIS
+  (RF, GS, LT, This :: code) -> (RF, GS, LT', code)
+
+  RF(this) = (l, _)
+  LT(l) = { M1, ..., Mp; O1, ..., Oq; LS }
+  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; RF(arg) :: LS }
+  -------------------------------------------------------------- ARG
+  (RF, GS, LT, Arg :: code) -> (RF, GS, LT', code)
+
+  RF(this) = (l, _)
+  LT(l) = { M1, ..., Mp; O1, ..., Oq; r :: LS }
+  r = (l, o)          requiring l here ensures field privacy
+  Oo = (r1, ..., rn)
+  f <= n
+  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; rf :: LS }
+  --------------------------------------------------------- SELECT
+  (RF, GS, LT, Select f :: code) -> (RF, GS, LT', code)
+
+  RF(this) = (l, _)
+  LT(l) = { M1, ..., Mp; O1, ..., Oq; ra :: rt :: LS }
+  rt = (l', _)
+  LT(l') = { M'1, ..., M'p'; ...; _ }
+  m <= p'
+  M'm = code'
+  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; LS }
+  GS' = (RF, code) :: GS
+  RF' = (this => rt, arg => ra)
+  ------------------------------------------------------ CALL
+  (RF, GS, LT, Call m :: code) -> (RF', GS', LT', code')
+
+  GS = (RF', code') :: GS'
+  RF(this) = (l, _)
+  RF'(this) = (l', _)
+  l <> l'
+  LT(l) = { M1, ..., Mp; O1, ..., Oq; rr :: LS }
+  LT(l') = { M'1, ..., M'p; O'1, ..., O'q; LS' }
+  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; LS }
+                l' => { M'1, ..., M'p; O'1, ..., O'q; rr :: LS }
+  -------------------------------------------------------------- RETURN-INTER
+  (RF, GS, LT, Return :: code) -> (RF', GS', LT', code')
+
+  GS = (RF', code') :: GS'
+  RF(this) = (l, _)
+  RF'(this) = (l, _)
+  ------------------------------------------------------ RETURN-INTRA
+  (RF, GS, LT, Return :: code) -> (RF', GS', LT', code')
+
+
+  RF(this) = (l, _)
+  LT(l) = { M1, ..., Mp; O1, ..., Oq; r :: r :: LS }
+  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; LS }
+  code = i1 :: ... :: in :: code'
+  --------------------------------------------------- BEQ-EQ
+  (RF, GS, LT, Beq n :: code) -> (RF, GS, LT', code')
+
+  RF(this) = (l, _)
+  LT(l) = { M1, ..., Mp; O1, ..., Oq; r1 :: r2 :: LS }
+  r1 <> r2
+  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; LS }
+  ---------------------------------------------------- BEQ-NEQ
+  (RF, GS, LT, Beq n :: code) -> (RF, GS, LT', code)
+
+
+--------------------------------------------------------------------------------
+| Def.: Compilation of expressions
 --------------------------------------------------------------------------------
 
 Define:
 
-  class_id(LT, l) = n
-    if l in dom(LT)
-    and n = |{l' in dom(LT) | l' < l}|
+  obj_id(LT, OT, o_high) = (l_low, o_low)
+    if OT(o_high) = obj l_high { ... }
+    and l_high in dom(LT)
+    and l_low = l_high
+    and o_low = ||{o'_high in dom(OT) |
+                   OT(o_high) = obj l { ... } and
+                   o'_high < o_high}||
 
-  obj_id(LT, OT, o) = (n, m)
-    if OT(o) = obj l { ... }
-    and n = class_id(LT, l)
-    and m = |{o' in dom(OT) | OT(o) = obj l { ... } and o' < o}|
+Invariant:
 
-c_expr(LT, OT, this) = This
-  (G(this) is defined in this case)
+  after the whole execution of the code for c_expr(LT, OT, e), the
+  compartment is the same as before, and exactly one new object
+  reference has been pushed on the local stack.
 
-c_expr(LT, OT, arg) = Arg
-  (G(arg) is defined in this case)
+  This reference is obj_id(v) iff (LT, OT) |- e -->* v.
 
-c_expr(LT, OT, o) = Ref obj_id(LT, OT, o)
+Compilation:
 
-c_expr(LT, OT, e.f) =
+  c_expr(LT, OT, this) = This
+
+  c_expr(LT, OT, arg) = Arg
+
+  c_expr(LT, OT, o) = Ref obj_id(LT, OT, o)
+
+  c_expr(LT, OT, e.f) =
      c_expr(LT, OT, e);
      Select f
 
-c_expr(LT, OT, e.m(e')) =
+  c_expr(LT, OT, e.m(e')) =
      c_expr(LT, OT, e);
-     Push;
      c_expr(LT, OT, e');
      Call m
 
-c_expr(LT, OT, e1 == e2 ? e3 : e4) =
+  c_expr(LT, OT, e1 == e2 ? e3 : e4) =
      c_expr(LT, OT, e1);
-     Push;
      c_expr(LT, OT, e2);
      Beq EQ;       (note: these are indeed relative forward jumps, so this works)
      c_expr(LT, OT, e4);
-     Push;         }  <--- a way to encode unconditional forward jump
+     Dup;          }  <--- a way to encode unconditional forward jump
      Beq END;      }
 EQ:  c_expr(LT, OT, e3);
 END: Nop
