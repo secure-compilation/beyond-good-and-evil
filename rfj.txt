@@ -1,103 +1,42 @@
 ================================================================================
-| Names for class and object declarations
-================================================================================
-
-In the language definition we will use the notion of names. Names will
-be considered to be naturals. When compiling to a realistic
-architecture, we will require that these naturals are word-sized.
-
---------------------------------------------------------------------------------
-| Q: Could we get rid of names?
---------------------------------------------------------------------------------
-
-A:
-
-When looking at a *complete* program (i.e. a program that provides all
-the definitions it relies on), it looks like names are useless. One
-could just use the order of definitions instead of names, to get an
-index for each declaration, and use that index everytime we refer to
-the corresponding declaration.
-
-When we consider *partial* programs, however, names are very
-handy. They allow us to have a very straightforward definition of the
-linking of two partial programs.
-
-Here, we want to consider partial programs for formal reasons: it
-allows us to have a clear notion of *context* (or *attacker*). Indeed,
-we want a program to be able to refer to attacker definitions, and the
-other way (a context to refer to program definitions). Names provide
-an easy solution to this problem. They allow us to have a symmetry
-between programs and contexts, and to consider mutually distrustful
-programs, each being part of the context for the others.
-
-
---------------------------------------------------------------------------------
-| Q: Could we have e.g. strings for names?
---------------------------------------------------------------------------------
-
-A:
-
-One could get a user-friendly variant of our language by using strings
-for names. Then we could easily translate programs by using e.g. :
-
-* a hash algorithm to map these strings to word-sized naturals, asking
-the user to give new names in case of collision, this approach would
-be interesting if we want to translate partial programs (or contexts),
-which would allow reusing the linking defined in the language with
-naturals as names ;
-
-* the order of declarations, this approach would be interesting if we
-only care about translating complete programs, that is, it requires to
-define a new notion of linking at the level of the language with
-strings if we want to talk about partial programs (or contexts) at
-this level.
-
-In both cases the main object (which would presumably have name
-"main") should be a special case which is necessarily mapped to
-natural 0 (the only fixed name in the language with naturals as
-names).
-
-The properties one would get on such a variant of our
-language would be the same as the ones we will describe (maybe with
-some extra assumptions to prevent name clashes). From now on, we go
-back to the naturals as names variant.
-
-================================================================================
 | Syntax
 ================================================================================
 
-C - class name -- mapped to class declarations L (CT)
+What we call names hereafter are naturals. When compiling to a
+realistic architecture, we will require them to be word-sized.
+
+l - class name -- mapped to class declarations L (LT)
 f - field index (natural)
 m - method index (natural)
 o - object names -- mapped to object declarations O (OT)
 
-P ::= (CT, OT)                   (partial) program
+P ::= (LT, OT)                   (partial) program
 
-CT ::= partial map from C to L   class table
+LT ::= partial map from l to L   class table
 
 OT ::= partial map from o to O   object table
 
 L ::=                            class declaration
   class {
-    C1, ..., Cn;                   field declarations
+    l1, ..., ln;                   field declarations
     M1, ..., Mp                    method declarations
   }
 
   where n, p >= 0
 
 O ::=                            object declaration
-  obj C { o1, ..., on }
+  obj l { o1, ..., on }
 
   where n >= 0
 
 M ::=                            method declaration
-  Cr (Ca) {                        result and arg type
+  lr (la) {                        result and argument types
     e                              method body
   }
 
 x ::=
-  | this
-  | arg
+  | this                         object on which the method was called
+  | arg                          object the method was provided as argument
 
 e ::=                            expressions
   | x                              variables
@@ -107,28 +46,6 @@ e ::=                            expressions
   | e == e ? e : e                 object identity test
 
 
---------------------------------------------------------------------------------
-| Q: Could we have a real syntax? Partial maps are not syntax.
---------------------------------------------------------------------------------
-
-A:
-
-Sure.
-
-Q ::= [] | D :: Q                (partial) program
-
-D ::=                            declaration
-  | C => L                         named class declaration
-  | o => O                         named object declaration
-
-This definition trivially translates to the previous definition. The only
-tricky point is name clashes, which we do not want to care about
-here. That's why we will use the definition with partial maps from now
-on.
-
-We could also have a more Java-like syntax that would very simply
-translate to the previous one.
-
 ================================================================================
 | Operational semantics
 ================================================================================
@@ -136,79 +53,54 @@ translate to the previous one.
 --------------------------------------------------------------------------------
 | Def.: Reduction relation on expressions.
 --------------------------------------------------------------------------------
-CH: we want this side-condition:
 
-OT(this) = obj C { ... }
-
-CH: for this we need to remember "this" instead of substituting it
-    (environmental instead of substitution semantics)
-
-CH: Andrew also wonders if packages are a better notion of modules
-    - I don't disagree with this, but we're trying to keep things simple
-
-CH: Andrew wonders whether we should have a stronger variant of private,
-    which requires that object selection is always done on this
-    - somehow related to the next proposal
-
-CH: Andrew idea: object-based calculus, with all the current simplicity
-    (conflate objects and classes)
-    - classes were our types, what do we do when they are gone:
-      - everything becomes untyped?
-      - structural object types a la Abadi and Cardelli
-    - everything easily becomes higher-order
-      - with dynamic allocation we get higher-order store
-      - with real variables and object creation we would probably
-        have to create closures
-      - Andrew: cloning based system?
-
-OT(o) = obj C { o1, ..., on }
+OT(o) = obj l { o1, ..., on }
 f = i in [1,n]
 ----------------------------- SEL
-(CT, OT) |- o.f --> oi
+(LT, OT); l |- o.f --> oi
 
 
-OT(o) = obj C { o1, ..., on }
-CT(C) = class {...; M1, ..., Mp }
-Mj = Cr (Ca) { e }
+OT(o) = obj l { o1, ..., on }
+LT(l) = class {...; M1, ..., Mp }
+Mj = lr (la) { e }
 m = j in [1,p]
 ----------------------------------------- CALL
-(CT, OT) |- o.m(oa) --> e[oa/arg][o/this]
+(LT, OT) |- o.m(oa) --> e[oa/arg][o/this]
 
 
 ------------------------------- TESTEQ
-(CT, OT) |- o == o ? e : e' --> e
+(LT, OT) |- o == o ? e : e' --> e
 
 o <> o'
 --------------------------------- TESTNEQ
-(CT, OT) |- o == o' ? e : e' --> e'
+(LT, OT) |- o == o' ? e : e' --> e'
 
 e1 --> e1'
 ---------------------------------- CONGRLCALL
-(CT, OT) |- e1.mi(e2) --> e1'.mi(e2)
+(LT, OT) |- e1.mi(e2) --> e1'.mi(e2)
 
 
-(CT, OT) |- e --> e'
+(LT, OT) |- e --> e'
 ------------------------------ CONGRRCALL
-(CT, OT) |- o.mi(e) --> o.mi(e')
+(LT, OT) |- o.mi(e) --> o.mi(e')
 
-(CT, OT) |- e1 --> e1'
+(LT, OT) |- e1 --> e1'
 ---------------------------------------------------- CONGRLTEST
-(CT, OT) |- e1 == e2 ? e3 : e4 --> e1' == e2 ? e3 : e4
+(LT, OT) |- e1 == e2 ? e3 : e4 --> e1' == e2 ? e3 : e4
 
-(CT, OT) |- e2 --> e2'
+(LT, OT) |- e2 --> e2'
 -------------------------------------------------- CONGRRTEST
-(CT, OT) |- o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
+(LT, OT) |- o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
 
-(CT, OT) |- (user_stacks, reg, call_stack, code) -->
+(LT, OT) |- (user_stacks, reg, call_stack, code) -->
 
-We sometimes use the notation e --> e', where CT and OT are implicitly assumed.
+We sometimes use the notation e --> e', where LT and OT are implicitly assumed.
 
 --------------------------------------------------------------------------------
 | Def.: Values
 --------------------------------------------------------------------------------
 
 A value is an object name.
-
 
 --------------------------------------------------------------------------------
 | Prop.: Values do not reduce
@@ -217,7 +109,6 @@ A value is an object name.
 --------------------------------------------------------------------------------
 
 Proof: No rule applies when we have an object name in the left hand side.
-
 
 --------------------------------------------------------------------------------
 | Prop.: Equality on values is decidable
@@ -243,18 +134,15 @@ equality on values is decidable. This gives the shape of e'', and is
 sufficient to conclude in the base case. In the inductive case,
 applying the induction hypothesis ends the proof.
 
-CH: sketchy, in Coq a simpler proof is to build an interpreter and
-    prove it correct (that interpreter is then useful on its own right)
-
 --------------------------------------------------------------------------------
 | Def.: Evaluation
 --------------------------------------------------------------------------------
 
-Given a program P = (CT, OT), evaluation starts with the expression:
+Given a program P = (LT, OT), evaluation starts with the expression:
 
                  o.m(o)     with o = 0 and m = 0
 
-Hence, only programs that define object 0 with a class C such that C
+Hence, only programs that define object 0 with a class l such that l
 has at least one method will have a non-stuck initial expression. This
 will be part of the notion of complete programs in our type system.
 
@@ -265,24 +153,24 @@ will be part of the notion of complete programs in our type system.
 
 We give a type system that allows to typecheck *complete* programs. A
 program that depends on classes (resp. objects) that are not in the
-domain of CT (resp. OT) will *not* typecheck. Similarly, programs that
+domain of LT (resp. OT) will *not* typecheck. Similarly, programs that
 do not define a main object will *not* typecheck.
 
 --------------------------------------------------------------------------------
 | Def.: Class of an object
 --------------------------------------------------------------------------------
 
-  classof(o) = C   if OT(o) = obj C {...}
+  classof(o) = l   if OT(o) = obj l {...}
 
 --------------------------------------------------------------------------------
 | Def.: Object declaration typing
 --------------------------------------------------------------------------------
 
-OT(o) = obj C {o1, ..., on}
-CT(C) = class {C1, ..., Cn; ...}
-forall i in [1,n]. classof(oi) = Ci
+OT(o) = obj l {o1, ..., on}
+LT(l) = class {l1, ..., ln; ...}
+forall i in [1,n]. classof(oi) = li
 ----------------------------------- OBJOK
-(CT, OT) |- o ok
+(LT, OT) |- o ok
 
 --------------------------------------------------------------------------------
 | Def.: Expression typing
@@ -290,108 +178,87 @@ forall i in [1,n]. classof(oi) = Ci
 
 We define typing environments as:
 
-                           G ::= {this:Cr, arg:Ca}
+                           G ::= {this:lt, arg:la}
 
 
 ----------------------- TVAR
-(CT, OT); G |- x : G(x)
+(LT, OT); G |- x : G(x)
 
 
 ----------------------------- TOBJ
-(CT, OT); G |- o : classof(o)
+(LT, OT); G |- o : classof(o)
 
 
-(CT, OT); G |- e : C
-G(this) = C                                   ensures field privacy
-CT(C) = class {C1, ..., Cn; ...}
+(LT, OT); G |- e : l
+G(this) = l                                   ensures field privacy
+LT(l) = class {l1, ..., ln; ...}
 f = i in [1,n]
 -------------------------------- TSEL
-(CT, OT); G |- e.f : Ci
+(LT, OT); G |- e.f : li
 
 
-(CT, OT); G |- e : C
-CT(C) = class {...; M1, ..., Mp}
+(LT, OT); G |- e : l
+LT(l) = class {...; M1, ..., Mp}
 m = j in [1,p]
-Mj = Cr (Ca) { ... }
-(CT, OT); G |- ea : Ca
+Mj = lr (la) { ... }
+(LT, OT); G |- ea : la
 -------------------------------- TCALL
-(CT, OT); G |- e.m(ea) : Cr
+(LT, OT); G |- e.m(ea) : lr
 
 
-(CT, OT); G |- e1 : C'
-(CT, OT); G |- e2 : C'
-(CT, OT); G |- e3 : C
-(CT, OT); G |- e4 : C
+(LT, OT); G |- e1 : l'
+(LT, OT); G |- e2 : l'
+(LT, OT); G |- e3 : l
+(LT, OT); G |- e4 : l
 --------------------------------------- TTEST
-(CT, OT); G |- (e1 == e2 ? e3 : e4) : C
-
+(LT, OT); G |- (e1 == e2 ? e3 : e4) : l
 
 --------------------------------------------------------------------------------
 | Def.: Method typing
 --------------------------------------------------------------------------------
 
-(CT, OT); {this:C, arg:Ca} |- e : Cr
------------------------------------- METHOK
-(CT, OT); C |- Cr (Ca) { e } ok
-
+(LT, OT); {this:lt, arg:la} |- e : lr
+------------------------------------- METHOK
+(LT, OT); lt |- lr (la) { e } ok
 
 --------------------------------------------------------------------------------
 | Def.: Class typing
 --------------------------------------------------------------------------------
 
-CT(C) = class {C1, ..., Cn; M1, ..., Mp}
-forall i in [1,n]. Ci in dom(CT)
-forall j in [1,p]. (CT, OT); C |- Mj ok
+LT(l) = class {l1, ..., ln; M1, ..., Mp}
+forall i in [1,n]. li in dom(LT)
+forall j in [1,p]. (LT, OT); l |- Mj ok
 ---------------------------------------- CLASSOK
-(CT, OT) |- C ok
-
-CH: Should make sure that one can build finite derivations using this
-    even when classes are mutually dependent. I'm a bit worried actually.
+(LT, OT) |- l ok
 
 --------------------------------------------------------------------------------
 | Def.: (Complete) program typing
 --------------------------------------------------------------------------------
 
-P = (CT, OT)
-forall C' in dom(CT). (CT, OT) |- C' ok
-forall o in dom(OT). (CT, OT) |- o ok
+P = (LT, OT)
+forall l' in dom(LT). (LT, OT) |- l' ok
+forall o in dom(OT). (LT, OT) |- o ok
 let o = 0 and m = 0 in
-  (CT, OT); {this: -, arg: -} |- o.m(o) : C             main object
+  (LT, OT); {this: -, arg: -} |- o.m(o) : l             main object
 ------------------------------------------- TPROG
-|- P : C
+|- P : l
 
-|- P : C
+|- P : l
 -------- PROGOK
 |- P ok
 
 More explicit, equivalent alternative:
 
-P = (CT, OT)
-forall C' in dom(CT). (CT, OT) |- C' ok
-forall o in dom(OT). (CT, OT) |- o ok
-OT(0) = obj C'' { ... }
-CT(C'') = { ...; M1, ..., Mp }
+P = (LT, OT)
+forall l' in dom(LT). (LT, OT) |- l' ok
+forall o in dom(OT). (LT, OT) |- o ok
+OT(0) = obj l'' { ... }
+LT(l'') = { ...; M1, ..., Mp }
 p >= 1
-M1 = C (C'') { e }
+M1 = l (l'') { e }
 --------------------------------------- TPROG'
-|- P : C
+|- P : l
 
-
---------------------------------------------------------------------------------
-| Q: Should we also have partial programs typing?
---------------------------------------------------------------------------------
-
-If we want to state full abstraction for (partial) programs, it goes
-by:
-                 P ~ Q  <->  compile(P) ~ compile(Q)
-
-So we would need to define at least compilation for partial
-programs. But we don't necessarily need partial program typing,
-although it could be interesting to study. See our notion of
-observational equivalence below to understand why we don't need it.
-
-CH: Typing partial programs seems easy.
-    Isn't avoiding this more complex than necessary?
 
 ================================================================================
 | Encodings
@@ -401,15 +268,17 @@ CH: Typing partial programs seems easy.
 | Tuples
 --------------------------------------------------------------------------------
 
-For each tuple type T=(C1, ..., Cn)
+For each tuple type T=(l1, ..., ln)
 
 class Unit {}
 
+obj tt : Unit {}
+
 class Tuple_T {
-  C1 f1, ..., Cn fn;
-  C1 get_1(Unit) { this.f1 },
+  l1 f1, ..., ln fn;
+  l1 get_1(Unit) { this.f1 },
   ...
-  Cn get_n(Unit) { this.fn },
+  ln get_n(Unit) { this.fn },
 }
 
 --------------------------------------------------------------------------------
@@ -433,24 +302,24 @@ If then else via identity test (e.g. (b == true ? e1 : e2)).
 --------------------------------------------------------------------------------
 | Progress
 --------------------------------------------------------------------------------
-| forall e C P G, |- P ok ->
-|                 P; G |- e : C ->
+| forall e l P G, |- P ok ->
+|                 P; G |- e : l ->
 |                   is_value e \/ exists e', P |- e --> e'
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 | Preservation (Subject reduction)
 --------------------------------------------------------------------------------
-| forall e e' C P G, P; G |- e : C ->
+| forall e e' l P G, P; G |- e : l ->
 |                    P |- e --> e' ->
-|                      P; G |- e' : C
+|                      P; G |- e' : l
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 | Type safety
 --------------------------------------------------------------------------------
-| forall e C P G, P; G |- e : C ->
-|                      is_value e \/ (exists e', e --> e' /\ |- e' : C)
+| forall e l P G, P; G |- e : l ->
+|                      is_value e \/ (exists e', e --> e' /\ |- e' : l)
 --------------------------------------------------------------------------------
 
 
@@ -462,32 +331,24 @@ If then else via identity test (e.g. (b == true ? e1 : e2)).
 | Def.: Linkability
 --------------------------------------------------------------------------------
 
-Two (partial) programs P = (CT, OT) and Q = (CT', OT') are linkable if
+Two (partial) programs P = (LT, OT) and Q = (LT', OT') are linkable if
 their domains are disjoint, that is:
 
-  linkable (CT, OT) (CT', OT') ::=
-    dom(CT) inter dom(CT') = empty_set /\
+  linkable (LT, OT) (LT', OT') ::=
+    dom(LT) inter dom(LT') = empty_set /\
       dom(OT) inter dom(OT') = empty_set
-
 
 --------------------------------------------------------------------------------
 | Def.: Linking
 --------------------------------------------------------------------------------
 
-TODO: Support separate type-checking and compilation
-
-CH: To keep our corruption property simple it seems we should stick to
-    programs that correspond to low-level components, or to sets of
-    low-level components.
-
-Two linkable (partial) programs P = (CT, OT) and Q = (CT', OT') can be
+Two linkable (partial) programs P = (LT, OT) and Q = (LT', OT') can be
 linked to get a new (partial) program P /\/\ Q.
 
-     P /\/\ Q ::= (CT disjoint_union CT', OT disjoint_union OT')
+     P /\/\ Q ::= (LT disjoint_union LT', OT disjoint_union OT')
 
 Note that linking happens "before" typing: we do not require any
 wellformedness property on P and Q.
-
 
 --------------------------------------------------------------------------------
 | Def.: High-level context
@@ -503,30 +364,15 @@ is linking:
 | Def.: Closing contexts
 --------------------------------------------------------------------------------
 
-Given a program P, a context c, a class name C, we say that c closes P
-with type C when c is linkable with P and inserting P in c gives a
-well-typed program of type C, that is:
+Given a program P, a context c, a class name l, we say that c closes P
+with type l when c is linkable with P and inserting P in c gives a
+well-typed program of type l, that is:
 
-                  linkable c P  /\  |- c[P] : C
+                  linkable c P  /\  |- c[P] : l
 
-We define the set of closing contexts at type C for a program P by:
+We define the set of closing contexts at type l for a program P by:
 
-     closing_contexts P C ::= {c | linkable c P  /\  |- c[P] : C}
-
-CH: TODO: These seem both syntactically broken.
-    Programs are not given types, they are not expressions.
-
-YJ: In the first approach, we had a main expression that was distinct
-    from the program.
-    I have changed things so that now, their is no main expression,
-    but a main object which is part of the program: object 0. Then,
-    evaluation begins by calling the first method of this object.
-    In the latest set of rules (see TPROG, TPROG'), programs are given
-    a type which would be the one of their "result value", that is,
-    the result type of calling the first method on the first object.
-    Is this bad practice?
-
-CH: Maybe not bad, just uselessly complicating things?
+     closing_contexts P l ::= {c | linkable c P  /\  |- c[P] : l}
 
 --------------------------------------------------------------------------------
 | Def.: Interface equivalence
@@ -536,10 +382,7 @@ We say that two programs P and Q are interface equivalent, or have the
 same interface, when they have the same closing contexts at every
 type, that is:
 
-  same_interface P Q := forall C. closing_contexts P C = closing_contexts Q C
-
-CH: There might be a more direct (equivalent) way of defining this:
-    same classes, same fields, same methods, same types for everything
+  same_interface P Q := forall l. closing_contexts P l = closing_contexts Q l
 
 --------------------------------------------------------------------------------
 | Def.: Observational equivalence
@@ -551,10 +394,9 @@ separately placing the two in c, the two resulting programs reduce to
 the same value. That is:
 
   P ~ Q ::= same_iterface P Q /\
-            forall C. forall c in closing_contexts P C. forall v.
+            forall l. forall c in closing_contexts P l. forall v.
             let o = 0 and m = 0 in
             c[P] |- o.m(o) -->* v  <->  c[Q] |- o.m(o) -->* v
-
 
 --------------------------------------------------------------------------------
 | Def.: Observational order
@@ -563,49 +405,19 @@ the same value. That is:
 We define the observational order on programs as follows:
 
   P ~< Q ::=
-    forall C. forall c in closing_contexts P C.
-    c in closing_contexts Q C /\ forall v.
+    forall l. forall c in closing_contexts P l.
+    c in closing_contexts Q l /\ forall v.
                                  let o = 0 and m = 0 in
                                  c[P] |- o.m(o) -->* v  ->
                                    c[Q] |- o.m(o) -->* v
 
 When we have P ~< Q, this means that Q captures all the behaviors of P.
 
-CH: Missing same_interface here?
-
-YJ: For this definition I only need one way of same_interface, that is:
-      forall C. forall c in closing_contexts P C.
-        c in closing_contexts Q C.
-    It could indeed be obtained directly from same_interface, and I
-    don't know what definition would be the most interesting. I'm not
-    sure how much this order is useful anyway. It looks a bit
-    artificial, but some people seem to like it (e.g. in the Java
-    Jr. paper, contextual equivalence is defined in terms of such an
-    order).
-    We can think more about what definition looks more relevant when
-    we start to use ~< (if we ever use it).
-
 --------------------------------------------------------------------------------
 | Prop.: Decomposition of observational equivalence
 --------------------------------------------------------------------------------
 | forall P Q. P ~ Q <-> (P ~< Q and Q ~< P)
 --------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
-| Q: Is our notion of observational equivalence relevant?
---------------------------------------------------------------------------------
-
-This definition considers that only the final result of a program is
-observable. This looks reasonable as long as *we do not have side
-effects* (in particular: printing). Every time we update the source
-language, we should check very carefully if this definition is still
-relevant or should be updated.
-
-CH: There are other sanity checks we could try; one can for instance
-    prove this observational equivalence equivalent with other
-    definitions, e.g. observing only termination behavior
-
-YJ: Good idea.
 
 ================================================================================
 | "Really abstract" machine
@@ -646,7 +458,6 @@ does not involve "running another machine", whereas in the high-level
 language reducing an expression may involve reducing another
 expression. This is why this system can be seen as a "machine", and
 the high-level one cannot.
-
 
 --------------------------------------------------------------------------------
 | Syntax
@@ -740,9 +551,6 @@ code fragment is a sequence of instructions, described hereafter.
                              equal (these two values get removed from
                              the user stack in the process)
 
-CH: Descriptions above are not understandable without some more
-    high-level intuition. Display all this in reverse order.
-
 
 Programs
 ========
@@ -778,11 +586,6 @@ language instead of being high-level expressions.
 At this level we make no distinction between inter- and intra-
 compartment calls. If we were to need this distinction it would anyway
 be lower level.
-
-CH: This abstract machine is fine for now, but bakes in an inefficient
-    compilation strategy with only 3 registers in use and lots of
-    stack fiddling. At some point we might think about compilation
-    schemes that use all the registers.
 
 --------------------------------------------------------------------------------
 | Def.: Reduction
@@ -884,53 +687,50 @@ Now the rules:
 
 Define:
 
-  class_id(CT, C) = n
-    if C in dom(CT)
-    and n = |{C' in dom(CT) | C' < C}|
+  class_id(LT, l) = n
+    if l in dom(LT)
+    and n = |{l' in dom(LT) | l' < l}|
 
-  obj_id(CT, OT, o) = (n, m)
-    if OT(o) = obj C { ... }
-    and n = class_id(CT, C)
-    and m = |{o' in dom(OT) | OT(o) = obj C { ... } and o' < o}|
+  obj_id(LT, OT, o) = (n, m)
+    if OT(o) = obj l { ... }
+    and n = class_id(LT, l)
+    and m = |{o' in dom(OT) | OT(o) = obj l { ... } and o' < o}|
 
-c_expr(CT, OT, this) = This
+c_expr(LT, OT, this) = This
   (G(this) is defined in this case)
 
-c_expr(CT, OT, arg) = Arg
+c_expr(LT, OT, arg) = Arg
   (G(arg) is defined in this case)
 
-c_expr(CT, OT, o) = Ref obj_id(CT, OT, o)
+c_expr(LT, OT, o) = Ref obj_id(LT, OT, o)
 
-c_expr(CT, OT, e.f) =
-     c_expr(CT, OT, e);
+c_expr(LT, OT, e.f) =
+     c_expr(LT, OT, e);
      Select f
 
-c_expr(CT, OT, e.m(e')) =
-     c_expr(CT, OT, e);
+c_expr(LT, OT, e.m(e')) =
+     c_expr(LT, OT, e);
      Push;
-     c_expr(CT, OT, e');
+     c_expr(LT, OT, e');
      Call m
 
-c_expr(CT, OT, e1 == e2 ? e3 : e4) =
-     c_expr(CT, OT, e1);
+c_expr(LT, OT, e1 == e2 ? e3 : e4) =
+     c_expr(LT, OT, e1);
      Push;
-     c_expr(CT, OT, e2);
+     c_expr(LT, OT, e2);
      Beq EQ;       (note: these are indeed relative forward jumps, so this works)
-     c_expr(CT, OT, e4);
+     c_expr(LT, OT, e4);
      Push;         }  <--- a way to encode unconditional forward jump
      Beq END;      }
-EQ:  c_expr(CT, OT, e3);
+EQ:  c_expr(LT, OT, e3);
 END: Nop
-
-CH: How about writing down the main invariants of this compiler
-    (e.g. in terms of register usage)?
 
 --------------------------------------------------------------------------------
 | Def.: Compilation of (complete) programs
 --------------------------------------------------------------------------------
 
 Compiling a complete program is quite straightforward once we know how
-to compile expressions. We can get a list of classes out of CT by
+to compile expressions. We can get a list of classes out of LT by
 skipping "holes" in the domain, and a list of objects for each class
 by skipping "holes" in the domain and using one counter per class.
 
@@ -952,7 +752,7 @@ low-level partial programs?).
 * Can we still have something as simple as lists of classes &
 per-compartment lists of objects? In particular, our definition for
 obj_id will not be usable in this setting. Should we update the source
-language to have object indices represented as (C, n) at the source
+language to have object indices represented as (l, n) at the source
 level already? Would this help?
 
 ----> Maybe we should think about what happens on more concrete
@@ -1084,15 +884,10 @@ Note: allowing returns to forged ra addresses seem ok because:
 | Compilation scheme (old)
 ================================================================================
 
-Define two tables:
+Define for each class:
 
-  CIT (Class Index Table): maps classes to a number
-  OIT (Object Index Table): maps objects to a number
-
-And for each class:
-
-  fieldoffset(C, f)
-  methodoffset(C, m)
+  fieldoffset(l, f)
+  methodoffset(l, m)
 
 --------------------------------------------------------------------------------
 
@@ -1111,13 +906,13 @@ Monitor services in the abstract machine:
 
 reg[r_arg1] = w
 reg[r_a] = pc'
-pc' in C_i
-pc' - 1 in C_i                                   forbid jumps between distinct compartments
+pc' in l_i
+pc' - 1 in l_i                                   forbid jumps between distinct compartments
 -----------------------------------------------------------------------------------------------
 (mem, reg, push_addr, s_1, ..., s_i, ..., s_n) -> (mem, reg, pc', s_1, ..., w :: s_i, ..., s_n)
 
-pc' in C_i
-pc' - 1 in C_i                                   forbid jumps between distinct compartments
+pc' in l_i
+pc' - 1 in l_i                                   forbid jumps between distinct compartments
 reg' = reg[r_ret <- w]
 ----------------------------------------------------------------------------------------------
 (mem, reg, pop_addr, s_1, ..., w :: s_i, ..., s_n) -> (mem, reg', pc', s1, ..., s_i, ..., s_n)
@@ -1152,7 +947,7 @@ Compilation of well-typed expressions:
 
 Fix four distinct registers: r_this, r_arg, r_arg1, r_arg2, r_arg3, r_res (=r_ret), r_aux.
 
-G = {this:Cr, arg:Ca} when compiling a method body.
+G = {this:lr, arg:la} when compiling a method body.
 G = {} when compiling the main expression.
 
 Properties of c_expr:
@@ -1175,8 +970,8 @@ c_expr(e.f) =
     Mov r_res r_arg1;
     Cons i_f r_arg2;
     Jal SELECT
-  if G |- e : C (deterministic)
-  and i_f = fieldoffset(C, f)
+  if G |- e : l (deterministic)
+  and i_f = fieldoffset(l, f)
 
 c_expr(e.m(e')) =
     c_expr(e);
@@ -1190,8 +985,8 @@ c_expr(e.m(e')) =
     Jal CALL
     Pop r_arg;
     Pop r_this
-  if G |- e : C (deterministic)
-  and i_m = methodoffset(C, m)
+  if G |- e : l (deterministic)
+  and i_m = methodoffset(l, m)
 
 c_expr(e1 == e2 ? e3 : e4) =
     c_expr(e1);
@@ -1229,8 +1024,8 @@ c_expr(e.f) =
     Const a r_aux;
     Binop_+ r_res r_aux r_aux;
     Load r_aux r_res
-  if G |- e : C (deterministic)
-  and a = fieldoffset(C, f)
+  if G |- e : l (deterministic)
+  and a = fieldoffset(l, f)
 
 c_expr(e.m(e')) =
     c_expr(e);
@@ -1245,8 +1040,8 @@ c_expr(e.m(e')) =
     Jal r_aux;
     Pop r_arg;
     Pop r_this
-  if G |- e : C (deterministic)
-  and a = CAT(C) + methodoffset(C, m)
+  if G |- e : l (deterministic)
+  and a = ClassAdressTable(l) + methodoffset(l, m)
 
 c_expr(e1 == e2 ? e3 : e4) =
     c_expr(e1);
