@@ -17,15 +17,18 @@ LT ::= partial map from l to L   class table
 OT ::= partial map from o to O   object table
 
 L ::=                            class declaration
-  class {
-    l1, ..., ln;                   field declarations
-    M1, ..., Mp                    method declarations
-  }
-
+  | class {                        class definition
+      l1, ..., ln;                   field declarations
+      M1, ..., Mp                    method definitions
+    }
+  | sig {                          class signature
+      S1, ..., Sp                    method signature
+    }
   where n, p >= 0
 
-O ::=                            object declaration
-  obj l { o1, ..., on }
+O ::=                            object declarations
+  | obj l { o1, ..., on }          object definition
+  | inst l                         object signature
 
   where n >= 0
 
@@ -33,6 +36,9 @@ M ::=                            method declaration
   lr (la) {                        result and argument types
     e                              method body
   }
+
+S ::=
+  lr (la)
 
 x ::=
   | this                         object on which the method was called
@@ -53,46 +59,71 @@ e ::=                            expressions
 | Def.: Reduction relation on expressions.
 --------------------------------------------------------------------------------
 
+---------------------------- REFL
+(LT, OT, ot, oa) |- e -->* e
+
+
+(LT, OT, ot, oa) |- e --> e'
+(LT, OT, ot, oa) |- e' -->* e''
+------------------------------- STEP
+(LT, OT, ot, oa) |- e -->* e''
+
+
+------------------------------- THIS
+(LT, OT, ot, oa) |- this --> ot
+
+
+------------------------------ ARG
+(LT, OT, ot, oa) |- arg --> oa
+
+
+OT(ot) = obj l { ... }               field privacy (granularity: class)
 OT(o) = obj l { o1, ..., on }
 f = i in [1,n]
------------------------------ SEL
-(LT, OT); l |- o.f --> oi
+------------------------------ SEL
+(LT, OT, ot, oa) |- o.f --> oi
 
 
-OT(o) = obj l { o1, ..., on }
-LT(l) = class {...; M1, ..., Mp }
+OT(ot') = obj l { o1, ..., on }
+LT(l) = class { ... ; M1, ..., Mp }
 Mj = lr (la) { e }
 m = j in [1,p]
------------------------------------------ CALL
-(LT, OT) |- o.m(oa) --> e[oa/arg][o/this]
+(LT, OT, ot', oa') |- e -->* o
+------------------------------------ CALL
+(LT, OT, ot, oa) |- ot'.m(oa') --> o
 
 
-------------------------------- TESTEQ
-(LT, OT) |- o == o ? e : e' --> e
+----------------------------------------- TESTEQ
+(LT, OT, ot, oa) |- o == o ? e : e' --> e
+
 
 o <> o'
---------------------------------- TESTNEQ
-(LT, OT) |- o == o' ? e : e' --> e'
-
-e1 --> e1'
----------------------------------- CONGRLCALL
-(LT, OT) |- e1.mi(e2) --> e1'.mi(e2)
+------------------------------------------- TESTNEQ
+(LT, OT, ot, oa) |- o == o' ? e : e' --> e'
 
 
-(LT, OT) |- e --> e'
------------------------------- CONGRRCALL
-(LT, OT) |- o.mi(e) --> o.mi(e')
-
-(LT, OT) |- e1 --> e1'
----------------------------------------------------- CONGRLTEST
-(LT, OT) |- e1 == e2 ? e3 : e4 --> e1' == e2 ? e3 : e4
-
-(LT, OT) |- e2 --> e2'
--------------------------------------------------- CONGRRTEST
-(LT, OT) |- o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
+(LT, OT, ot, oa) |- e1 --> e1'
+-------------------------------------------- CONGRLCALL
+(LT, OT, ot, oa) |- e1.mi(e2) --> e1'.mi(e2)
 
 
-We sometimes use the notation e --> e', where LT and OT are implicitly assumed.
+(LT, OT, ot, oa) |- e --> e'
+---------------------------------------- CONGRRCALL
+(LT, OT, ot, oa) |- o.mi(e) --> o.mi(e')
+
+
+(LT, OT, ot, oa) |- e1 --> e1'
+-------------------------------------------------------------- CONGRLTEST
+(LT, OT, ot, oa) |- e1 == e2 ? e3 : e4 --> e1' == e2 ? e3 : e4
+
+
+(LT, OT, ot, oa) |- e2 --> e2'
+------------------------------------------------------------ CONGRRTEST
+(LT, OT, ot, oa) |- o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
+
+
+We sometimes use the notation e --> e', where LT, OT, ot and oa are
+implicitly assumed.
 
 --------------------------------------------------------------------------------
 | Def.: Values
@@ -119,7 +150,10 @@ Proof: Object names are naturals.
 --------------------------------------------------------------------------------
 | Prop.: Determinism of our reduction relation
 --------------------------------------------------------------------------------
-| forall e e', e --> e'  ->  (forall e'', e --> e''  ->  e' = e'')
+| forall e e' e'',
+|    e --> e'  ->
+|    e --> e'' ->
+|      e' = e''
 --------------------------------------------------------------------------------
 
 Proof: Corollary of the fact that values (hence object names) do not
@@ -132,27 +166,10 @@ equality on values is decidable. This gives the shape of e'', and is
 sufficient to conclude in the base case. In the inductive case,
 applying the induction hypothesis ends the proof.
 
---------------------------------------------------------------------------------
-| Def.: Evaluation
---------------------------------------------------------------------------------
-
-Given a program P = (LT, OT), evaluation starts with the expression:
-
-                 o.m(o)     with o = 0 and m = 0
-
-Hence, only programs that define object 0 with a class l such that l
-has at least one method will have a non-stuck initial expression. This
-will be part of the notion of complete programs in our type system.
-
 
 ================================================================================
-| Type system
+| Type system (old)
 ================================================================================
-
-We give a type system that allows to typecheck *complete* programs. A
-program that depends on classes (resp. objects) that are not in the
-domain of LT (resp. OT) will *not* typecheck. Similarly, programs that
-do not define a main object will *not* typecheck.
 
 --------------------------------------------------------------------------------
 | Def.: Class of an object
@@ -326,22 +343,22 @@ If then else via identity test (e.g. (b == true ? e1 : e2)).
 ================================================================================
 
 --------------------------------------------------------------------------------
-| Def.: Linkability
+| Def.: Compatibility (old)
 --------------------------------------------------------------------------------
 
-Two (partial) programs P = (LT, OT) and Q = (LT', OT') are linkable if
-their domains are disjoint, that is:
+Two (partial) programs P = (LT, OT) and Q = (LT', OT') are compatible
+if their domains are disjoint, that is:
 
   linkable (LT, OT) (LT', OT') ::=
     dom(LT) inter dom(LT') = empty_set /\
       dom(OT) inter dom(OT') = empty_set
 
 --------------------------------------------------------------------------------
-| Def.: Linking
+| Def.: Linking (old)
 --------------------------------------------------------------------------------
 
-Two linkable (partial) programs P = (LT, OT) and Q = (LT', OT') can be
-linked to get a new (partial) program P /\/\ Q.
+Two compatible (partial) programs P = (LT, OT) and Q = (LT', OT') can
+be linked to get a new (partial) program P /\/\ Q.
 
      P /\/\ Q ::= (LT disjoint_union LT', OT disjoint_union OT')
 
@@ -349,7 +366,33 @@ Note that linking happens "before" typing: we do not require any
 wellformedness property on P and Q.
 
 --------------------------------------------------------------------------------
-| Def.: High-level context
+| Def.: Complete programs (todo)
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+| Def.: Evaluable programs (todo)
+--------------------------------------------------------------------------------
+
+A program is evaluable if it is a complete program, that is compatible
+with the following program:
+
+  CT = (0 => sig { 0 (0) })
+  OT = (0 => inst 0)
+
+--------------------------------------------------------------------------------
+| Def.: Evaluation (todo)
+--------------------------------------------------------------------------------
+
+Given an evaluable program P = (LT, OT), one can show that reducing
+the expression 0.0(0) in any context of the form (LT, OT, ot, oa)
+yields the same result independently of the choice for ot and oa.
+
+Hence, only programs that define object 0 with a class l such that l
+has (at least) one method will have a non-stuck initial expression. This
+will be part of the notion of complete programs in our type system.
+
+--------------------------------------------------------------------------------
+| Def.: High-level context (old)
 --------------------------------------------------------------------------------
 
 A high-level context c is a partial program. A program can only be
@@ -359,7 +402,7 @@ is linking:
      c[P] ::= P /\/\ c       when linkable c P
 
 --------------------------------------------------------------------------------
-| Def.: Closing contexts
+| Def.: Closing contexts (old)
 --------------------------------------------------------------------------------
 
 Given a program P, a context c, a class name l, we say that c closes P
@@ -373,7 +416,7 @@ We define the set of closing contexts at type l for a program P by:
      closing_contexts P l ::= {c | linkable c P  /\  |- c[P] : l}
 
 --------------------------------------------------------------------------------
-| Def.: Interface equivalence
+| Def.: Interface equivalence (old)
 --------------------------------------------------------------------------------
 
 We say that two programs P and Q are interface equivalent, or have the
@@ -383,7 +426,7 @@ type, that is:
   same_interface P Q := forall l. closing_contexts P l = closing_contexts Q l
 
 --------------------------------------------------------------------------------
-| Def.: Observational equivalence
+| Def.: Observational equivalence (old)
 --------------------------------------------------------------------------------
 
 Two programs P and Q are observationnally equivalent if they are
@@ -391,13 +434,13 @@ interface equivalent and, for any context c that closes them, when
 separately placing the two in c, the two resulting programs reduce to
 the same value. That is:
 
-  P ~ Q ::= same_iterface P Q /\
+  P ~ Q ::= same_interface P Q /\
             forall l. forall c in closing_contexts P l. forall v.
             let o = 0 and m = 0 in
             c[P] |- o.m(o) -->* v  <->  c[Q] |- o.m(o) -->* v
 
 --------------------------------------------------------------------------------
-| Def.: Observational order
+| Def.: Observational order (old)
 --------------------------------------------------------------------------------
 
 We define the observational order on programs as follows:
