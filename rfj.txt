@@ -10,35 +10,31 @@ f - field index (natural)
 m - method index (natural)
 o - object names -- mapped to object declarations O (OT)
 
-P ::= (LT, OT)                   (partial) program
+--------------------------------------------------------------------------------
+| Programs
+--------------------------------------------------------------------------------
+
+A ::= (LT, OT)                   program
 
 LT ::= partial map from l to L   class table
 
 OT ::= partial map from o to O   object table
 
-L ::=                            class declaration
-  | class {                        class definition
-      l1, ..., ln;                   field declarations
-      M1, ..., Mp                    method definitions
-    }
-  | sig {                          class signature
-      S1, ..., Sp                    method signature
-    }
+L ::=
+  class {                        class definition
+    l1, ..., ln;                   field declarations
+    M1, ..., Mp                    method definitions
+  }
   where n, p >= 0
 
-O ::=                            object declarations
-  | obj l { o1, ..., on }          object definition
-  | inst l                         object signature
-
+O ::=
+  obj l { o1, ..., on }          object definition
   where n >= 0
 
 M ::=                            method declaration
   lr (la) {                        result and argument types
     e                              method body
   }
-
-S ::=
-  lr (la)
 
 x ::=
   | this                         object on which the method was called
@@ -51,6 +47,55 @@ e ::=                            expressions
   | e.m(e)                         method call
   | e == e ? e : e                 object identity test
 
+--------------------------------------------------------------------------------
+| Partial programs
+--------------------------------------------------------------------------------
+
+P ::= (                          partial program
+  D,                               declarations
+  A                                definitions (syntactically like a
+                                   program defined above)
+)
+
+D ::= (ST, IT)
+
+ST ::= partial map from l to S   signature table (class declaration table)
+
+IT ::= partial map from o to I   instance table (object declaration table)
+
+S ::=
+  class sig {                    class declaration
+    N1, ..., Np                    method signatures
+  }
+  where p >= 0
+
+I ::=
+  obj sig l                      object declaration
+
+N ::=
+  lr (la)
+
+--------------------------------------------------------------------------------
+| Programs are partial programs in disguise
+--------------------------------------------------------------------------------
+
+Every program A = (LT, OT) can (and will) be seen as a partial program
+(D, A) where
+
+  D = (ST, IT)
+
+  ST : dom(LT)                     -> S
+       class {                        class sig {
+         ...;                     |->   meth_sig(M1), ..., meth_sig(Mp)
+         M1, ..., Mp                  }
+       }
+
+  meth_sig : M              -> N
+             lr (la) { e } |-> lr (la)
+
+  ST : dom(LT)       -> I
+       obj l { ... } |-> obj sig l
+
 ================================================================================
 | Operational semantics
 ================================================================================
@@ -59,70 +104,72 @@ e ::=                            expressions
 | Def.: Reduction relation on expressions.
 --------------------------------------------------------------------------------
 
----------------------------- REFL
-(LT, OT, ot, oa) |- e -->* e
+----------------------- REFL
+A; (ot, oa) |- e -->* e
 
 
-(LT, OT, ot, oa) |- e --> e'
-(LT, OT, ot, oa) |- e' -->* e''
-------------------------------- STEP
-(LT, OT, ot, oa) |- e -->* e''
+A; (ot, oa) |- e --> e'
+A; (ot, oa) |- e' -->* e''
+-------------------------- STEP
+A; (ot, oa) |- e -->* e''
 
 
-------------------------------- THIS
-(LT, OT, ot, oa) |- this --> ot
+-------------------------- THIS
+A; (ot, oa) |- this --> ot
 
 
------------------------------- ARG
-(LT, OT, ot, oa) |- arg --> oa
+------------------------- ARG
+A; (ot, oa) |- arg --> oa
 
 
+A = (OT, LT)
 OT(ot) = obj l { ... }               field privacy (granularity: class)
 OT(o) = obj l { o1, ..., on }
 f = i in [1,n]
------------------------------- SEL
-(LT, OT, ot, oa) |- o.f --> oi
+----------------------------- SEL
+A; (ot, oa) |- o.f --> oi
 
 
+A = (OT, LT)
 OT(ot') = obj l { o1, ..., on }
 LT(l) = class { ... ; M1, ..., Mp }
 Mj = lr (la) { e }
 m = j in [1,p]
-(LT, OT, ot', oa') |- e -->* o
------------------------------------- CALL
-(LT, OT, ot, oa) |- ot'.m(oa') --> o
+A; (ot', oa') |- e -->* o
+----------------------------------- CALL
+A; (ot, oa) |- ot'.m(oa') --> o
 
 
------------------------------------------ TESTEQ
-(LT, OT, ot, oa) |- o == o ? e : e' --> e
+------------------------------------ TESTEQ
+A; (ot, oa) |- o == o ? e : e' --> e
 
 
 o <> o'
-------------------------------------------- TESTNEQ
-(LT, OT, ot, oa) |- o == o' ? e : e' --> e'
+-------------------------------------- TESTNEQ
+A; (ot, oa) |- o == o' ? e : e' --> e'
 
 
-(LT, OT, ot, oa) |- e1 --> e1'
--------------------------------------------- CONGRLCALL
-(LT, OT, ot, oa) |- e1.mi(e2) --> e1'.mi(e2)
+A; (ot, oa) |- e1 --> e1'
+--------------------------------------- CONGRLCALL
+A; (ot, oa) |- e1.mi(e2) --> e1'.mi(e2)
 
 
-(LT, OT, ot, oa) |- e --> e'
----------------------------------------- CONGRRCALL
-(LT, OT, ot, oa) |- o.mi(e) --> o.mi(e')
+A; (ot, oa) |- e --> e'
+----------------------------------- CONGRRCALL
+A; (ot, oa) |- o.mi(e) --> o.mi(e')
 
 
-(LT, OT, ot, oa) |- e1 --> e1'
--------------------------------------------------------------- CONGRLTEST
-(LT, OT, ot, oa) |- e1 == e2 ? e3 : e4 --> e1' == e2 ? e3 : e4
+A; (ot, oa) |- e1 --> e1'
+--------------------------------------------------------- CONGRLTEST
+A; (ot, oa) |- e1 == e2 ? e3 : e4 --> e1' == e2 ? e3 : e4
 
 
-(LT, OT, ot, oa) |- e2 --> e2'
------------------------------------------------------------- CONGRRTEST
-(LT, OT, ot, oa) |- o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
+A; (ot, oa) |- e2 --> e2'
+------------------------------------------------------- CONGRRTEST
+A; (ot, oa) |- o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
 
 
-We sometimes use the notation e --> e', where LT, OT, ot and oa are
+We sometimes use the notation e --> e', where A, ot and oa are
 implicitly assumed.
 
 --------------------------------------------------------------------------------
@@ -168,24 +215,89 @@ applying the induction hypothesis ends the proof.
 
 
 ================================================================================
-| Type system (old)
+| Type system
 ================================================================================
 
 --------------------------------------------------------------------------------
-| Def.: Class of an object
+| Def.: Partial-program typing
 --------------------------------------------------------------------------------
 
-  classof(o) = l   if OT(o) = obj l {...}
+P = (D, A)
+D = (ST, IT)
+A = (LT, OT)
+dom(LT) subset of dom(ST)
+forall l in dom(LT),
+  let class { ...; M1, ..., Mp } = LT(L) in
+  ST(l) = class sig { meth_sig(M1), ..., meth_sig(Mp) }
+forall l in dom(LT),
+  let obj l { ... } = OT(L) in
+  IT(l) = obj sig l
+dom(OT) subset of dom(IT)
+forall l in dom(ST). P |- ST(l) ok
+forall o in dom(IT). P |- IT(l) ok
+forall l in dom(LT). P |- LT(l) @ l ok
+forall o in dom(OT). P |- OT(l) ok
+------------------------------------------------- PROGOK
+|- P ok
+
+This is the only place where we check that LT "implements" ST and
+OT "implements" IT. The other rules often make no sense if it is not
+the case, so it is an (explicit) assumption to make about P every time
+we want to prove something interesting about the other rules.
 
 --------------------------------------------------------------------------------
 | Def.: Object declaration typing
 --------------------------------------------------------------------------------
 
-OT(o) = obj l {o1, ..., on}
-LT(l) = class {l1, ..., ln; ...}
-forall i in [1,n]. classof(oi) = li
------------------------------------ OBJOK
-(LT, OT) |- o ok
+P = (D, _)
+D = (ST, _)
+l in dom(ST)
+----------------- OBJSIGOK
+P |- obj sig l ok
+
+--------------------------------------------------------------------------------
+| Def.: Object definition typing
+--------------------------------------------------------------------------------
+
+P = (D, A)
+D = (_, IT)
+A = (LT, _)
+LT(l) = class { l1, ..., ln; ... }
+forall i in [1,n]. IT(oi) = obj sig li
+-------------------------------------- OBJOK
+P |- obj l { o1, ..., on } ok
+
+--------------------------------------------------------------------------------
+| Def.: Class declaration typing
+--------------------------------------------------------------------------------
+
+P = (D, _)
+D = (ST, _)
+forall j in [1,p],
+  let lr (la) = Si in
+  lr in dom(ST) /\ la in dom(ST)
+--------------------------------- CLASSSIGOK
+P |- class sig { S1, ..., Sp } ok
+
+--------------------------------------------------------------------------------
+| Def.: Class definition typing
+--------------------------------------------------------------------------------
+
+P = (D, _)
+D = (ST, _)
+forall i in [1,n]. li in dom(ST)
+forall j in [1,p]. P |- Mj @ lt ok
+----------------------------------------------- CLASSOK
+P |- class { l1, ..., ln; M1, ..., Mp } @ lt ok
+
+--------------------------------------------------------------------------------
+| Def.: Method typing
+--------------------------------------------------------------------------------
+
+G = {this:lt, arg:la}
+P; G |- e : lr
+-------------------------- METHOK
+P |- lr (la) { e } @ lt ok
 
 --------------------------------------------------------------------------------
 | Def.: Expression typing
@@ -195,85 +307,40 @@ We define typing environments as:
 
                            G ::= {this:lt, arg:la}
 
+---------------- TVAR
+P; G |- x : G(x)
 
------------------------ TVAR
-(LT, OT); G |- x : G(x)
+P = (D, _)
+D = (_, IT)
+IT(o) = obj sig l
+----------------- TOBJ
+P; G |- o : l
 
-
------------------------------ TOBJ
-(LT, OT); G |- o : classof(o)
-
-
-(LT, OT); G |- e : l
+P; G |- e : l
 G(this) = l                                   ensures field privacy
-LT(l) = class {l1, ..., ln; ...}
+P = (_, A)
+A = (LT, _)
+LT(l) = class { l1, ..., ln; ... }
 f = i in [1,n]
--------------------------------- TSEL
-(LT, OT); G |- e.f : li
+---------------------------------- TSEL
+P; G |- e.f : li
 
-
-(LT, OT); G |- e : l
-LT(l) = class {...; M1, ..., Mp}
+P; G |- e : l
+P = (D, _)
+D = (ST, _)
+ST(l) = class sig { S1, ..., Sp }
 m = j in [1,p]
-Mj = lr (la) { ... }
-(LT, OT); G |- ea : la
--------------------------------- TCALL
-(LT, OT); G |- e.m(ea) : lr
+Sj = lr (la)
+P; G |- ea : la
+--------------------------------- TCALL
+P; G |- e.m(ea) : lr
 
-
-(LT, OT); G |- e1 : l'
-(LT, OT); G |- e2 : l'
-(LT, OT); G |- e3 : l
-(LT, OT); G |- e4 : l
---------------------------------------- TTEST
-(LT, OT); G |- (e1 == e2 ? e3 : e4) : l
-
---------------------------------------------------------------------------------
-| Def.: Method typing
---------------------------------------------------------------------------------
-
-(LT, OT); {this:lt, arg:la} |- e : lr
-------------------------------------- METHOK
-(LT, OT); lt |- lr (la) { e } ok
-
---------------------------------------------------------------------------------
-| Def.: Class typing
---------------------------------------------------------------------------------
-
-LT(l) = class {l1, ..., ln; M1, ..., Mp}
-forall i in [1,n]. li in dom(LT)
-forall j in [1,p]. (LT, OT); l |- Mj ok
----------------------------------------- CLASSOK
-(LT, OT) |- l ok
-
---------------------------------------------------------------------------------
-| Def.: (Complete) program typing
---------------------------------------------------------------------------------
-
-P = (LT, OT)
-forall l' in dom(LT). (LT, OT) |- l' ok
-forall o in dom(OT). (LT, OT) |- o ok
-let o = 0 and m = 0 in
-  (LT, OT); {this: -, arg: -} |- o.m(o) : l             main object
-------------------------------------------- TPROG
-|- P : l
-
-|- P : l
--------- PROGOK
-|- P ok
-
-More explicit, equivalent alternative:
-
-P = (LT, OT)
-forall l' in dom(LT). (LT, OT) |- l' ok
-forall o in dom(OT). (LT, OT) |- o ok
-OT(0) = obj l'' { ... }
-LT(l'') = { ...; M1, ..., Mp }
-p >= 1
-M1 = l (l'') { e }
---------------------------------------- TPROG'
-|- P : l
-
+P; G |- e1 : l'
+P; G |- e2 : l'
+P; G |- e3 : l
+P; G |- e4 : l
+-------------------------------- TTEST
+P; G |- (e1 == e2 ? e3 : e4) : l
 
 ================================================================================
 | Encodings
@@ -343,27 +410,39 @@ If then else via identity test (e.g. (b == true ? e1 : e2)).
 ================================================================================
 
 --------------------------------------------------------------------------------
-| Def.: Compatibility (old)
+| Def.: Compatibility
 --------------------------------------------------------------------------------
 
-Two (partial) programs P = (LT, OT) and Q = (LT', OT') are compatible
-if their domains are disjoint, that is:
+Two well-typed partial programs are compatible if they share the same
+declarations while having disjoint domains for their definitions, that
+is:
 
-  linkable (LT, OT) (LT', OT') ::=
-    dom(LT) inter dom(LT') = empty_set /\
-      dom(OT) inter dom(OT') = empty_set
+  |- P ok
+  |- P' ok
+  P = (D, (LT, OT))
+  P' = (D, (LT', OT'))
+  dom(LT) inter dom(LT') = empty_set
+  dom(OT) inter dom(OT') = empty_set
+  -------------------------------------------
+  |- P compatible P'
+
+Note: Condition:
+  dom(OT) inter dom(OT') = empty_set
+is entailed by condition:
+  dom(LT) inter dom(LT') = empty_set
+since well-typed partial programs can only provide object definitions
+for classes that they actually define. As such, it could be removed.
 
 --------------------------------------------------------------------------------
-| Def.: Linking (old)
+| Def.: Linking
 --------------------------------------------------------------------------------
 
-Two compatible (partial) programs P = (LT, OT) and Q = (LT', OT') can
+Two compatible (partial) programs
+  P = (D, (LT, OT))
+  Q = (D, (LT', OT')) can
 be linked to get a new (partial) program P /\/\ Q.
 
-     P /\/\ Q ::= (LT disjoint_union LT', OT disjoint_union OT')
-
-Note that linking happens "before" typing: we do not require any
-wellformedness property on P and Q.
+  P /\/\ Q ::= (D, (LT disjoint_union LT', OT disjoint_union OT'))
 
 --------------------------------------------------------------------------------
 | Def.: Complete programs (todo)
@@ -376,8 +455,8 @@ wellformedness property on P and Q.
 A program is evaluable if it is a complete program, that is compatible
 with the following program:
 
-  CT = (0 => sig { 0 (0) })
-  OT = (0 => inst 0)
+  CT = (0 => class sig { 0 (0) })
+  OT = (0 => obj sig 0)
 
 --------------------------------------------------------------------------------
 | Def.: Evaluation (todo)
