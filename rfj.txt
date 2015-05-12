@@ -79,10 +79,11 @@ N ::=
 | Programs are partial programs in disguise
 --------------------------------------------------------------------------------
 
-Every program A = (LT, OT) can (and will) be seen as a partial program
-(D, A) where
+Every program A = (LT, OT) can be seen as a partial program
+  (decls(A), A)
+where
 
-  D = (ST, IT)
+  decls(A) ::= (ST, IT)
 
   ST : dom(LT)                     -> S
        class {                        class sig {
@@ -93,7 +94,7 @@ Every program A = (LT, OT) can (and will) be seen as a partial program
   meth_sig : M              -> N
              lr (la) { e } |-> lr (la)
 
-  ST : dom(LT)       -> I
+  IT : dom(OT)       -> I
        obj l { ... } |-> obj sig l
 
 ================================================================================
@@ -203,8 +204,8 @@ Proof: Object names are naturals.
 |      e' = e''
 --------------------------------------------------------------------------------
 
-Proof: Corollary of the fact that values (hence object names) do not
-reduce.
+Proof (old): Corollary of the fact that values (hence object names) do
+not reduce.
 
 By induction on the size of the derivation tree for e --> e'. By case
 on the last rule applied in this tree. Only this rule applies with e
@@ -445,99 +446,162 @@ be linked to get a new (partial) program P /\/\ Q.
   P /\/\ Q ::= (D, (LT disjoint_union LT', OT disjoint_union OT'))
 
 --------------------------------------------------------------------------------
-| Def.: Complete programs (todo)
+| Prop.: Typing is preserved by linking
+--------------------------------------------------------------------------------
+| forall P Q. |- P ok ->
+|             |- Q ok ->
+|               |- P /\/\ Q ok
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-| Def.: Evaluable programs (todo)
+| Def.: Complete programs
 --------------------------------------------------------------------------------
 
-A program is evaluable if it is a complete program, that is compatible
-with the following program:
+A well-typed partial program is complete if the domains of
+definitions match the domains of declarations.
 
-  CT = (0 => class sig { 0 (0) })
-  OT = (0 => obj sig 0)
-
---------------------------------------------------------------------------------
-| Def.: Evaluation (todo)
---------------------------------------------------------------------------------
-
-Given an evaluable program P = (LT, OT), one can show that reducing
-the expression 0.0(0) in any context of the form (LT, OT, ot, oa)
-yields the same result independently of the choice for ot and oa.
-
-Hence, only programs that define object 0 with a class l such that l
-has (at least) one method will have a non-stuck initial expression. This
-will be part of the notion of complete programs in our type system.
+    |- P ok
+    P = ((ST, IT), (CT, OT))
+    dom(ST) = dom(CT)
+    dom(OT) = dom(IT)
+    --------------------------------------
+    |- P complete
 
 --------------------------------------------------------------------------------
-| Def.: High-level context (old)
+| Prop: Declarations are redundant for complete programs
+--------------------------------------------------------------------------------
+| forall P, |- P complete ->
+|           let (D, A) = P in
+|           D = decls(A)
 --------------------------------------------------------------------------------
 
-A high-level context c is a partial program. A program can only be
-inserted in a linkable context. Inserting a program P in a context c
+In other words, a complete program P = (D, A) is uniquely
+characterized by its definitions A.
+
+--------------------------------------------------------------------------------
+| Prop: Decomposition of complete programs (todo)
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+| Def.: Evaluable programs
+--------------------------------------------------------------------------------
+
+A complete program is evaluable if it is also compatible with the
+Interaction partial program defined as follows:
+
+  Interaction ::= ((ST0, IT0), (empty_map, empty_map))
+    where ST0 = (0 => class sig { 0 (0) })
+          OT0 = (0 => obj sig 0)
+
+
+  |- P complete
+  |- P compatible Interaction
+  ---------------------------
+  |- P evaluable
+
+--------------------------------------------------------------------------------
+| Def.: Reduction of evaluable programs
+--------------------------------------------------------------------------------
+
+Given an evaluable program (decls(A), A) with A = (CT, OT),
+it holds that
+  CT(0) = class { ...; 0 (0) { e } }
+  OT(0) = obj 0 { ... }.
+
+We define a reduction relation between programs and expressions as
+follows:
+
+  |- (decls(A), A) complete
+  A; (0, 0) |- e --> e'
+  -------------------------
+  |- A --> e'
+
+  |- (decls(A), A) complete
+  A; (0, 0) |- e -->* e'
+  -------------------------
+  |- A -->* e'
+
+--------------------------------------------------------------------------------
+| Def.: Result
+--------------------------------------------------------------------------------
+
+For every evaluable program (decls(A), A), if there exists an o such
+that |- A -->* o, then this o is unique and defined to be the result
+of evaluating A.
+
+If no such o exists, then we define the result to be _|_.
+
+  result A ::= o    if such an o exists
+  result A ::= _|_  otherwise
+
+--------------------------------------------------------------------------------
+| Def.: High-level context
+--------------------------------------------------------------------------------
+
+A high-level context C is a partial program. A program can only be
+inserted in a compatible context. Inserting a program P in a context C
 is linking:
 
-     c[P] ::= P /\/\ c       when linkable c P
+     C[P] ::= P /\/\ C       when |- C compatible P
 
 --------------------------------------------------------------------------------
-| Def.: Closing contexts (old)
+| Def.: Closing contexts
 --------------------------------------------------------------------------------
 
-Given a program P, a context c, a class name l, we say that c closes P
-with type l when c is linkable with P and inserting P in c gives a
-well-typed program of type l, that is:
+Given a program P and a context C, we say that C closes P when C is
+compatible with P and inserting P in C gives a complete program, that
+is:
 
-                  linkable c P  /\  |- c[P] : l
+   |- C compatible P
+   |- C[P] complete
+   -----------------
+   |- C closes P
 
-We define the set of closing contexts at type l for a program P by:
+We define the set of closing contexts of a program P by:
 
-     closing_contexts P l ::= {c | linkable c P  /\  |- c[P] : l}
+  closing_contexts P ::= {C | |- C closes P}
 
 --------------------------------------------------------------------------------
-| Def.: Interface equivalence (old)
+| Def.: Interface equivalence
 --------------------------------------------------------------------------------
 
 We say that two programs P and Q are interface equivalent, or have the
 same interface, when they have the same closing contexts at every
 type, that is:
 
-  same_interface P Q := forall l. closing_contexts P l = closing_contexts Q l
+  same_interface P Q ::= closing_contexts P = closing_contexts Q
 
 --------------------------------------------------------------------------------
-| Def.: Observational equivalence (old)
+| Prop.: Characterization of interface equivalence for well-typed programs
+--------------------------------------------------------------------------------
+| forall P Q,
+|   |- P ok ->
+|   |- Q ok ->
+|     let (D, (ST, OT)) = P in
+|     let (D', (ST', OT')) = Q in
+|       same_interface P Q
+|         <->
+|       (D = D' /\ dom(ST) = dom(ST') /\ dom(OT) = dom(OT'))
 --------------------------------------------------------------------------------
 
-Two programs P and Q are observationnally equivalent if they are
-interface equivalent and, for any context c that closes them, when
-separately placing the two in c, the two resulting programs reduce to
-the same value. That is:
-
-  P ~ Q ::= same_interface P Q /\
-            forall l. forall c in closing_contexts P l. forall v.
-            let o = 0 and m = 0 in
-            c[P] |- o.m(o) -->* v  <->  c[Q] |- o.m(o) -->* v
+Proof: todo.
 
 --------------------------------------------------------------------------------
-| Def.: Observational order (old)
+| Def.: Observational equivalence
 --------------------------------------------------------------------------------
 
-We define the observational order on programs as follows:
+Two well-typed partial programs P and Q are observationnally
+equivalent if they are interface equivalent and, for any context C
+that closes them, when separately placing the two in C, the two
+resulting programs give the same result. That is:
 
-  P ~< Q ::=
-    forall l. forall c in closing_contexts P l.
-    c in closing_contexts Q l /\ forall v.
-                                 let o = 0 and m = 0 in
-                                 c[P] |- o.m(o) -->* v  ->
-                                   c[Q] |- o.m(o) -->* v
-
-When we have P ~< Q, this means that Q captures all the behaviors of P.
-
---------------------------------------------------------------------------------
-| Prop.: Decomposition of observational equivalence
---------------------------------------------------------------------------------
-| forall P Q. P ~ Q <-> (P ~< Q and Q ~< P)
---------------------------------------------------------------------------------
+  |- P ok
+  |- Q ok
+  same_interface P Q
+  forall c in closing_contexts P,
+    result c[P] = result c[Q]
+  ---------------------------------------------------------
+  |- P ~ Q
 
 ================================================================================
 | "Really abstract" intermediate machine
