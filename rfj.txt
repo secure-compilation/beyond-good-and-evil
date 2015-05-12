@@ -49,56 +49,6 @@ e ::=                            expressions
   | e.m(e)                         method call
   | e == e ? e : e                 object identity test
 
---------------------------------------------------------------------------------
-| Partial programs
---------------------------------------------------------------------------------
-
-P ::= (                          partial program
-  D,                               declarations
-  A                                definitions (syntactically like a
-                                   program defined above)
-)
-
-D ::= (ST, IT)
-
-ST ::= partial map from l to S   signature table (class declaration table)
-
-IT ::= partial map from o to I   instance table (object declaration table)
-
-S ::=
-  class sig {                    class declaration
-    N1, ..., Np                    method signatures
-  }
-  where p >= 0
-
-I ::=
-  obj sig l                      object declaration
-
-N ::=
-  lr (la)
-
---------------------------------------------------------------------------------
-| Programs are partial programs in disguise
---------------------------------------------------------------------------------
-
-Every program A = (LT, OT) can be seen as a partial program
-  (decls(A), A)
-where
-
-  decls(A) ::= (ST, IT)
-
-  ST : dom(LT)                     -> S
-       class {                        class sig {
-         ...;                     |->   meth_sig(M1), ..., meth_sig(Mp)
-         M1, ..., Mp                  }
-       }
-
-  meth_sig : M              -> N
-             lr (la) { e } |-> lr (la)
-
-  IT : dom(OT)       -> I
-       obj l { ... } |-> obj sig l
-
 ================================================================================
 | Operational semantics
 ================================================================================
@@ -106,6 +56,8 @@ where
 --------------------------------------------------------------------------------
 | Def.: Reduction relation on expressions.
 --------------------------------------------------------------------------------
+
+CH: call stacks
 
 ----------------------- REFL
 A; (ot, oa) |- e -->* e
@@ -221,9 +173,100 @@ applying the induction hypothesis ends the proof.
 | Type system
 ================================================================================
 
+CH: imports instead of global signatures
+
+--------------------------------------------------------------------------------
+| Partial programs
+--------------------------------------------------------------------------------
+
+P ::= (                          partial program
+  D,                               declarations
+  A                                definitions (syntactically like a
+                                   program defined above)
+)
+
+D ::= (ST, IT)
+
+ST ::= partial map from l to S   signature table (class declaration table)
+
+IT ::= partial map from o to I   instance table (object declaration table)
+
+S ::=
+  class sig {                    class declaration
+    N1, ..., Np                    method signatures
+  }
+  where p >= 0
+
+I ::=
+  obj sig l                      object declaration
+
+N ::=
+  lr (la)
+
+--------------------------------------------------------------------------------
+| Programs are partial programs in disguise
+--------------------------------------------------------------------------------
+
+Every program A = (LT, OT) can be seen as a partial program
+  (decls(A), A)
+where
+
+  decls(A) ::= (ST, IT)
+
+  ST : dom(LT)                     -> S
+       class {                        class sig {
+         ...;                     |->   meth_sig(M1), ..., meth_sig(Mp)
+         M1, ..., Mp                  }
+       }
+
+  meth_sig : M              -> N
+             lr (la) { e } |-> lr (la)
+
+  IT : dom(OT)       -> I
+       obj l { ... } |-> obj sig l
+
 --------------------------------------------------------------------------------
 | Def.: Partial-program typing
 --------------------------------------------------------------------------------
+
+CH: Composition lemma
+
+I1 |- A1 : E1   ( P1 = I1, A1, E1 )
+I2 |- A2 : E2
+
+E1 compatible E2 -- e.g. no duplicate definitions
+I1 compatible E2
+-- if something is defined in E2 and if this appears in I1, then it
+   appears with a compatible type
+I2 compatible E1
+I1 compatible I2
+-- all definitions that appear in both have the same type
+
+guarantee:
+(I1-E2) + (I2-E1) |- A1 ++ A2 : E1 + E2
+
+Assumptions:
+- every well-typed program has imports (I) and exports (E)
+- imports have to include all external stuff the program uses
+- exports currently include everything the program defines
+  (simplification one can relax at some point, e.g. with a "private"
+  keyword, packages, etc)
+
+Assumption:
+I |- A : E implies that E doesn't contain anything in I
+
+CH: producing complete program
+empty |- A : E can be the result of composition lemma, because of "-"
+
+
+CH: Currently, composition based on global interface
+
+If
+|- (D, A1) ok
+|- (D, A2) ok
+then
+|- (D, A1 ++ A2) ok
+
 
 P = (D, A)
 D = (ST, IT)
@@ -265,8 +308,8 @@ P |- obj sig l ok
 P = (D, A)
 D = (_, IT)
 A = (LT, _)
-LT(l) = class { l1, ..., ln; ... }
-forall i in [1,n]. IT(oi) = obj sig li
+LT(l) = class { l1, ..., ln; ... }            can only define objects of classes
+forall i in [1,n]. IT(oi) = obj sig li                       in the same program
 -------------------------------------- OBJOK
 P |- obj l { o1, ..., on } ok
 
@@ -437,7 +480,7 @@ since well-typed partial programs can only provide object definitions
 for classes that they actually define. As such, it could be removed.
 
 --------------------------------------------------------------------------------
-| Def.: Linking
+| Def.: Programs and Linking
 --------------------------------------------------------------------------------
 
 Two compatible (partial) programs
@@ -446,6 +489,10 @@ Two compatible (partial) programs
 be linked to get a new (partial) program P /\/\ Q.
 
   P /\/\ Q ::= (D, (LT disjoint_union LT', OT disjoint_union OT'))
+
+To keep our stronger than full abstraction corruption property simple
+it we stick to programs that correspond to low-level components, or to
+sets of low-level components.
 
 --------------------------------------------------------------------------------
 | Prop.: Typing is preserved by linking
@@ -474,14 +521,14 @@ definitions match the domains of declarations.
 --------------------------------------------------------------------------------
 | forall P, |- P complete ->
 |           let (D, A) = P in
-|           D = decls(A)
+|           D = decls(A)                    CH: assumes unique or minimal typing
 --------------------------------------------------------------------------------
 
 In other words, a complete program P = (D, A) is uniquely
 characterized by its definitions A.
 
 --------------------------------------------------------------------------------
-| Prop: Decomposition of complete programs (todo)
+| Prop: Minimal decomposition of complete programs (todo)
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
@@ -497,7 +544,7 @@ Interaction partial program defined as follows:
 
 
   |- P complete
-  |- P compatible Interaction
+  |- P compatible Interaction                         CH: empty |- P : E + Main
   ---------------------------
   |- P evaluable
 
@@ -519,22 +566,26 @@ follows:
   |- A --> e'
 
   |- (decls(A), A) complete
-  A; (0, 0) |- e -->* e'
+  A; (0, 0) |- e -->* v
   -------------------------
-  |- A -->* e'
+  |- A ==> v
+
+CH: would it be convenient for anything to have a separate big-step semantics?
 
 --------------------------------------------------------------------------------
 | Def.: Result
 --------------------------------------------------------------------------------
 
 For every evaluable program (decls(A), A), if there exists an o such
-that |- A -->* o, then this o is unique and defined to be the result
+that |- A ==> o, then this o is unique and defined to be the result
 of evaluating A.
 
 If no such o exists, then we define the result to be _|_.
 
   result A ::= o    if such an o exists
   result A ::= _|_  otherwise
+
+Note: result is not computable
 
 --------------------------------------------------------------------------------
 | Def.: High-level context
@@ -588,6 +639,9 @@ type, that is:
 
 Proof: todo.
 
+CH: same_interface' (I1, A1, E1) (I2, A2, E2) = I1 = I2 /\ E1 = E2
+CH: for well-typed programs I expect same_interface' = same_interface
+
 --------------------------------------------------------------------------------
 | Def.: Observational equivalence
 --------------------------------------------------------------------------------
@@ -605,11 +659,14 @@ resulting programs give the same result. That is:
   ---------------------------------------------------------
   |- P ~ Q
 
+Strong property including both equi-termination and same result.
+CH: my intuition is that any of the two would suffice to get the other
+
 ================================================================================
-| "Really abstract" intermediate machine
+| Intermediate machine
 ================================================================================
 
-Here we present an abstract machine. The goal is to have an
+Here we present an abstract stack machine. The goal is to have an
 intermediate language which offers a lower-level view, while still
 being abstract (e.g. we allow unbounded stacks).
 
@@ -621,21 +678,21 @@ A machine state is formed by:
 
 * the currently running code;
 
-* two read-only registers, this and arg, one holding a reference to
-  the current object, the other holding a reference to the current
-  argument;
+* two registers, this and arg, that can only be changed by calls and
+  returns, one holding a reference to the current object, the other
+  holding a reference to the current argument;
 
-* a call stack that will allow storing the current environment before
-  performing a call, so that it can be restored afterwards;
+* a call stack that allows storing the current environment (registers
+  + continuation code) before performing a call, so that it can be
+  restored afterwards;
 
 * compartments, each corresponding to a high-level class, storing the
   code for its methods, all its instances, and a local
   stack used when executing a method of this compartment.
 
-The running code can only use (i.e. pop from / push to) the local
-stack owned by the class of the object that is currently referenced by
-register this. Upon call, we may switch compartments, and thus local
-stacks.
+The running code can only use the local stack owned by the class of
+the object that is currently referenced by register this. Upon call,
+we may switch compartments, and thus local stacks.
 
 This prevents low-level methods from compromising the local stack used by a
 caller of a different compartment. An attacker compromising a given
@@ -660,7 +717,7 @@ s ::= (                    machine state
   RF,                        a register file
   GS,                        a global call stack
   KT,                        compartments table
-  code                       the running code
+  code                       the currently running code
 )
 
 RF ::= (                   register file of immutable registers
@@ -707,7 +764,7 @@ instr ::=                  instruction
   | Nop
   | This                     push reg[this]
   | Arg                      push reg[arg]
-  | Ref r                    push reference r
+  | Ref r                    push constant reference r
   | Dup                      duplicate top value
   | Select f                 field selection
                                pop, then push the value of field f of
