@@ -17,8 +17,10 @@ o - object names -- mapped to object declarations O (OT)
 A ::= (LT, OT)                   program
 
 LT ::= partial map from l to L   class table
+       with finite domain
 
 OT ::= partial map from o to O   object table
+       with finite domain
 
 L ::=
   class {                        class definition
@@ -644,10 +646,10 @@ before control gets back to this caller.
 | Syntax
 --------------------------------------------------------------------------------
 
-At this level only compartments have names. Objects are indexed
-compartement-wise.
+At this level we have no names. Compartments are indexed, and objects
+are indexed compartement-wise.
 
-l ::= n                    compartment name (where n is natural)
+l ::= n                    compartment index (where n is natural)
 o ::= n                    object index (where n is natural)
 f ::= n                    field index (where n is natural)
 m ::= n                    method index (where n is natural)
@@ -657,7 +659,7 @@ r ::= (l, o)               object reference
 s ::= (                    machine state
   RF,                        a register file
   GS,                        a global call stack
-  LT,                        compartments table
+  KT,                        compartments table
   code                       the running code
 )
 
@@ -672,19 +674,19 @@ GS ::= [] | (              call stack: to restore execution after a call
                              value from the local stack)
 ) :: GS
 
-LT ::= partial map from l to L
+KT ::= { K1, ..., Kk }     compartment table
 
-L ::= {                    compartment
-  M1, ..., Mp;               methods
-  O1, ..., Oq;               instances
-  LS                         local stack
-}
+  where k >= 0
 
-  where p, q >= 0
+K ::=                      compartment
+| { M1, ..., Mp;             methods
+    O1, ..., Oq;             instances
+    LS }                     local stack
+| _|_                      undefined compartment
+                             (will be filled by linking)
 
-O ::= (r1, ..., rn)        object
-
-  where n >= 0
+  where O ::= (r1, ..., rn)  object
+        p, q, n >= 0
 
 M ::=                      method
   code
@@ -696,8 +698,8 @@ code ::=                   code
   [] | instr :: code         list of instructions
 
 
-Note: "stack" always means "current local stack" when describing an
-instruction hereafter, similarly "push" and "pop" always refer to
+Note: hereafter, "stack" always means "current local stack" when
+describing an instruction, similarly "push" and "pop" always refer to
 operations on the current local stack.
 
 
@@ -712,7 +714,7 @@ instr ::=                  instruction
                                the popped object
   | Call m                   method call
                                pop twice, then call method m of the
-                               first popped object, using the second
+                               second popped object, using the first
                                popped object as argument
   | Return                   return from call (with result)
                                pop, then resume execution to the
@@ -737,11 +739,20 @@ bit silly; the rule would also be longer to state).
 | Def.: Reduction
 --------------------------------------------------------------------------------
 
-Macro:
+Macros:
 
-  PointsToSomething(r) ::=
+  KT(l) ::= Kl when KT = { K1, ..., Kk }
+                    1 <= l <= k
+
+  (KT with l => K) ::= { K1, ..., Kl-1,
+                         K,
+                         Kl+1, ..., Kk }
+                      when    KT = { K1, ..., Kk }
+                              1 <= l <= k
+
+  PointsToSomething(KT, r) ::=
     r = (l, o)
-    LT(l) = { ...; O1, ..., Oq; ... }
+    KT(l) = { ...; O1, ..., Oq; ... }
     o <= q
 
 TODO: Add sanity checks in the rules, which should hopefully be
@@ -749,144 +760,159 @@ TODO: Add sanity checks in the rules, which should hopefully be
 when stating the rules looks good. Is this a good idea? Would it be
 too strong to add everywhere the following premisse?
 
-    PointsToSomething(RF(this))
-    PointsToSomething(RF(arg))
-    forall l in dom(LT),
-      match LT(l) with
+    PointsToSomething(KT, RF(this))
+    PointsToSomething(KT, RF(arg))
+    forall l in dom(KT),
+      match KT(l) with
       | { ...; ...; LS} =>
             for every r in LS,
-            PointsToSomething(r)
+            PointsToSomething(KT, r)
 
 Rules:
 
   ----------------------------------------------- NOP
-  (RF, GS, LT, Nop :: code) -> (RF, GS, LT, code)
+  (RF, GS, KT, Nop :: code) -> (RF, GS, KT, code)
 
   RF(this) = (l, _)
-  LT(l) = { M1, ..., Mp; O1, ..., Oq; r :: LS }
-  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; r :: r :: LS }
+  KT(l) = { M1, ..., Mp; O1, ..., Oq; r :: LS }
+  KT' = KT with l => { M1, ..., Mp; O1, ..., Oq; r :: r :: LS }
   ------------------------------------------------------------- DUP
-  (RF, GS, LT, Dup :: code) -> (RF, GS, LT', code)
+  (RF, GS, KT, Dup :: code) -> (RF, GS, KT', code)
 
   RF(this) = (l, _)
-  LT(l) = { M1, ..., Mp; O1, ..., Oq; LS }
-  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; r :: LS }
+  KT(l) = { M1, ..., Mp; O1, ..., Oq; LS }
+  KT' = KT with l => { M1, ..., Mp; O1, ..., Oq; r :: LS }
   -------------------------------------------------------- REF
-  (RF, GS, LT, Ref r :: code) -> (RF, GS, LT', code)
+  (RF, GS, KT, Ref r :: code) -> (RF, GS, KT', code)
 
   RF(this) = (l, _)
-  LT(l) = { M1, ..., Mp; O1, ..., Oq; LS }
-  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; RF(this) :: LS }
+  KT(l) = { M1, ..., Mp; O1, ..., Oq; LS }
+  KT' = KT with l => { M1, ..., Mp; O1, ..., Oq; RF(this) :: LS }
   --------------------------------------------------------------- THIS
-  (RF, GS, LT, This :: code) -> (RF, GS, LT', code)
+  (RF, GS, KT, This :: code) -> (RF, GS, KT', code)
 
   RF(this) = (l, _)
-  LT(l) = { M1, ..., Mp; O1, ..., Oq; LS }
-  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; RF(arg) :: LS }
+  KT(l) = { M1, ..., Mp; O1, ..., Oq; LS }
+  KT' = KT with l => { M1, ..., Mp; O1, ..., Oq; RF(arg) :: LS }
   -------------------------------------------------------------- ARG
-  (RF, GS, LT, Arg :: code) -> (RF, GS, LT', code)
+  (RF, GS, KT, Arg :: code) -> (RF, GS, KT', code)
 
   RF(this) = (l, _)
-  LT(l) = { M1, ..., Mp; O1, ..., Oq; r :: LS }
+  KT(l) = { M1, ..., Mp; O1, ..., Oq; r :: LS }
   r = (l, o)          requiring l here ensures field privacy
   Oo = (r1, ..., rn)
   f <= n
-  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; rf :: LS }
+  KT' = KT with l => { M1, ..., Mp; O1, ..., Oq; rf :: LS }
   --------------------------------------------------------- SELECT
-  (RF, GS, LT, Select f :: code) -> (RF, GS, LT', code)
+  (RF, GS, KT, Select f :: code) -> (RF, GS, KT', code)
 
   RF(this) = (l, _)
-  LT(l) = { M1, ..., Mp; O1, ..., Oq; ra :: rt :: LS }
+  KT(l) = { M1, ..., Mp; O1, ..., Oq; ra :: rt :: LS }
   rt = (l', _)
-  LT(l') = { M'1, ..., M'p'; ...; _ }
+  KT(l') = { M'1, ..., M'p'; ...; _ }
   m <= p'
   M'm = code'
-  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; LS }
+  KT' = KT with l => { M1, ..., Mp; O1, ..., Oq; LS }
   GS' = (RF, code) :: GS
   RF' = (this => rt, arg => ra)
   ------------------------------------------------------ CALL
-  (RF, GS, LT, Call m :: code) -> (RF', GS', LT', code')
+  (RF, GS, KT, Call m :: code) -> (RF', GS', KT', code')
 
   GS = (RF', code') :: GS'
   RF(this) = (l, _)
   RF'(this) = (l', _)
   l <> l'
-  LT(l) = { M1, ..., Mp; O1, ..., Oq; rr :: LS }
-  LT(l') = { M'1, ..., M'p; O'1, ..., O'q; LS' }
-  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; LS }
+  KT(l) = { M1, ..., Mp; O1, ..., Oq; rr :: LS }
+  KT(l') = { M'1, ..., M'p; O'1, ..., O'q; LS' }
+  KT' = KT with l => { M1, ..., Mp; O1, ..., Oq; LS }
                 l' => { M'1, ..., M'p; O'1, ..., O'q; rr :: LS }
   -------------------------------------------------------------- RETURN-INTER
-  (RF, GS, LT, Return :: code) -> (RF', GS', LT', code')
+  (RF, GS, KT, Return :: code) -> (RF', GS', KT', code')
 
   GS = (RF', code') :: GS'
   RF(this) = (l, _)
   RF'(this) = (l, _)
   ------------------------------------------------------ RETURN-INTRA
-  (RF, GS, LT, Return :: code) -> (RF', GS', LT, code')
+  (RF, GS, KT, Return :: code) -> (RF', GS', KT, code')
 
 
   RF(this) = (l, _)
-  LT(l) = { M1, ..., Mp; O1, ..., Oq; r :: r :: LS }
-  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; LS }
+  KT(l) = { M1, ..., Mp; O1, ..., Oq; r :: r :: LS }
+  KT' = KT with l => { M1, ..., Mp; O1, ..., Oq; LS }
   code = i1 :: ... :: in :: code'
   --------------------------------------------------- BEQ-EQ
-  (RF, GS, LT, Beq n :: code) -> (RF, GS, LT', code')
+  (RF, GS, KT, Beq n :: code) -> (RF, GS, KT', code')
 
   RF(this) = (l, _)
-  LT(l) = { M1, ..., Mp; O1, ..., Oq; r1 :: r2 :: LS }
+  KT(l) = { M1, ..., Mp; O1, ..., Oq; r1 :: r2 :: LS }
   r1 <> r2
-  LT' = LT with l => { M1, ..., Mp; O1, ..., Oq; LS }
+  KT' = KT with l => { M1, ..., Mp; O1, ..., Oq; LS }
   ---------------------------------------------------- BEQ-NEQ
-  (RF, GS, LT, Beq n :: code) -> (RF, GS, LT', code)
+  (RF, GS, KT, Beq n :: code) -> (RF, GS, KT', code)
 
 
 --------------------------------------------------------------------------------
-| Def.: Compilation of expressions
+| Def.: Compilation
 --------------------------------------------------------------------------------
 
-Define:
+When compiling, we want to linearize the finite partial maps CT, OT
+into "arrays" (one fixed "array" of components, each having a fixed
+"array" of objects). This is also possible for partial programs (D, A)
+thanks to the declarations D: we know what the complete program will
+look like.
 
-  obj_id(LT, OT, o_high) = (l_low, o_low)
-    if OT(o_high) = obj l_high { ... }
-    and l_high in dom(LT)
-    and l_low = l_high
-    and o_low = ||{o'_high in dom(OT) |
-                   OT(o_high) = obj l { ... } and
-                   o'_high < o_high}||
+Thus, we define:
 
-Invariant:
+  class_id(ST, l) = || { l' in dom(ST) | l' < l } ||
+    when l in dom(ST)
 
-  after the whole execution of the code for c_expr(LT, OT, e), the
-  compartment is the same as before, and exactly one new object
-  reference has been pushed on the local stack.
+  obj_id(ST, IT, o) = (
+    class_id(ST, l),
+    || { o' in dom(IT) | IT(o') = obj sig l /\ o' < o } ||
+  )
+    when IT(o) = obj sig l
 
-  This reference is obj_id(v) iff (LT, OT) |- e -->* v.
+Compilation of expressions
+--------------------------
 
-Compilation:
+  Intuitive invariant, assuming a complete source program:
 
-  c_expr(LT, OT, this) = This
+    When executed (from an appropriate machine state), the compiled
+    expression (used as current code) will either terminate or loop.
 
-  c_expr(LT, OT, arg) = Arg
+    If it does not terminate, then neither does the source expression
+    (in a matching environment).
 
-  c_expr(LT, OT, o) = Ref obj_id(LT, OT, o)
+    If it does terminate, however, then so does the source expression
+    (in a matching environment). After the execution of the compiled
+    expression, the current object is the same as before and exactly
+    one new object reference has been pushed on the local stack. This
+    reference is obj_id(o), where o is the unique object reference
+    that the source expression reduces to.
 
-  c_expr(LT, OT, e.f) =
-     c_expr(LT, OT, e);
+  c_expr(ST, IT, this) = This
+
+  c_expr(ST, IT, arg) = Arg
+
+  c_expr(ST, IT, o) = Ref obj_id(ST, IT, o)
+
+  c_expr(ST, IT, e.f) =
+     c_expr(ST, IT, e);
      Select f
 
-  c_expr(LT, OT, e.m(e')) =
-     c_expr(LT, OT, e);
-     c_expr(LT, OT, e');
+  c_expr(ST, IT, e.m(e')) =
+     c_expr(ST, IT, e);
+     c_expr(ST, IT, e');
      Call m
 
-  c_expr(LT, OT, e1 == e2 ? e3 : e4) =
-     c_expr(LT, OT, e1);
-     c_expr(LT, OT, e2);
+  c_expr(ST, IT, e1 == e2 ? e3 : e4) =
+     c_expr(ST, IT, e1);
+     c_expr(ST, IT, e2);
      Beq EQ;       (note: these are indeed relative forward jumps, so this works)
-     c_expr(LT, OT, e4);
+     c_expr(ST, IT, e4);
      Dup;          }  <--- a way to encode unconditional forward jump
      Beq END;      }
-EQ:  c_expr(LT, OT, e3);
+EQ:  c_expr(ST, IT, e3);
 END: Nop
 
 --------------------------------------------------------------------------------
@@ -894,7 +920,7 @@ END: Nop
 --------------------------------------------------------------------------------
 
 Compiling a complete program is quite straightforward once we know how
-to compile expressions. We can get a list of classes out of LT by
+to compile expressions. We can get a list of classes out of KT by
 skipping "holes" in the domain, and a list of objects for each class
 by skipping "holes" in the domain and using one counter per class.
 
