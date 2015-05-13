@@ -50,8 +50,82 @@ e ::=                            expressions
   | e == e ? e : e                 object identity test
 
 ================================================================================
-| Operational semantics
+| Semantics
 ================================================================================
+
+We introduce a natural semantics which gives a high-level intuition,
+together with an operational semantics which relates well to low-level
+evaluation. We relate the two.
+
+--------------------------------------------------------------------------------
+| Def.: Values
+--------------------------------------------------------------------------------
+
+A value is an object name o.
+
+--------------------------------------------------------------------------------
+| Prop.: Equality on values is decidable
+--------------------------------------------------------------------------------
+| forall o o', {o = o'} + {o <> o'}
+--------------------------------------------------------------------------------
+
+Proof: Object names are naturals.
+
+--------------------------------------------------------------------------------
+| Natural semantics
+--------------------------------------------------------------------------------
+
+-------------------------- THIS
+A; (ot, oa) |- this ==> ot
+
+
+------------------------- ARG
+A; (ot, oa) |- arg ==> oa
+
+
+---------------------- OBJ
+A; (ot, oa) |- o ==> o
+
+
+A; (ot, oa) |- e ==> o
+A = (OT, LT)
+OT(o) = obj l { o1, ..., on }
+OT(ot) = obj l { ... }               field privacy (granularity: class)
+f = i in [1,n]
+----------------------------- SEL
+A; (ot, oa) |- e.f ==> oi
+
+
+A; (ot, oa) |- e1 ==> ot'
+A; (ot, oa) |- e2 ==> oa'
+A = (OT, LT)
+OT(ot') = obj l { o1, ..., on }
+LT(l) = class { ... ; M1, ..., Mp }
+Mj = lr (la) { e }
+m = j in [1,p]
+A; (ot', oa') |- e ==> o
+----------------------------------- CALL
+A; (ot, oa) |- e1.m(e2) ==> o
+
+
+e1 ==> o12
+e2 ==> o12
+e3 ==> o3
+---------------------------------------- TESTEQ
+A; (ot, oa) |- e1 == e2 ? e3 : e4 ==> o3
+
+
+e1 ==> o1
+e2 ==> o2
+o1 <> o2
+e4 ==> o4
+---------------------------------------- TESTNEQ
+A; (ot, oa) |- e1 == e2 ? e3 : e4 --> o4
+
+
+--------------------------------------------------------------------------------
+| Operational semantics
+--------------------------------------------------------------------------------
 
 E ::=                            flat evaluation contexts
   | [].f
@@ -68,10 +142,6 @@ CS ::= []                        call stack
 
 Cfg ::=                          reduction configurations
   | (CS, ot, oa, K, e)
-
---------------------------------------------------------------------------------
-| Def.: Reduction relation on expressions.
---------------------------------------------------------------------------------
 
 
 -------------------------------------------------- THIS
@@ -125,126 +195,72 @@ A |- (CS, ot, oa, [] == e2 ? e3 : e4 :: K, o1) -->
      (CS, ot, oa, o1 == [] ? e3 : e4 :: K, e2)
 
 
----------------------------------------------------------------- TEST_EQ
-A |- (CS, ot, oa, K, o == o ? e3 : e4) --> (CS, ot, oa, K, e3)
+------------------------------------------------ TEST_POP_EQ
+A |- (CS, ot, oa, o == [] ? e3 : e4 :: K, o) -->
+     (CS, ot, oa,                      K, e3)
 
 o <> o'
------------------------------------------------------------------ TEST_NEQ
-A |- (CS, ot, oa, K, o == o' ? e3 : e4) --> (CS, ot, oa, K, e4)
-
-
---------------------------------- old semantics below
-
-
------------------------ REFL
-A; (ot, oa) |- e -->* e
-
-
-A; (ot, oa) |- e --> e'
-A; (ot, oa) |- e' -->* e''
--------------------------- STEP
-A; (ot, oa) |- e -->* e''
-
-
--------------------------- THIS
-A; (ot, oa) |- this --> ot
-
-
-------------------------- ARG
-A; (ot, oa) |- arg --> oa
-
-
-A = (OT, LT)
-OT(ot) = obj l { ... }               field privacy (granularity: class)
-OT(o) = obj l { o1, ..., on }
-f = i in [1,n]
------------------------------ SEL
-A; (ot, oa) |- o.f --> oi
-
-
-A = (OT, LT)
-OT(ot') = obj l { o1, ..., on }
-LT(l) = class { ... ; M1, ..., Mp }
-Mj = lr (la) { e }
-m = j in [1,p]
-A; (ot', oa') |- e -->* o
------------------------------------ CALL
-A; (ot, oa) |- ot'.m(oa') --> o
-
-
------------------------------------- TESTEQ
-A; (ot, oa) |- o == o ? e : e' --> e
-
-
-o <> o'
--------------------------------------- TESTNEQ
-A; (ot, oa) |- o == o' ? e : e' --> e'
-
-
-A; (ot, oa) |- e1 --> e1'
---------------------------------------- CONGRLCALL
-A; (ot, oa) |- e1.mi(e2) --> e1'.mi(e2)
-
-
-A; (ot, oa) |- e --> e'
------------------------------------ CONGRRCALL
-A; (ot, oa) |- o.mi(e) --> o.mi(e')
-
-
-A; (ot, oa) |- e1 --> e1'
---------------------------------------------------------- CONGRLTEST
-A; (ot, oa) |- e1 == e2 ? e3 : e4 --> e1' == e2 ? e3 : e4
-
-
-A; (ot, oa) |- e2 --> e2'
-------------------------------------------------------- CONGRRTEST
-A; (ot, oa) |- o == e2 ? e3 : e4 --> o == e2' ? e3 : e4
-
-
-We sometimes use the notation e --> e', where A, ot and oa are
-implicitly assumed.
+------------------------------------------------- TEST_POP_NEQ
+A |- (CS, ot, oa, o == [] ? e3 : e4 :: K, o') -->
+     (CS, ot, oa, K,                      e4)
 
 --------------------------------------------------------------------------------
-| Def.: Values
+| Notations for reductions between configurations
 --------------------------------------------------------------------------------
 
-A value is an object name.
+For every program A, we define three relations -->_A, -/->_A and
+-->*_A between configurations as follows:
+
+Cfg -->_A Cfg' ::= A |- Cfg --> Cfg'
+
+Cfg -/->_A Cfg' ::= ~ (Cfg -->_A Cfg')
+                    i.e. (Cfg -->_A Cfg') -> _|_
+
+-->*_A ::= reflexive and transitive closure of -->_A
+
+--------------------------------------------------------------------------------
+| Prop.: Relation between natural and operational semantics (hopefully)
+--------------------------------------------------------------------------------
+| forall A ot oa e o,
+|   A; (ot, oa) |- e ==> o
+|     <->
+|   ([], ot, oa, [], e) -->*_A ([], ot, oa, [], o)
+--------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 | Prop.: Values do not reduce
 --------------------------------------------------------------------------------
-| forall (v:value) (e: expr), v -/-> e.
+| forall o A ot oa Cfg',
+|   ([], ot, oa, [], o) -/->_A Cfg'
 --------------------------------------------------------------------------------
 
-Proof: No rule applies when we have an object name in the left hand side.
+Proof: No rule applies with such a configuration in the left-hand side.
 
 --------------------------------------------------------------------------------
-| Prop.: Equality on values is decidable
+| Prop.: Reduction is deterministic
 --------------------------------------------------------------------------------
-| forall v v', {v = v'} + {v <> v'}.
---------------------------------------------------------------------------------
-
-Proof: Object names are naturals.
-
---------------------------------------------------------------------------------
-| Prop.: Determinism of our reduction relation
---------------------------------------------------------------------------------
-| forall e e' e'',
-|    e --> e'  ->
-|    e --> e'' ->
-|      e' = e''
+| forall Cfg Cfg' Cfg'',
+|    Cfg --> Cfg'  ->
+|    Cfg --> Cfg'' ->
+|      Cfg' = Cfg''
 --------------------------------------------------------------------------------
 
-Proof (old): Corollary of the fact that values (hence object names) do
-not reduce.
-
-By induction on the size of the derivation tree for e --> e'. By case
-on the last rule applied in this tree. Only this rule applies with e
-as a the left-hand side, because object names do not reduce and
-equality on values is decidable. This gives the shape of e'', and is
-sufficient to conclude in the base case. In the inductive case,
-applying the induction hypothesis ends the proof.
-
+Proof: We show that at most one rule applies with Cfg as the left-hand
+side. Let (_, _, _, K, e) = Cfg. By case on e:
+* if e is not an o:
+    at most one rule applies depending on e (syntax-directed):
+      this -> THIS, arg -> ARG, e.f -> SEL_PUSH,
+      e.m(e') -> CALL_PUSH1, e1 == e2 ? e3 : e4 -> TEST_PUSH1;
+* if e is an o:
+  * if K is empty, only RETURN may apply;
+  * otherwise, by case on the head E of K:
+    * if E is o == [] ? e3 : e4, then at most one rule applies, chosen
+      between TEST_POP_EQ and TEST_POP_NEQ which are mutually
+      exclusive;
+    * otherwise, at most one rule applies depending on E
+      (syntax-directed):
+        [].f -> SEL_POP, [].m(e) -> CALL_PUSH2,
+        o.m([]) -> CALL_DO, [] == e2 ? e3 : e4 -> TEST_PUSH2.
 
 ================================================================================
 | Type system
