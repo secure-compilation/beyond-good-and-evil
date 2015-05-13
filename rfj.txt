@@ -53,15 +53,15 @@ e ::=                            expressions
 | Operational semantics
 ================================================================================
 
-F ::=                            frames (flat evaluation contexts)
+E ::=                            flat evaluation contexts
   | [].f
   | [].m(e)
   | o.m([])
   | [] == e2 ? e3 : e4
   | o1 == [] ? e3 : e4
 
-K ::= []                         continuations (lists of frames)
-  | F :: K
+K ::= []                         continuations (lists of flat eval contexts)
+  | E :: K
 
 CS ::= []                        call stack
   | (ot, oa, K) :: CS
