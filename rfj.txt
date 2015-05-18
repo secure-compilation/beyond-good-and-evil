@@ -71,9 +71,9 @@ A value is an object name o.
 
 Proof: Object names are naturals.
 
---------------------------------------------------------------------------------
-| Big-step semantics
---------------------------------------------------------------------------------
+
+Big-step semantics
+==================
 
 -------------------------- THIS
 A; (ot, oa) |- this ==> ot
@@ -123,9 +123,8 @@ e4 ==> o4
 A; (ot, oa) |- e1 == e2 ? e3 : e4 --> o4
 
 
---------------------------------------------------------------------------------
-| Small-step semantics
---------------------------------------------------------------------------------
+Small-step semantics
+====================
 
 E ::=                            flat evaluation contexts
   | [].f
@@ -204,9 +203,9 @@ o <> o'
 A |- (CS, ot, oa, o == [] ? e3 : e4 :: K, o') -->
      (CS, ot, oa, K,                      e4)
 
---------------------------------------------------------------------------------
-| Notations for reductions between configurations
---------------------------------------------------------------------------------
+
+Notations for reductions between configurations
+===============================================
 
 For every program A, we define three relations -->_A, -/->_A and
 -->*_A between configurations as follows:
@@ -217,6 +216,10 @@ Cfg -/->_A Cfg' ::= ~ (Cfg -->_A Cfg')
                     i.e. (Cfg -->_A Cfg') -> _|_
 
 -->*_A ::= reflexive and transitive closure of -->_A
+
+
+Properties
+==========
 
 --------------------------------------------------------------------------------
 | Prop.: Relation between big-step and small-step semantics (hopefully)
@@ -262,6 +265,30 @@ side. Let (_, _, _, K, e) = Cfg. By case on e:
         [].f -> SEL_POP, [].m(e) -> CALL_PUSH2,
         o.m([]) -> CALL_DO, [] == e2 ? e3 : e4 -> TEST_PUSH2.
 
+
+Semantics of programs
+=====================
+
+--------------------------------------------------------------------------------
+| Def.: Reduction of programs
+--------------------------------------------------------------------------------
+
+We define a reduction relation between programs and values as follows:
+
+  A = (LT, OT)
+  LT(0) = class { ...; 0 (0) { e } }
+  OT(0) = obj 0 { ... }
+  A; (0, 0) |- e ==> v
+  ----------------------------------
+  |- A ==> v
+
+Note: We define later evaluable programs, which can be seen as
+  particular well-typed programs which trivially satisfy the two
+  extra conditions we ask for, that is:
+    LT(0) = class { ...; 0 (0) { e } }
+    OT(0) = obj 0 { ... }.
+
+
 ================================================================================
 | Type system
 ================================================================================
@@ -304,6 +331,17 @@ N ::=
 --------------------------------------------------------------------------------
 | Def.: Partial-program typing
 --------------------------------------------------------------------------------
+
+P = (I, A, E)
+I |- A : E
+-------------
+|- P ok
+
+|- I ok
+I |- A ok
+I; A |- E ok
+------------
+I |- A : E
 
 Well-formedness of import declarations
 ======================================
@@ -371,8 +409,8 @@ forall o in dom(OD),
 A |- E ok
 
 
-Well-formedness and -typing of programs
-=======================================
+Well-formedness and -typing of partial programs
+===============================================
 
 
 I = D
@@ -394,7 +432,7 @@ Object definition typing
 D = (_, OD)
 A = (LT, OT)
 LT(l) = class { l1, ..., ln; ... }            can only define objects of classes
-forall i in [1,n],                                           in the same program
+forall i in [1,n],                                   in the same partial program
   OD(oi) = obj decl li \/
     OT(oi) = obj li { ... }
 ----------------------------------
@@ -482,6 +520,171 @@ D; A; G |- e4 : l
 -------------------------------- TTEST
 D; A; G |- (e1 == e2 ? e3 : e4) : l
 
+
+--------------------------------------------------------------------------------
+| Def.: Complete programs
+--------------------------------------------------------------------------------
+
+A program A is complete if it typechecks with no import and export
+declarations.
+
+  (empty_map, empty_map) |- A : (empty_map, empty_map)
+  ----------------------------------------------------
+  |- A complete
+
+
+--------------------------------------------------------------------------------
+| Def.: Evaluable programs
+--------------------------------------------------------------------------------
+
+A program A is evaluable if can be typed with no import declarations
+and a particular choice of export declarations which correspond to
+the way program evaluation is performed.
+
+  MainSig ::= (LE, OE)
+    where LE = (0 => class decl { 0 (0) })
+          OE = (0 => obj decl 0)
+
+  empty_map |- A : MainSig
+  ------------------------
+  |- A evaluable
+
+
+--------------------------------------------------------------------------------
+| Def: Complete and evaluable partial programs
+--------------------------------------------------------------------------------
+
+We say that a well-typed partial program (I, A, E) is complete when
+  I = (empty_map, empty_map).
+
+We say that it is evaluable when moreover
+  LE(0) = class decl { 0 (0) }
+and
+  OE(0) = obj decl 0.
+
+Note:
+  (I, A, E) complete ->  |- A complete.
+  (I, A, E) evaluable ->  |- A evaluable.
+
+  However, it is possible for A to be complete (resp. evaluable)
+  without having (I, A, E) complete (resp. evaluable), for instance if
+  the partial program has useless import declarations.
+
+
+--------------------------------------------------------------------------------
+| Def.: Compatibility
+--------------------------------------------------------------------------------
+
+  |- P ok
+  |- Q ok
+  P = (I, A, E)
+  Q = (I', A', E')
+  |- compatible A A'
+  |- compatible I E'
+  |- compatible I' E
+  |- compatible I I'
+  ------------------
+  |- compatible P Q
+
+Note: we don't need a notion of compatibility between E and E' because
+having  |- A : E ok  and  |- A' : E' ok  and  |- compatible A A'
+already entails that E and E' have disjoint domains, which is what we
+would require as a notion of compatibility between E and E'.
+
+
+  A = (LT, OT)
+  A' = (LT', OT')
+  dom(LT) inter dom(LT') = empty_set
+  ----------------------------------
+  |- compatible A A'
+
+Note: we don't need to enforce that
+  dom(OT) inter dom(OT') = empty_set
+because it already entailed by condition
+  dom(LT) inter dom(LT') = empty_set
+since well-typed partial programs can only provide object definitions
+for classes that they actually define.
+
+
+  I = D
+  D = (LI, OI)
+  E = D'
+  D' = (LE, OE)
+  forall l in dom(LE) inter dom(LI),
+    LE(l) = LI(l) /\
+      forall o in dom(OI),
+        OI(o) = obj decl l ->
+          OE(o) = OI(o)
+  dom(LT) inter dom(LT') = empty_set
+  dom(OT) inter dom(OT') = empty_set
+  ----------------------------------
+  |- compatible I E
+
+
+  I = D
+  D = (LI, OI)
+  I' = D'
+  D' = (LI', OI')
+  forall l in dom(LI) inter dom(LI'),
+    LI(l) = LI'(l)
+  forall o in dom(OI) inter dom(OI'),
+    OI(o) = OI'(o)
+  -----------------------------------
+  |- compatible I I'
+
+
+--------------------------------------------------------------------------------
+| Def.: Linking
+--------------------------------------------------------------------------------
+
+Two compatible (hence also well-typed) partial programs
+  P = ((LI, OI), (LT, OT), (LE, OE))
+  Q = ((LI', OI'), (LT', OT'), (LE', OE'))
+can be linked to get a new partial program P /\/\ Q.
+
+  P /\/\ Q ::= (
+    ((LI - LE') union (LI' - LE), (OI - OE') union (OI' - OE)),
+    (LT disjoint_union LT', OT disjoint_union OT'),
+    (LE disjoint_union LE', OE disjoint_union OE')
+  ) when |- compatible P Q
+
+  where
+
+    M - M' is defined
+      * for any M and M' such that M(x) = M'(x)
+        for all x in dom(M) inter dom(M')
+      * as the partial map M restricted to
+        domain dom(M) - dom(M')
+
+    M union M' is defined (when applicable) as the partial map
+      (M - M') disjoint_union M'
+
+--------------------------------------------------------------------------------
+| Th.: Linking preserves well-typing (composition lemma)
+--------------------------------------------------------------------------------
+| forall P Q, |- compatible P Q  ->  |- P /\/\ Q ok
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+| Prop.: Linking is symmetric
+--------------------------------------------------------------------------------
+| forall P Q, |- compatible P Q  ->
+|             |- compatible Q P  ->
+|             (Q /\/\ P = P /\/\ Q)
+| forall P Q, |- compatible P Q  <->  |- compatible Q P
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+| Prop.: Linking is associative
+--------------------------------------------------------------------------------
+| forall P Q R, |- compatible P Q  ->  |- compatible (P /\/\ Q) R  ->
+|               |- compatible Q R  ->  |- compatible P (Q /\/\ R) ->
+|               (P /\/\ Q) /\/\ R = P /\/\ (Q /\/\ R)
+| forall P Q R, (|- compatible P Q  /\  |- compatible (P /\/\ Q) R)
+|                 <->
+|               (|- compatible Q R  /\  |- compatible P (Q /\/\ R))
+--------------------------------------------------------------------------------
+
 ================================================================================
 | Encodings
 ================================================================================
@@ -547,215 +750,89 @@ If then else via identity test, e.g. (b == true ? e1 : e2).
 
 
 ================================================================================
-| High-level programs, high-level contexts (old)
+| Observational equivalence
 ================================================================================
 
---------------------------------------------------------------------------------
-| Def.: Compatibility
---------------------------------------------------------------------------------
-
-Two well-typed partial programs are compatible if they share the same
-declarations while having disjoint domains for their definitions, that
-is:
-
-  |- P ok
-  |- P' ok
-  P = (D, (LT, OT))
-  P' = (D, (LT', OT'))
-  dom(LT) inter dom(LT') = empty_set
-  dom(OT) inter dom(OT') = empty_set
-  -------------------------------------------
-  |- P compatible P'
-
-Note: Condition:
-  dom(OT) inter dom(OT') = empty_set
-is entailed by condition:
-  dom(LT) inter dom(LT') = empty_set
-since well-typed partial programs can only provide object definitions
-for classes that they actually define. As such, it could be removed.
-
---------------------------------------------------------------------------------
-| Def.: Programs and Linking
---------------------------------------------------------------------------------
-
-Two compatible (partial) programs
-  P = (D, (LT, OT))
-  Q = (D, (LT', OT')) can
-be linked to get a new (partial) program P /\/\ Q.
-
-  P /\/\ Q ::= (D, (LT disjoint_union LT', OT disjoint_union OT'))
-
 To keep our stronger than full abstraction corruption property simple
-it we stick to programs that correspond to low-level components, or to
-sets of low-level components.
+we stick to programs that correspond to low-level components, or to
+sets of low-level components. However, to allow interaction with the
+context, our notion of high-level programs will be well-typed
+*partial* programs, which may include import declarations that will be
+mapped to context definitions.
 
 --------------------------------------------------------------------------------
-| Prop.: Typing is preserved by linking
---------------------------------------------------------------------------------
-| forall P Q. |- P ok ->
-|             |- Q ok ->
-|               |- P /\/\ Q ok
+| Def.: High-level program
 --------------------------------------------------------------------------------
 
---------------------------------------------------------------------------------
-| Def.: Complete programs
---------------------------------------------------------------------------------
-
-A well-typed partial program is complete if the domains of
-definitions match the domains of declarations.
-
-    |- P ok
-    P = ((ST, IT), (CT, OT))
-    dom(ST) = dom(CT)
-    dom(OT) = dom(IT)
-    --------------------------------------
-    |- P complete
-
---------------------------------------------------------------------------------
-| Prop: Declarations are redundant for complete programs
---------------------------------------------------------------------------------
-| forall P, |- P complete ->
-|           let (D, A) = P in
-|           D = decls(A)                    CH: assumes unique or minimal typing
---------------------------------------------------------------------------------
-
-In other words, a complete program P = (D, A) is uniquely
-characterized by its definitions A.
-
---------------------------------------------------------------------------------
-| Prop: Minimal decomposition of complete programs (todo)
---------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
-| Def.: Evaluable programs
---------------------------------------------------------------------------------
-
-A complete program is evaluable if it is also compatible with the
-Interaction partial program defined as follows:
-
-  Interaction ::= ((ST0, IT0), (empty_map, empty_map))
-    where ST0 = (0 => class sig { 0 (0) })
-          OT0 = (0 => obj sig 0)
-
-
-  |- P complete
-  |- P compatible Interaction                         CH: empty |- P : E + Main
-  ---------------------------
-  |- P evaluable
-
---------------------------------------------------------------------------------
-| Def.: Reduction of evaluable programs
---------------------------------------------------------------------------------
-
-Given an evaluable program (decls(A), A) with A = (CT, OT),
-it holds that
-  CT(0) = class { ...; 0 (0) { e } }
-  OT(0) = obj 0 { ... }.
-
-We define a reduction relation between programs and expressions as
-follows:
-
-  |- (decls(A), A) complete
-  A; (0, 0) |- e --> e'
-  -------------------------
-  |- A --> e'
-
-  |- (decls(A), A) complete
-  A; (0, 0) |- e -->* v
-  -------------------------
-  |- A ==> v
-
-CH: would it be convenient for anything to have a separate big-step semantics?
-
---------------------------------------------------------------------------------
-| Def.: Result
---------------------------------------------------------------------------------
-
-For every evaluable program (decls(A), A), if there exists an o such
-that |- A ==> o, then this o is unique and defined to be the result
-of evaluating A.
-
-If no such o exists, then we define the result to be _|_.
-
-  result A ::= o    if such an o exists
-  result A ::= _|_  otherwise
-
-Note: result is not computable
+A high-level program is a well-typed partial program.
 
 --------------------------------------------------------------------------------
 | Def.: High-level context
 --------------------------------------------------------------------------------
 
-A high-level context C is a partial program. A program can only be
-inserted in a compatible context. Inserting a program P in a context C
-is linking:
+A high-level context C is a well-typed partial program. A program can
+only be inserted in a compatible context. Inserting a program P in a
+context C is linking, it yields a new high-level program:
 
-     C[P] ::= P /\/\ C       when |- C compatible P
+     C[P] ::= P /\/\ C       when |- compatible C P
 
 --------------------------------------------------------------------------------
 | Def.: Closing contexts
 --------------------------------------------------------------------------------
 
 Given a program P and a context C, we say that C closes P when C is
-compatible with P and inserting P in C gives a complete program, that
-is:
+compatible with P and inserting P in C gives an evaluable partial
+program, that is:
 
-   |- C compatible P
-   |- C[P] complete
+   |- compatible C P
+   |- C[P] evaluable
    -----------------
-   |- C closes P
+   |- closes C P
 
 We define the set of closing contexts of a program P by:
 
-  closing_contexts P ::= {C | |- C closes P}
+  closing_contexts P ::= {C | |- closes C P}
 
 --------------------------------------------------------------------------------
 | Def.: Interface equivalence
 --------------------------------------------------------------------------------
 
-We say that two programs P and Q are interface equivalent, or have the
-same interface, when they have the same closing contexts at every
-type, that is:
+We say that two programs P and Q are interface equivalent when they
+share the same import and export definitions.
 
-  same_interface P Q ::= closing_contexts P = closing_contexts Q
+  same_interface (I, A, E) (I', A', E') ::= (I = I') /\ E = E'
 
 --------------------------------------------------------------------------------
 | Prop.: Characterization of interface equivalence for well-typed programs
 --------------------------------------------------------------------------------
-| forall P Q,
-|   |- P ok ->
-|   |- Q ok ->
-|     let (D, (ST, OT)) = P in
-|     let (D', (ST', OT')) = Q in
-|       same_interface P Q
-|         <->
-|       (D = D' /\ dom(ST) = dom(ST') /\ dom(OT) = dom(OT'))
+| forall P Q,  |- P ok  ->  |- Q ok  ->
+|     same_interface P Q <-> (closing_contexts P = closing_contexts Q)
 --------------------------------------------------------------------------------
 
 Proof: todo.
-
-CH: same_interface' (I1, A1, E1) (I2, A2, E2) = I1 = I2 /\ E1 = E2
-CH: for well-typed programs I expect same_interface' = same_interface
 
 --------------------------------------------------------------------------------
 | Def.: Observational equivalence
 --------------------------------------------------------------------------------
 
-Two well-typed partial programs P and Q are observationnally
-equivalent if they are interface equivalent and, for any context C
-that closes them, when separately placing the two in C, the two
-resulting programs give the same result. That is:
+Two well-typed programs P and Q are observationnally equivalent if
+they are interface equivalent and, for any context C that closes them,
+when separately placing the two in C, the two resulting programs
+behave the same with respect to termination. That is:
+
 
   |- P ok
   |- Q ok
   same_interface P Q
-  forall c in closing_contexts P,
-    result c[P] = result c[Q]
+  forall C in closing_contexts P,
+    let (_, A, _) = C[P] in
+    let (_, B, _) = C[Q] in
+    terminates A <-> terminates B
   ---------------------------------------------------------
   |- P ~ Q
 
-Strong property including both equi-termination and same result.
-CH: my intuition is that any of the two would suffice to get the other
+  where
+   terminates A ::= exists o, |- A ==> o
 
 ================================================================================
 | Intermediate machine
