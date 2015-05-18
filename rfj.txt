@@ -50,11 +50,11 @@ e ::=                            expressions
   | e == e ? e : e                 object identity test
 
 ================================================================================
-| Semantics
+| Operational semantics
 ================================================================================
 
-We introduce a natural semantics which gives a high-level intuition,
-together with an operational semantics which relates well to low-level
+We introduce a big-step semantics which gives a high-level intuition,
+together with a small-step semantics which relates well to low-level
 evaluation. We relate the two.
 
 --------------------------------------------------------------------------------
@@ -72,7 +72,7 @@ A value is an object name o.
 Proof: Object names are naturals.
 
 --------------------------------------------------------------------------------
-| Natural semantics
+| Big-step semantics
 --------------------------------------------------------------------------------
 
 -------------------------- THIS
@@ -124,7 +124,7 @@ A; (ot, oa) |- e1 == e2 ? e3 : e4 --> o4
 
 
 --------------------------------------------------------------------------------
-| Operational semantics
+| Small-step semantics
 --------------------------------------------------------------------------------
 
 E ::=                            flat evaluation contexts
@@ -219,7 +219,7 @@ Cfg -/->_A Cfg' ::= ~ (Cfg -->_A Cfg')
 -->*_A ::= reflexive and transitive closure of -->_A
 
 --------------------------------------------------------------------------------
-| Prop.: Relation between natural and operational semantics (hopefully)
+| Prop.: Relation between big-step and small-step semantics (hopefully)
 --------------------------------------------------------------------------------
 | forall A ot oa e o,
 |   A; (ot, oa) |- e ==> o
@@ -272,214 +272,215 @@ CH: imports instead of global signatures
 | Partial programs
 --------------------------------------------------------------------------------
 
-P ::= (                          partial program
-  D,                               declarations
-  A                                definitions (syntactically like a
-                                   program defined above)
+P ::= (                           partial program
+  I,                                imported declarations
+  A,                                definitions (syntactically like a
+                                    program defined above)
+  E                                 exported declarations
 )
 
-D ::= (ST, IT)
+I ::= D
 
-ST ::= partial map from l to S   signature table (class declaration table)
+E ::= D
 
-IT ::= partial map from o to I   instance table (object declaration table)
+D ::= (LD, OD)
 
-S ::=
-  class sig {                    class declaration
-    N1, ..., Np                    method signatures
+LD ::= partial map from l to LL  class declaration table
+
+OD ::= partial map from o to OO  object declaration table
+
+LL ::=
+  class decl {                    class declaration
+    N1, ..., Np                     method signatures
   }
   where p >= 0
 
-I ::=
-  obj sig l                      object declaration
+OO ::=
+  obj decl l                      object declaration
 
 N ::=
   lr (la)
 
 --------------------------------------------------------------------------------
-| Programs are partial programs in disguise
---------------------------------------------------------------------------------
-
-Every program A = (LT, OT) can be seen as a partial program
-  (decls(A), A)
-where
-
-  decls(A) ::= (ST, IT)
-
-  ST : dom(LT)                     -> S
-       class {                        class sig {
-         ...;                     |->   meth_sig(M1), ..., meth_sig(Mp)
-         M1, ..., Mp                  }
-       }
-
-  meth_sig : M              -> N
-             lr (la) { e } |-> lr (la)
-
-  IT : dom(OT)       -> I
-       obj l { ... } |-> obj sig l
-
---------------------------------------------------------------------------------
 | Def.: Partial-program typing
 --------------------------------------------------------------------------------
 
-CH: Composition lemma
+Well-formedness of import declarations
+======================================
 
-I1 |- A1 : E1   ( P1 = I1, A1, E1 )
-I2 |- A2 : E2
-
-E1 compatible E2 -- e.g. no duplicate definitions
-I1 compatible E2
--- if something is defined in E2 and if this appears in I1, then it
-   appears with a compatible type
-I2 compatible E1
-I1 compatible I2
--- all definitions that appear in both have the same type
-
-guarantee:
-(I1-E2) + (I2-E1) |- A1 ++ A2 : E1 + E2
-
-Assumptions:
-- every well-typed program has imports (I) and exports (E)
-- imports have to include all external stuff the program uses
-- exports currently include everything the program defines
-  (simplification one can relax at some point, e.g. with a "private"
-  keyword, packages, etc)
-
-Assumption:
-I |- A : E implies that E doesn't contain anything in I
-
-CH: producing complete program
-empty |- A : E can be the result of composition lemma, because of "-"
+I = D
+D = (LD, OD)
+forall l in dom(LD),
+  let class decl { N1, ..., Np } = LD(l) in
+  forall i in [1,p],
+    let lr (la) = Ni in
+    lr in dom(LD) /\ la in dom(LD)
+forall o in dom(OD),
+  let obj decl l = OD(o) in
+  l in dom(LD)
+-------------------------------------------
+|- I ok
 
 
-CH: Currently, composition based on global interface
+Well-formedness of export declarations
+======================================
 
-If
-|- (D, A1) ok
-|- (D, A2) ok
-then
-|- (D, A1 ++ A2) ok
+I |- E ok
+A |- E ok
+------------
+I; A |- E ok
 
 
-P = (D, A)
-D = (ST, IT)
+I = D
+D = (LD, OD)
+E = D'
+D' = (LD', OD')
+dom(LD) inter dom(LD') = empty_set
+dom(OD) inter dom(OD') = empty_set
+forall l in dom(LD'),
+  let class decl { N1, ..., Np } = LD'(l) in
+  forall i in [1,p],
+    let lr (la) = Ni in
+    (lr in dom(LD) \/ lr in dom(LD')) /\
+      (la in dom(LD) \/ la in dom(LD'))
+forall o in dom(OD'),
+  let obj decl l = OD'(o) in
+  l in dom(LD) \/ l in dom(LD')
+--------------------------------------------
+I |- E ok
+
+
+E = D
+D = (LD, OD)
 A = (LT, OT)
-dom(LT) subset of dom(ST)
+dom(LD) included in dom(LT)
+dom(OD) included in dom(OT)
+forall l in dom(LD),
+  let class decl { N1, ..., Np } = LD(l) in
+  let class { ... ; M1, ..., Mp' } = LT(l) in
+  p = p' /\
+    forall i in [1,p],
+    let lr (la) = Ni in
+    let lr' (la') { _ } = Mi in
+    lr = lr' /\ la = la'
+forall o in dom(OD),
+  let obj decl l = OD(o) in
+  let obj l' { ... } = OT(o) in
+  l = l'
+---------------------------------------------
+A |- E ok
+
+
+Well-formedness and -typing of programs
+=======================================
+
+
+I = D
+D = (LD, OD)
+A = (LT, OT)
+dom(LD) inter dom(LT) = empty_set
+dom(OD) inter dom(OT) = empty_set
 forall l in dom(LT),
-  let class { ...; M1, ..., Mp } = LT(L) in
-  ST(l) = class sig { meth_sig(M1), ..., meth_sig(Mp) }
-forall l in dom(LT),
-  let obj l { ... } = OT(L) in
-  IT(l) = obj sig l
-dom(OT) subset of dom(IT)
-forall l in dom(ST). P |- ST(l) ok
-forall o in dom(IT). P |- IT(l) ok
-forall l in dom(LT). P |- LT(l) @ l ok
-forall o in dom(OT). P |- OT(l) ok
-------------------------------------------------- PROGOK
-|- P ok
+  D; A |- LT(l) @ l ok
+forall o in dom(OT),
+  D; A |- OT(o) ok
+---------------------------------
+I |- A ok
 
-This is the only place where we check that LT "implements" ST and
-OT "implements" IT. The other rules often make no sense if it is not
-the case, so it is an (explicit) assumption to make about P every time
-we want to prove something interesting about the other rules.
 
---------------------------------------------------------------------------------
-| Def.: Object declaration typing
---------------------------------------------------------------------------------
+Object definition typing
+------------------------
 
-P = (D, _)
-D = (ST, _)
-l in dom(ST)
------------------ OBJSIGOK
-P |- obj sig l ok
-
---------------------------------------------------------------------------------
-| Def.: Object definition typing
---------------------------------------------------------------------------------
-
-P = (D, A)
-D = (_, IT)
-A = (LT, _)
+D = (_, OD)
+A = (LT, OT)
 LT(l) = class { l1, ..., ln; ... }            can only define objects of classes
-forall i in [1,n]. IT(oi) = obj sig li                       in the same program
--------------------------------------- OBJOK
-P |- obj l { o1, ..., on } ok
+forall i in [1,n],                                           in the same program
+  OD(oi) = obj decl li \/
+    OT(oi) = obj li { ... }
+----------------------------------
+D; A |- obj l { o1, ..., on } ok
 
---------------------------------------------------------------------------------
-| Def.: Class declaration typing
---------------------------------------------------------------------------------
 
-P = (D, _)
-D = (ST, _)
+Class definition typing
+-----------------------
+
+D = (LD, _)
+A = (LT, _)
+forall i in [1,n],
+  li in dom(LD) \/ li in dom(LT)
 forall j in [1,p],
-  let lr (la) = Si in
-  lr in dom(ST) /\ la in dom(ST)
---------------------------------- CLASSSIGOK
-P |- class sig { S1, ..., Sp } ok
+  D; A |- Mj @ lt ok
+--------------------------------------------------
+D; A |- class { l1, ..., ln; M1, ..., Mp } @ lt ok
 
---------------------------------------------------------------------------------
-| Def.: Class definition typing
---------------------------------------------------------------------------------
 
-P = (D, _)
-D = (ST, _)
-forall i in [1,n]. li in dom(ST)
-forall j in [1,p]. P |- Mj @ lt ok
------------------------------------------------ CLASSOK
-P |- class { l1, ..., ln; M1, ..., Mp } @ lt ok
-
---------------------------------------------------------------------------------
-| Def.: Method typing
---------------------------------------------------------------------------------
+Method typing
+-------------
 
 G = {this:lt, arg:la}
-P; G |- e : lr
--------------------------- METHOK
-P |- lr (la) { e } @ lt ok
+D; A; G |- e : lr
+-----------------------------
+D; A |- lr (la) { e } @ lt ok
 
---------------------------------------------------------------------------------
-| Def.: Expression typing
---------------------------------------------------------------------------------
+
+Expression typing
+-----------------
 
 We define typing environments as:
 
                            G ::= {this:lt, arg:la}
 
----------------- TVAR
-P; G |- x : G(x)
+------------------- TVAR
+D; A; G |- x : G(x)
 
-P = (D, _)
-D = (_, IT)
-IT(o) = obj sig l
------------------ TOBJ
-P; G |- o : l
 
-P; G |- e : l
+A = (_, OT)
+OT(o) = obj l { ... }
+--------------------- TOBJ
+D; A; G |- o : l
+
+
+D = (_, OD)
+OD(o) = obj decl l
+------------------ TOBJ'
+D; A; G |- o : l
+
+
+D; A; G |- e : l
 G(this) = l                                   ensures field privacy
-P = (_, A)
 A = (LT, _)
 LT(l) = class { l1, ..., ln; ... }
-f = i in [1,n]
+f in [1,n]
 ---------------------------------- TSEL
-P; G |- e.f : li
+D; A; G |- e.f : lf
 
-P; G |- e : l
-P = (D, _)
-D = (ST, _)
-ST(l) = class sig { S1, ..., Sp }
-m = j in [1,p]
-Sj = lr (la)
-P; G |- ea : la
---------------------------------- TCALL
-P; G |- e.m(ea) : lr
 
-P; G |- e1 : l'
-P; G |- e2 : l'
-P; G |- e3 : l
-P; G |- e4 : l
+D; A; G |- e : l
+A = (LT, _)
+LT(l) = class { ...; N1, ..., Np }
+m in [1,p]
+Sm = lr (la) { _ }
+D; A; G |- ea : la
+---------------------------------- TCALL
+D; A; G |- e.m(ea) : lr
+
+
+D; A; G |- e : l
+D = (LD, _)
+LD(l) = class decl { N1, ..., Np }
+m in [1,p]
+Sm = lr (la)
+D; A; G |- ea : la
+---------------------------------- TCALL'
+D; A; G |- e.m(ea) : lr
+
+
+D; A; G |- e1 : l'
+D; A; G |- e2 : l'
+D; A; G |- e3 : l
+D; A; G |- e4 : l
 -------------------------------- TTEST
-P; G |- (e1 == e2 ? e3 : e4) : l
+D; A; G |- (e1 == e2 ? e3 : e4) : l
 
 ================================================================================
 | Encodings
@@ -491,9 +492,7 @@ P; G |- (e1 == e2 ? e3 : e4) : l
 
 For each tuple type T=(l1, ..., ln)
 
-class Unit {}
-
-obj tt : Unit {}
+class decl Unit {}
 
 class Tuple_T {
   l1 f1, ..., ln fn;
@@ -511,7 +510,7 @@ class Bool {}
 obj true : Bool {}
 obj false : Bool {}
 
-If then else via identity test (e.g. (b == true ? e1 : e2)).
+If then else via identity test, e.g. (b == true ? e1 : e2).
 
 
 ================================================================================
@@ -523,29 +522,32 @@ If then else via identity test (e.g. (b == true ? e1 : e2)).
 --------------------------------------------------------------------------------
 | Progress
 --------------------------------------------------------------------------------
-| forall e l P G, |- P ok ->
-|                 P; G |- e : l ->
-|                   is_value e \/ exists e', P |- e --> e'
+| forall e l I A G, I |- A ok ->
+|                   I; A; G |- e : l ->
+|                     is_value e \/ exists e', e -->_A e'
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 | Preservation (Subject reduction)
 --------------------------------------------------------------------------------
-| forall e e' l P G, P; G |- e : l ->
-|                    P |- e --> e' ->
+| forall e e' l I A G, I |- A ok ->
+|                      I; A; G |- e : l ->
+|                      e -->_A e' ->
 |                      P; G |- e' : l
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 | Type safety
 --------------------------------------------------------------------------------
-| forall e l P G, P; G |- e : l ->
-|                      is_value e \/ (exists e', e --> e' /\ |- e' : l)
+| forall e l I A G, I |- A ok ->
+|                   I; A; G |- e : l ->
+|                     is_value e \/
+|                       (exists e', e -->_A e' /\ I; A; G |- e' : l)
 --------------------------------------------------------------------------------
 
 
 ================================================================================
-| High-level programs, high-level contexts
+| High-level programs, high-level contexts (old)
 ================================================================================
 
 --------------------------------------------------------------------------------
