@@ -298,10 +298,10 @@ Note: We define later evaluable programs, which can be seen as
 --------------------------------------------------------------------------------
 
 P ::= (                           partial program
-  I,                                imported declarations
+  I,                                import declarations
   A,                                definitions (syntactically like a
                                     program defined above)
-  E                                 exported declarations
+  E                                 export declarations
 )
 
 I ::= D
@@ -581,7 +581,9 @@ We say that a well-typed partial program (I, A, E) is complete when
 We say that it is evaluable when moreover
   LE(0) = class decl { 0 (0) }
 and
-  OE(0) = obj decl 0.
+  OE(0) = obj decl 0
+where
+  E = (LE, OE).
 
 Note:
   (I, A, E) complete ->  |- A complete.
@@ -913,7 +915,6 @@ s ::= (                    machine state
   RF,                        a register file
   GS,                        a global call stack
   LT,                        compartment table
-  OT,                        instance table
   code                       the currently running code
 )
 
@@ -929,18 +930,19 @@ GS ::= [] | (              call stack: to restore execution after a call
 
 LT ::= partial map from l to L     compartment table
 
-OT ::= partial map from o to O     instance table
-
 L ::=                      compartment
 | { M1, ..., Mp;             methods
+    LOT;                     local instance table
     LS }                     local stack
 
-        p >= 0
+  where   p >= 0
 
 M ::=                      method
   code
 
-O ::= (o1, ..., on) @ l    instance
+LOT ::= partial map from o to LO   local instance table
+
+LO ::= (o1, ..., on)       local instance definition
 
 LS ::=                     local stack storing object references
   [] | o :: local_stack
@@ -987,6 +989,28 @@ a value, then pushing it again to the very same stack, which looks a
 bit silly; the rule would also be longer to state).
 
 --------------------------------------------------------------------------------
+| Def.: Merging of local object tables -- a.k.a. global object table
+--------------------------------------------------------------------------------
+
+OT ::= partial map from o to O    global instance table
+
+O ::= (o1, ..., on) @ l           instance definition
+
+
+merge_objects is a partial function which takes a compartment table LT
+and returns a global instance table OT. This partial function is only
+defined if all local object tables are pairwise disjoint in LT. When
+it is the case, it returns the disjoint union of all local object
+tables -- tagging each instance definition with its source
+compartment's id.
+
+merge_instance_tables(LT) ::=
+  disjoint_union
+    (let {...; OLT; _} = LT(l) in globalize(OLT, l))_{l in dom(LT)}
+
+  where globalize(OLT, l) maps any o in dom(OLT) to OLT(o) @ l
+
+--------------------------------------------------------------------------------
 | Def.: Reduction
 --------------------------------------------------------------------------------
 
@@ -995,6 +1019,7 @@ TODO: Add sanity checks in the rules, which should hopefully be
 when stating the rules looks good. Is this a good idea? Would it be
 too strong to add everywhere the following premisse?
 
+    OT = merge_instance_tables(LT)
     RF(this) in dom(OT)
     RF(arg) in dom(OT)
     forall l in dom(LT),
@@ -1005,83 +1030,93 @@ too strong to add everywhere the following premisse?
 
 Rules:
 
-  ------------------------------------------------------- NOP
-  (RF, GS, LT, OT, Nop :: code) -> (RF, GS, LT, OT, code)
+  ----------------------------------------------- NOP
+  (RF, GS, LT, Nop :: code) -> (RF, GS, LT, code)
 
+  OT = merge_object_tables(LT)
   OT(RF(this)) = _ @ l
-  LT(l) = { M1, ..., Mp; o :: LS }
-  LT' = LT with l => { M1, ..., Mp; o :: o :: LS }
-  -------------------------------------------------------- DUP
-  (RF, GS, LT, OT, Dup :: code) -> (RF, GS, LT', OT, code)
+  LT(l) = { M1, ..., Mp; LOT; o :: LS }
+  LT' = LT with l => { M1, ..., Mp; LOT; o :: o :: LS }
+  ----------------------------------------------------- DUP
+  (RF, GS, LT, Dup :: code) -> (RF, GS, LT', code)
 
+  OT = merge_object_tables(LT)
   OT(RF(this)) = _ @ l
-  LT(l) = { M1, ..., Mp; LS }
-  LT' = LT with l => { M1, ..., Mp; o :: LS }
-  ---------------------------------------------------------- REF
-  (RF, GS, LT, OT, Ref o :: code) -> (RF, GS, LT', OT, code)
+  LT(l) = { M1, ..., Mp; LOT; LS }
+  LT' = LT with l => { M1, ..., Mp; LOT; o :: LS }
+  -------------------------------------------------- REF
+  (RF, GS, LT, Ref o :: code) -> (RF, GS, LT', code)
 
+  OT = merge_object_tables(LT)
   OT(RF(this)) = _ @ l
-  LT(l) = { M1, ..., Mp; LS }
-  LT' = LT with l => { M1, ..., Mp; RF(this) :: LS }
-  --------------------------------------------------------- THIS
-  (RF, GS, LT, OT, This :: code) -> (RF, GS, LT', OT, code)
+  LT(l) = { M1, ..., Mp; LOT; LS }
+  LT' = LT with l => { M1, ..., Mp; LOT; RF(this) :: LS }
+  ------------------------------------------------------- THIS
+  (RF, GS, LT, This :: code) -> (RF, GS, LT', code)
 
+  OT = merge_object_tables(LT)
   OT(RF(this)) = _ @ l
-  LT(l) = { M1, ..., Mp; LS }
-  LT' = LT with l => { M1, ..., Mp; RF(arg) :: LS }
-  -------------------------------------------------------- ARG
-  (RF, GS, LT, OT, Arg :: code) -> (RF, GS, LT', OT, code)
+  LT(l) = { M1, ..., Mp; LOT; LS }
+  LT' = LT with l => { M1, ..., Mp; LOT; RF(arg) :: LS }
+  ------------------------------------------------------ ARG
+  (RF, GS, LT, Arg :: code) -> (RF, GS, LT', code)
 
+  OT = merge_object_tables(LT)
   OT(RF(this)) = _ @ l
-  LT(l) = { M1, ..., Mp; o :: LS }
+  LT(l) = { M1, ..., Mp; LOT; o :: LS }
   OT(o) = (o1, ..., on) @ l                 requiring l here ensures
   f <= n                                               field privacy
-  LT' = LT with l => { M1, ..., Mp; of :: LS }
-  ------------------------------------------------------------- SELECT
-  (RF, GS, LT, OT, Select f :: code) -> (RF, GS, LT', OT, code)
+  LT' = LT with l => { M1, ..., Mp; LOT; of :: LS }
+  ----------------------------------------------------- SELECT
+  (RF, GS, LT, Select f :: code) -> (RF, GS, LT', code)
 
+  OT = merge_object_tables(LT)
   OT(RF(this)) = _ @ l
-  LT(l) = { M1, ..., Mp; oa :: ot :: LS }
+  LT(l) = { M1, ..., Mp; LOT; oa :: ot :: LS }
   OT(ot) = _ @ l'
   LT(l') = { M'1, ..., M'p'; _ }
   m <= p'
   M'm = code'
-  LT' = LT with l => { M1, ..., Mp; LS }
+  LT' = LT with l => { M1, ..., Mp; LOT; LS }
   GS' = (RF, code) :: GS
   RF' = (this => ot, arg => oa)
-  -------------------------------------------------------------- CALL
-  (RF, GS, LT, OT, Call m :: code) -> (RF', GS', LT', OT, code')
+  ------------------------------------------------------ CALL
+  (RF, GS, LT, Call m :: code) -> (RF', GS', LT', code')
 
+  OT = merge_object_tables(LT)
   GS = (RF', code') :: GS'
   OT(RF(this)) = _ @ l
   OT(RF'(this)) = _ @ l
-  ---------------------------------------------------------- RETURN-INTRA
-  (RF, GS, LT, OT, Return :: _) -> (RF', GS', LT, OT, code')
+  -------------------------------------------------- RETURN-INTRA
+  (RF, GS, LT, Return :: _) -> (RF', GS', LT, code')
 
+  OT = merge_object_tables(LT)
   GS = (RF', code') :: GS'
   OT(RF(this)) = _ @ l
   OT(RF'(this)) = _ @ l'
   l <> l'
-  LT(l) = { M1, ..., Mp; o :: LS }
-  LT(l') = { M'1, ..., M'p; LS' }
-  LT' = LT with l => { M1, ..., Mp; LS }
-                l' => { M'1, ..., M'p; o :: LS' }
-  ----------------------------------------------------------- RETURN-INTER
-  (RF, GS, LT, OT, Return :: _) -> (RF', GS', LT', OT, code')
+  LT(l) = { M1, ..., Mp; LOT; o :: LS }
+  LT(l') = { M'1, ..., M'p'; LOT'; LS' }
+  LT' = LT with l => { M1, ..., Mp; LOT; LS }
+                l' => { M'1, ..., M'p'; LOT'; o :: LS' }
+  ------------------------------------------------------ RETURN-INTER
+  (RF, GS, LT, Return :: _) -> (RF', GS', LT', code')
 
+  OT = merge_object_tables(LT)
   OT(RF(this)) = _ @ l
-  LT(l) = { M1, ..., Mp; o :: o :: LS }
-  LT' = LT with l => { M1, ..., Mp; LS }
+  LT(l) = { M1, ..., Mp; LOT; o :: o :: LS }
+  LT' = LT with l => { M1, ..., Mp; LOT; LS }
   code = i1 :: ... :: in :: code'
-  ----------------------------------------------------------- BEQ-EQ
-  (RF, GS, LT, OT, Beq n :: code) -> (RF, GS, LT', OT, code')
+  --------------------------------------------------- BEQ-EQ
+  (RF, GS, LT, Beq n :: code) -> (RF, GS, LT', code')
 
+  OT = merge_object_tables(LT)
   OT(RF(this)) = _ @ l
-  LT(l) = { M1, ..., Mp; o1 :: o2 :: LS }
+  LT(l) = { M1, ..., Mp; LOT; o1 :: o2 :: LS }
   o1 <> o2
-  LT' = LT with l => { M1, ..., Mp; LS }
-  ---------------------------------------------------------- BEQ-NEQ
-  (RF, GS, LT, OT, Beq n :: code) -> (RF, GS, LT', OT, code)
+  LT' = LT with l => { M1, ..., Mp; LOT; LS }
+  -------------------------------------------------- BEQ-NEQ
+  (RF, GS, LT, Beq n :: code) -> (RF, GS, LT', code)
 
 
 --------------------------------------------------------------------------------
@@ -1130,6 +1165,37 @@ Compilation of expressions
 EQ:  c_expr(e3);
 END: Nop
 
+
+Compilation of methods
+----------------------
+
+  c_meth(lr (la) { e }) = c_expr(e)
+
+Compilation of classes
+----------------------
+
+  c_class(class { l1, ..., ln; M1, ..., Mp }, OT, l) =
+    { c_meth(M1), ..., c_meth(Mp); extract_objects(OT, l); [] }
+
+  where extract_objects(OT, l) is a partial map defined only for
+        all o such that OT(o) = obj l { o1, ..., on },
+        which maps o to (o1, ..., on).
+
+Compilation of programs
+-----------------------
+
+  c_prog(LT, OT) = LT'
+
+  where LT' is a partial map with domain dom(LT)
+        such that for every l in dom(LT),
+        LT'(l) = c_class(LT(l), OT, l)
+
+Compilation of partial programs
+-------------------------------
+
+  Just forget the declarations:
+
+  c_pprog(I, A, E) = c_prog(A)
 
 ================================================================================
 | Symbolic micro-policy (compartmentalization variant)
