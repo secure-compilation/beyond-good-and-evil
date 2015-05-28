@@ -911,24 +911,8 @@ o ::= n                    instance name (where n is natural)
 f ::= n                    field index (where n is natural)
 m ::= n                    method index (where n is natural)
 
-s ::= (                    machine state
-  RF,                        a register file
-  GS,                        a global call stack
-  LT,                        compartment table
-  code                       the currently running code
-)
-
-RF ::= (                   register file of immutable registers
-  this => o,                 current instance
-  arg => o                   current argument
-)
-
-GS ::= [] | (              call stack: to restore execution after a call
-  RF,                        register file to be restored
-  code                       code to be executed after restoring
-) :: GS
-
-LT ::= partial map from l to L     compartment table
+LT ::=                     program
+  partial map from l to L    (a compartment table)
 
 L ::=                      compartment
 | { M1, ..., Mp;             methods
@@ -980,39 +964,63 @@ instr ::=                  instruction
 
 Note: At this level we make no distinction between inter- and intra-
 compartment calls. If we were to need this distinction it would anyway
-be lower level.
-
-Note: Now we actually have two rules for inter and intra, but they
-could be merged into one, following the intuition described
-above. They look cleaner when separated (otherwise we would be popping
-a value, then pushing it again to the very same stack, which looks a
-bit silly; the rule would also be longer to state).
+be lower level. We actually have distinct rules in the semantics, but
+they could be merged into one, following the intuition described
+above. They just look cleaner when separated (otherwise we would be
+popping a value, then pushing it again to the very same stack, which
+looks a bit silly; the rule would also be longer to state).
 
 --------------------------------------------------------------------------------
-| Def.: Merging of local object tables -- a.k.a. global object table
+| Semantics
 --------------------------------------------------------------------------------
+
+s ::= (                    machine state
+  RF,                        a register file
+  GS,                        a global call stack
+  LT,                        a program (compartment table)
+  code                       the currently running code
+)
+
+RF ::= (                   register file of immutable registers
+  this => o,                 current instance
+  arg => o                   current argument
+)
+
+GS ::= [] | (              call stack: to restore execution after a call
+  RF,                        register file to be restored
+  code                       code to be executed after restoring
+) :: GS
 
 OT ::= partial map from o to O    global instance table
 
 O ::= (o1, ..., on) @ l           instance definition
 
+merge_instance_tables(LT) ::= OT
 
-merge_objects is a partial function which takes a compartment table LT
-and returns a global instance table OT. This partial function is only
-defined if all local object tables are pairwise disjoint in LT. When
-it is the case, it returns the disjoint union of all local object
-tables -- tagging each instance definition with its source
+  when forall l l' in dom(LT), l <> l' ->
+       let {...; OLT; _} = LT(l) in
+       let {...; OLT'; _} = LT(l') in
+       dom(OLT) inter dom(OLT') = empty_set
+
+  where
+
+    OT ::= disjoint_union (OT_l)_{l in dom(LT)}
+
+
+    OT_l ::=
+      let {...; OLT; _} = LT(l) in
+      globalize(OLT, l)
+
+    globalize(OLT, l) maps any o in dom(OLT) to OLT(o) @ l
+
+merge_instance_tables is a partial function which takes a compartment
+table LT and returns a global instance table OT. This partial function
+is only defined if all local object tables are pairwise disjoint in
+LT. When it is the case, it returns the disjoint union of all local
+object tables, tagging each instance definition with its source
 compartment's id.
 
-merge_instance_tables(LT) ::=
-  disjoint_union
-    (let {...; OLT; _} = LT(l) in globalize(OLT, l))_{l in dom(LT)}
 
-  where globalize(OLT, l) maps any o in dom(OLT) to OLT(o) @ l
-
---------------------------------------------------------------------------------
-| Def.: Reduction
---------------------------------------------------------------------------------
 
 TODO: Add sanity checks in the rules, which should hopefully be
 *proved* useless e.g. because they are invariants. Having them around
@@ -1033,35 +1041,35 @@ Rules:
   ----------------------------------------------- NOP
   (RF, GS, LT, Nop :: code) -> (RF, GS, LT, code)
 
-  OT = merge_object_tables(LT)
+  OT = merge_instance_tables(LT)
   OT(RF(this)) = _ @ l
   LT(l) = { M1, ..., Mp; LOT; o :: LS }
   LT' = LT with l => { M1, ..., Mp; LOT; o :: o :: LS }
   ----------------------------------------------------- DUP
   (RF, GS, LT, Dup :: code) -> (RF, GS, LT', code)
 
-  OT = merge_object_tables(LT)
+  OT = merge_instance_tables(LT)
   OT(RF(this)) = _ @ l
   LT(l) = { M1, ..., Mp; LOT; LS }
   LT' = LT with l => { M1, ..., Mp; LOT; o :: LS }
   -------------------------------------------------- REF
   (RF, GS, LT, Ref o :: code) -> (RF, GS, LT', code)
 
-  OT = merge_object_tables(LT)
+  OT = merge_instance_tables(LT)
   OT(RF(this)) = _ @ l
   LT(l) = { M1, ..., Mp; LOT; LS }
   LT' = LT with l => { M1, ..., Mp; LOT; RF(this) :: LS }
   ------------------------------------------------------- THIS
   (RF, GS, LT, This :: code) -> (RF, GS, LT', code)
 
-  OT = merge_object_tables(LT)
+  OT = merge_instance_tables(LT)
   OT(RF(this)) = _ @ l
   LT(l) = { M1, ..., Mp; LOT; LS }
   LT' = LT with l => { M1, ..., Mp; LOT; RF(arg) :: LS }
   ------------------------------------------------------ ARG
   (RF, GS, LT, Arg :: code) -> (RF, GS, LT', code)
 
-  OT = merge_object_tables(LT)
+  OT = merge_instance_tables(LT)
   OT(RF(this)) = _ @ l
   LT(l) = { M1, ..., Mp; LOT; o :: LS }
   OT(o) = (o1, ..., on) @ l                 requiring l here ensures
@@ -1070,7 +1078,7 @@ Rules:
   ----------------------------------------------------- SELECT
   (RF, GS, LT, Select f :: code) -> (RF, GS, LT', code)
 
-  OT = merge_object_tables(LT)
+  OT = merge_instance_tables(LT)
   OT(RF(this)) = _ @ l
   LT(l) = { M1, ..., Mp; LOT; oa :: ot :: LS }
   OT(ot) = _ @ l'
@@ -1083,14 +1091,14 @@ Rules:
   ------------------------------------------------------ CALL
   (RF, GS, LT, Call m :: code) -> (RF', GS', LT', code')
 
-  OT = merge_object_tables(LT)
+  OT = merge_instance_tables(LT)
   GS = (RF', code') :: GS'
   OT(RF(this)) = _ @ l
   OT(RF'(this)) = _ @ l
   -------------------------------------------------- RETURN-INTRA
   (RF, GS, LT, Return :: _) -> (RF', GS', LT, code')
 
-  OT = merge_object_tables(LT)
+  OT = merge_instance_tables(LT)
   GS = (RF', code') :: GS'
   OT(RF(this)) = _ @ l
   OT(RF'(this)) = _ @ l'
@@ -1102,7 +1110,7 @@ Rules:
   ------------------------------------------------------ RETURN-INTER
   (RF, GS, LT, Return :: _) -> (RF', GS', LT', code')
 
-  OT = merge_object_tables(LT)
+  OT = merge_instance_tables(LT)
   OT(RF(this)) = _ @ l
   LT(l) = { M1, ..., Mp; LOT; o :: o :: LS }
   LT' = LT with l => { M1, ..., Mp; LOT; LS }
@@ -1110,7 +1118,7 @@ Rules:
   --------------------------------------------------- BEQ-EQ
   (RF, GS, LT, Beq n :: code) -> (RF, GS, LT', code')
 
-  OT = merge_object_tables(LT)
+  OT = merge_instance_tables(LT)
   OT(RF(this)) = _ @ l
   LT(l) = { M1, ..., Mp; LOT; o1 :: o2 :: LS }
   o1 <> o2
