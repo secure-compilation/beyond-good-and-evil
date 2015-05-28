@@ -1217,6 +1217,7 @@ Compilation of expressions
      Beq EQ;       (note: these are indeed relative forward jumps, so this works)
      c_expr(e4);
      Dup;          }  <--- a way to encode unconditional forward jump
+     Dup;          }
      Beq END;      }
 EQ:  c_expr(e3);
 END: Nop
