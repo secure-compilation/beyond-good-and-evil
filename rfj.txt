@@ -1194,41 +1194,41 @@ Compilation of expressions
 
     The execution of the compiled expression goes on forever.
 
-  c_expr(this) = This
+  comp_expr(this) = This
 
-  c_expr(arg) = Arg
+  comp_expr(arg) = Arg
 
-  c_expr(o) = Ref o
+  comp_expr(o) = Ref o
 
-  c_expr(e.f) =
-     c_expr(e);
+  comp_expr(e.f) =
+     comp_expr(e);
      Select f
 
-  c_expr(e.m(e')) =
-     c_expr(e);
-     c_expr(e');
+  comp_expr(e.m(e')) =
+     comp_expr(e);
+     comp_expr(e');
      Call m
 
-  c_expr(e1 == e2 ? e3 : e4) =
-     c_expr(e1);
-     c_expr(e2);
+  comp_expr(e1 == e2 ? e3 : e4) =
+     comp_expr(e1);
+     comp_expr(e2);
      Beq EQ;       (note: these are indeed relative forward jumps, so this works)
-     c_expr(e4);
+     comp_expr(e4);
      B END;
-EQ:  c_expr(e3);
+EQ:  comp_expr(e3);
 END: Nop
 
 
 Compilation of methods
 ----------------------
 
-  c_meth(lr (la) { e }) = c_expr(e)
+  comp_meth(lr (la) { e }) = comp_expr(e)
 
 Compilation of classes
 ----------------------
 
-  c_class(class { l1, ..., ln; M1, ..., Mp }, OT, l) =
-    { c_meth(M1), ..., c_meth(Mp); extract_objects(OT, l); [] }
+  comp_class(class { l1, ..., ln; M1, ..., Mp }, OT, l) =
+    { comp_meth(M1), ..., comp_meth(Mp); extract_objects(OT, l); [] }
 
   where extract_objects(OT, l) is a partial map defined only for
         all o such that OT(o) = obj l { o1, ..., on },
@@ -1237,27 +1237,61 @@ Compilation of classes
 Compilation of programs
 -----------------------
 
-  c_prog(LT, OT) = LT'
+  comp_prog(LT, OT) = LT'
 
   where LT' is a partial map with domain dom(LT)
         such that for every l in dom(LT),
-        LT'(l) = c_class(LT(l), OT, l)
+        LT'(l) = comp_class(LT(l), OT, l)
 
 Compilation of partial programs
 -------------------------------
 
   Just forget the declarations:
 
-  c_partprog(I, A, E) = c_prog(A)
+  comp_partprog(I, A, E) = comp_prog(A)
 
 --------------------------------------------------------------------------------
 | Prop.: Separate compilation
 --------------------------------------------------------------------------------
 | forall P Q, |- linkable P Q ->
-|   linkable (c_partprog(P)) (c_partprog(Q))
+|   linkable (comp_partprog(P)) (comp_partprog(Q))
 |     /\
-|   c_partprog(P /\/\ Q) = c_partprog(P) /\/\ c_partprog(Q)
+|   comp_partprog(P /\/\ Q) = comp_partprog(P) /\/\ comp_partprog(Q)
 --------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+| Decompilation
+--------------------------------------------------------------------------------
+
+See decomp.ml.
+
+--------------------------------------------------------------------------------
+| Prop.: Reconstitution of expressions
+--------------------------------------------------------------------------------
+| forall e, decomp_code (comp_expr e) = e.
+--------------------------------------------------------------------------------
+
+Problems:
+
+* There are no types in the intermediate language, but we want to
+  prevent the context from giving ill-typed parameters to program
+  methods.
+
+* When decompiling a compiled method, we want to give it the very same
+  signature and not just one that works.
+
+* There are no export declarations in the intermediate language, but
+  we want to prevent the context from using non-exported classes or
+  objects.
+
+* There are no import declarations in the intermediate language, but
+  we don't want to run a program which has missing dependencies.
+
+* When decompiling a compiled partial program, we should be able to
+  recover I and E. Currently, we could generate a minimal I and a
+  maximal E, but these are not necessarily the ones used in the source
+  program.
+
 
 ================================================================================
 | Symbolic micro-policy (compartmentalization variant)
@@ -1444,33 +1478,33 @@ Fix four distinct registers: r_this, r_arg, r_arg1, r_arg2, r_arg3, r_res (=r_re
 G = {this:lr, arg:la} when compiling a method body.
 G = {} when compiling the main expression.
 
-Properties of c_expr:
+Properties of comp_expr:
 - invariant: r_arg and r_this are preserved
             (they can change internally, but are restored at the end)
 - can overwrite all other registers
 - writes result to r_res
 - finishes with same stack as it was called (restores the original stack)
 
-c_expr(this) = Mov r_this r_res
+comp_expr(this) = Mov r_this r_res
   (G(this) is defined in this case)
 
-c_expr(arg) = Mov r_arg r_res
+comp_expr(arg) = Mov r_arg r_res
   (G(arg) is defined in this case)
 
-c_expr(o) = Const o r_res
+comp_expr(o) = Const o r_res
 
-c_expr(e.f) =
-    c_expr(e);
+comp_expr(e.f) =
+    comp_expr(e);
     Mov r_res r_arg1;
     Cons i_f r_arg2;
     Jal SELECT
   if G |- e : l (deterministic)
   and i_f = fieldoffset(l, f)
 
-c_expr(e.m(e')) =
-    c_expr(e);
+comp_expr(e.m(e')) =
+    comp_expr(e);
     Jal PUSH r_res;
-    c_expr(e');
+    comp_expr(e');
     Pop r_arg1;
     Mov r_res r_arg2;
     Const i_m r_arg3;
@@ -1482,16 +1516,16 @@ c_expr(e.m(e')) =
   if G |- e : l (deterministic)
   and i_m = methodoffset(l, m)
 
-c_expr(e1 == e2 ? e3 : e4) =
-    c_expr(e1);
+comp_expr(e1 == e2 ? e3 : e4) =
+    comp_expr(e1);
     Push r_res;
-    c_expr(e2);
+    comp_expr(e2);
     Pop r_aux;
     Binop_= r_aux r_res r_aux;
     Bnz r_aux LST;
-    c_expr(e4);
+    comp_expr(e4);
     Jump END;
-LST:c_expr(e3);
+LST:comp_expr(e3);
 END:Nop
 
 Q: How to represent the auxiliary stack of saved registers?
@@ -1513,18 +1547,18 @@ Q: How to represent the auxiliary stack of saved registers?
                         (micro-policy for call-stack protection)
                 - alt3: lightweight return addr protection + only local stacks
 
-c_expr(e.f) =
-    c_expr(e);
+comp_expr(e.f) =
+    comp_expr(e);
     Const a r_aux;
     Binop_+ r_res r_aux r_aux;
     Load r_aux r_res
   if G |- e : l (deterministic)
   and a = fieldoffset(l, f)
 
-c_expr(e.m(e')) =
-    c_expr(e);
+comp_expr(e.m(e')) =
+    comp_expr(e);
     Push r_res;
-    c_expr(e');
+    comp_expr(e');
     Pop r_aux;
     Push r_this;
     Push r_arg;
@@ -1537,16 +1571,16 @@ c_expr(e.m(e')) =
   if G |- e : l (deterministic)
   and a = ClassAdressTable(l) + methodoffset(l, m)
 
-c_expr(e1 == e2 ? e3 : e4) =
-    c_expr(e1);
+comp_expr(e1 == e2 ? e3 : e4) =
+    comp_expr(e1);
     Push r_res;
-    c_expr(e2);
+    comp_expr(e2);
     Pop r_aux;
     Binop_- r_aux r_res r_aux;
     Bnz r_aux k;
-    c_expr(e3);
+    comp_expr(e3);
     Const 1 r_aux;                        } ugly relative jump
     Bnz k' r_aux;                         } ^^^^^^^^^^^^^^^^^^
-    c_expr(e4)
-  if k = |c_expr(e3)| + 2
-  and k' = |c_expr(e4)|
+    comp_expr(e4)
+  if k = |comp_expr(e3)| + 2
+  and k' = |comp_expr(e4)|
