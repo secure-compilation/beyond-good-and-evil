@@ -943,7 +943,6 @@ instr ::=                  instruction
   | This                     push reg[this]
   | Arg                      push reg[arg]
   | Ref o                    push constant reference o
-  | Dup                      duplicate top value
   | Select f                 field selection
                                pop, then push the value of field f of
                                the popped object
@@ -955,6 +954,8 @@ instr ::=                  instruction
                                pop, then resume execution to the
 			       caller after pushing popped value to
 			       its local stack
+  | B n                      unconditional forward jump
+                               skip n instructions
   | Beq n                    object identity test
                                pop twice, then skip n instructions
 			       (forward jump) if the two references
@@ -1050,12 +1051,9 @@ Rules:
   ----------------------------------------------- NOP
   (RF, GS, LT, Nop :: code) -> (RF, GS, LT, code)
 
-  OT = merge_instance_tables(LT)
-  OT(RF(this)) = _ @ l
-  LT(l) = { M1, ..., Mp; LOT; o :: LS }
-  LT' = LT with l => { M1, ..., Mp; LOT; o :: o :: LS }
-  ----------------------------------------------------- DUP
-  (RF, GS, LT, Dup :: code) -> (RF, GS, LT', code)
+  code = i1 :: ... :: in :: code'
+  --------------------------------------------------- B
+  (RF, GS, LT, Beq n :: code) -> (RF, GS, LT', code')
 
   OT = merge_instance_tables(LT)
   OT(RF(this)) = _ @ l
@@ -1216,9 +1214,7 @@ Compilation of expressions
      c_expr(e2);
      Beq EQ;       (note: these are indeed relative forward jumps, so this works)
      c_expr(e4);
-     Dup;          }  <--- a way to encode unconditional forward jump
-     Dup;          }
-     Beq END;      }
+     B END;
 EQ:  c_expr(e3);
 END: Nop
 
