@@ -34,7 +34,7 @@ O ::=
   where n >= 0
 
 M ::=                            method declaration
-  lr (la) {                        result and argument types
+  lr (la) {                        result and argument types (BCP: What are the possible types?)
     e                              method body
   }
 
@@ -90,8 +90,8 @@ A; (ot, oa) |- o ==> o
 A; (ot, oa) |- e ==> o
 A = (OT, LT)
 OT(o) = obj l { o1, ..., on }
-OT(ot) = obj l { ... }               field privacy (granularity: class)
-f = i in [1,n]
+OT(ot) = obj l { ... }               field privacy (granularity: class) (BCP:??)
+f = i in [1,n]                       (BCP:??)
 ----------------------------- SEL
 A; (ot, oa) |- e.f ==> oi
 
