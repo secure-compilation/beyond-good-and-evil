@@ -34,7 +34,7 @@ O ::=
   where n >= 0
 
 M ::=                            method declaration
-  lr (la) {                        result and argument types (BCP: What are the possible types?)
+  lr (la) {                        result and argument types 
     e                              method body
   }
 
