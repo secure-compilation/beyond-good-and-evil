@@ -891,7 +891,7 @@ A machine state is formed by:
   methods, a local object table storing all of its instances, and a
   local stack used when executing a method of this compartment.
 
-The running code can only use the local stack owned by the class of
+aThe running code can only use the local stack owned by the class of
 the object that is currently referenced by register this. Upon call,
 we may switch compartments, and thus local stacks.
 
