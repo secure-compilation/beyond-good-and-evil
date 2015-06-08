@@ -925,9 +925,10 @@ L ::=                      compartment
 M ::=                      method
   code
 
-LOT ::= partial map from o to LO   local instance table
+LOT ::=                    local instance table
+  partial map from o to LO_n  (each LOT has a fixed n)
 
-LO ::= (o1, ..., on)       local instance definition
+LO_n ::= (o1, ..., on)     local instance definition
 
 LS ::=                     local stack storing object references
   [] | o :: local_stack
@@ -966,15 +967,11 @@ instr ::=                  instruction
 
 Note: At this level we make no distinction between inter- and intra-
 compartment calls. If we were to need this distinction it would anyway
-be lower level. We actually have distinct rules in the semantics, but
-they could be merged into one, following the intuition described
-above. They just look cleaner when separated (otherwise we would be
-popping a value, then pushing it again to the very same stack, which
-looks a bit silly; the rule would also be longer to state).
+be lower level.
 
 
 --------------------------------------------------------------------------------
-| Def: Well-formedness
+| Def: Well-formedness (outdated)
 --------------------------------------------------------------------------------
 
 A program is well-formed if all of its local object tables have
@@ -1003,139 +1000,108 @@ RF ::= (                   register file of immutable registers
 )
 
 GS ::= [] | (              call stack: to restore execution after a call
+  lr,                        expected type for the result
   RF,                        register file to be restored
   code                       code to be executed after restoring
 ) :: GS
 
-OT ::= partial map from o to O    global instance table
 
-O ::= (o1, ..., on) @ l           instance definition
-
-merge_instance_tables(LT) ::= OT
-
-  when well_formed LT
-
-  where
-
-    OT ::= disjoint_union (OT_l)_{l in dom(LT)}
-
-
-    OT_l ::=
-      let {...; OLT; _} = LT(l) in
-      globalize(OLT, l)
-
-    globalize(OLT, l) maps any o in dom(OLT) to OLT(o) @ l
-
-merge_instance_tables is a partial function which takes a compartment
-table LT and returns a global instance table OT. This partial function
-is only defined if all local object tables are pairwise disjoint in
-LT. When it is the case, it returns the disjoint union of all local
-object tables, tagging each instance definition with its source
-compartment's id.
-
-
-
-TODO: Add sanity checks in the rules, which should hopefully be
-*proved* useless e.g. because they are invariants. Having them around
-when stating the rules looks good. Is this a good idea? Would it be
-too strong to add everywhere the following premisse?
-
-    OT = merge_instance_tables(LT)
-    RF(this) in dom(OT)
-    RF(arg) in dom(OT)
-    forall l in dom(LT),
-      match LT(l) with
-      | { M1, ..., Mp; LS} =>
-            for every o in LS,
-            o in dom(OT)
+TODO: Think about the invariants we want; we probably need more sanity
+checks, e.g. that "this" and "arg" and all objects on local stacks
+always have a corresponding declaration and definition.
 
 Rules:
 
-  ----------------------------------------------- NOP
-  (RF, GS, LT, Nop :: code) -> (RF, GS, LT, code)
+  ---------------------------------------------------- NOP
+  E |- (RF, GS, LT, Nop :: code) -> (RF, GS, LT, code)
 
   code = i1 :: ... :: in :: code'
-  --------------------------------------------------- B
-  (RF, GS, LT, Beq n :: code) -> (RF, GS, LT', code')
+  ------------------------------------------------------ B
+  E |- (RF, GS, LT, B n :: code) -> (RF, GS, LT', code')
 
-  OT = merge_instance_tables(LT)
-  OT(RF(this)) = _ @ l
+  E = (_, OE)
+  OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; LS }
   LT' = LT with l => { M1, ..., Mp; LOT; o :: LS }
-  -------------------------------------------------- REF
-  (RF, GS, LT, Ref o :: code) -> (RF, GS, LT', code)
+  ------------------------------------------------------- REF
+  E |- (RF, GS, LT, Ref o :: code) -> (RF, GS, LT', code)
 
-  OT = merge_instance_tables(LT)
-  OT(RF(this)) = _ @ l
+  E = (_, OE)
+  OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; LS }
   LT' = LT with l => { M1, ..., Mp; LOT; RF(this) :: LS }
   ------------------------------------------------------- THIS
-  (RF, GS, LT, This :: code) -> (RF, GS, LT', code)
+  E |- (RF, GS, LT, This :: code) -> (RF, GS, LT', code)
 
-  OT = merge_instance_tables(LT)
-  OT(RF(this)) = _ @ l
+  E = (_, OE)
+  OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; LS }
   LT' = LT with l => { M1, ..., Mp; LOT; RF(arg) :: LS }
   ------------------------------------------------------ ARG
-  (RF, GS, LT, Arg :: code) -> (RF, GS, LT', code)
+  E |- (RF, GS, LT, Arg :: code) -> (RF, GS, LT', code)
 
-  OT = merge_instance_tables(LT)
-  OT(RF(this)) = _ @ l
+  E = (_, OE)
+  OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; o :: LS }
-  OT(o) = (o1, ..., on) @ l                 requiring l here ensures
-  f <= n                                               field privacy
+  OE(o) = obj decl l                    requiring l here ensures field
+  LOT(o) = (o1, ..., on)                                       privacy
+  f <= n
   LT' = LT with l => { M1, ..., Mp; LOT; of :: LS }
-  ----------------------------------------------------- SELECT
-  (RF, GS, LT, Select f :: code) -> (RF, GS, LT', code)
+  ---------------------------------------------------------- SELECT
+  E |- (RF, GS, LT, Select f :: code) -> (RF, GS, LT', code)
 
-  OT = merge_instance_tables(LT)
-  OT(RF(this)) = _ @ l
-  LT(l) = { M1, ..., Mp; LOT; oa :: ot :: LS }
-  OT(ot) = _ @ l'
-  LT(l') = { M'1, ..., M'p'; _ }
+  E = (LE, OE)
+  OE(RF(this)) = obj decl l
+  LT(l) = { M1, ..., Mp; LOT; oa' :: ot' :: LS }
+  OE(ot') = obj decl l'
+  l <> l'
+  LT(l') = { M'1, ..., M'p'; LOT'; _ }
+  LE(l') = class decl { N'1, ..., N'p' }
   m <= p'
+  N'm = lr (la)
+  OE(oa') = la
   M'm = code'
   LT' = LT with l => { M1, ..., Mp; LOT; LS }
-  GS' = (RF, code) :: GS
-  RF' = (this => ot, arg => oa)
-  ------------------------------------------------------ CALL
-  (RF, GS, LT, Call m :: code) -> (RF', GS', LT', code')
+  GS' = (lr, RF, code) :: GS
+  RF' = (this => ot', arg => oa')
+  ----------------------------------------------------------- CALL
+  E |- (RF, GS, LT, Call m :: code) -> (RF', GS', LT', code')
 
-  OT = merge_instance_tables(LT)
-  GS = (RF', code') :: GS'
-  OT(RF(this)) = _ @ l
-  OT(RF'(this)) = _ @ l
-  -------------------------------------------------- RETURN-INTRA
-  (RF, GS, LT, Return :: _) -> (RF', GS', LT, code')
-
-  OT = merge_instance_tables(LT)
-  GS = (RF', code') :: GS'
-  OT(RF(this)) = _ @ l
-  OT(RF'(this)) = _ @ l'
-  l <> l'
+  E = (_, OE)
+  GS = (lr, RF', code') :: GS'
+  OE(RF(this)) = obj decl l
+  OE(RF'(this)) = obj decl l'
   LT(l) = { M1, ..., Mp; LOT; o :: LS }
-  LT(l') = { M'1, ..., M'p'; LOT'; LS' }
-  LT' = LT with l => { M1, ..., Mp; LOT; LS }
-                l' => { M'1, ..., M'p'; LOT'; o :: LS' }
-  ------------------------------------------------------ RETURN-INTER
-  (RF, GS, LT, Return :: _) -> (RF', GS', LT', code')
+  OE(o) = lr
+  if l = l' then
+    LT(l') = { M'1, ..., M'p'; LOT'; LS' }
+    LT' = LT with l => { M1, ..., Mp; LOT; LS }
+                  l' => { M'1, ..., M'p'; LOT'; o :: LS' }
+  else
+    LT' = LT
+  -------------------------------------------------------- RETURN
+  E |- (RF, GS, LT, Return :: _) -> (RF', GS', LT', code')
 
-  OT = merge_instance_tables(LT)
-  OT(RF(this)) = _ @ l
+  E = (_, OE)
+  OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; o :: o :: LS }
   LT' = LT with l => { M1, ..., Mp; LOT; LS }
   code = i1 :: ... :: in :: code'
   --------------------------------------------------- BEQ-EQ
   (RF, GS, LT, Beq n :: code) -> (RF, GS, LT', code')
 
-  OT = merge_instance_tables(LT)
-  OT(RF(this)) = _ @ l
+  E = (_, OE)
+  OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; o1 :: o2 :: LS }
   o1 <> o2
   LT' = LT with l => { M1, ..., Mp; LOT; LS }
   -------------------------------------------------- BEQ-NEQ
   (RF, GS, LT, Beq n :: code) -> (RF, GS, LT', code)
 
+
+
+CHECKPOINT: after this point most definitions are outdated for this
+section (intermediate language).
 
 --------------------------------------------------------------------------------
 | Linking
@@ -1294,6 +1260,9 @@ Problems:
   recover I and E. Currently, we could generate a minimal I and a
   maximal E, but these are not necessarily the ones used in the source
   program.
+
+* Method bodies in the low-level may correspond to ill-typed
+  high-level expressions or even no high-level expressions at all.
 
 
 ================================================================================
