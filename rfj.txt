@@ -10,6 +10,8 @@ f - field index (natural)
 m - method index (natural)
 o - object names -- mapped to object declarations O (OT)
 
+In our setting, only object names are values, and only class names are types.
+
 --------------------------------------------------------------------------------
 | Programs
 --------------------------------------------------------------------------------
@@ -75,6 +77,23 @@ Proof: Object names are naturals.
 Big-step semantics
 ==================
 
+The big-step semantics is described by statements of the form:
+
+  A; (ot, oa) |- e ==> o
+
+where A is the program; ot is the current "this" object; oa is the
+current argument object; e is the expression to evaluate; and o is the
+result value.
+
+(1) Our fields are private with class granularity, i.e.:
+* two objects of different classes cannot access each other's fields;
+* different object instances of the same class can access each other's
+private fields.
+
+(2) Classes and objects have names, which are natural numbers. Fields
+(resp. methods) are referred by their position in the class definition
+of the object.
+
 -------------------------- THIS
 A; (ot, oa) |- this ==> ot
 
@@ -92,6 +111,11 @@ A = (OT, LT)
 OT(o) = obj l { o1, ..., on }
 OT(ot) = obj l { ... }               field privacy (granularity: class) (BCP:??)
 f = i in [1,n]                       (BCP:??)
+                                     (YJ: More explanations on this in
+				     (1) and (2) above, which we
+				     should keep in the document. If
+				     this is not enough, could I have
+				     a more explicit question?)
 ----------------------------- SEL
 A; (ot, oa) |- e.f ==> oi
 
@@ -125,6 +149,14 @@ A; (ot, oa) |- e1 == e2 ? e3 : e4 --> o4
 
 Small-step semantics
 ====================
+
+The small-step semantics is described by statements of the form:
+
+  A |- Cfg --> Cfg'
+
+where A is the program; Cfg is the configuration being reduced; and
+Cfg' the reduced configuration.
+
 
 E ::=                            flat evaluation contexts
   | [].f
@@ -891,7 +923,7 @@ A machine state is formed by:
   methods, a local object table storing all of its instances, and a
   local stack used when executing a method of this compartment.
 
-aThe running code can only use the local stack owned by the class of
+The running code can only use the local stack owned by the class of
 the object that is currently referenced by register this. Upon call,
 we may switch compartments, and thus local stacks.
 
