@@ -369,7 +369,6 @@ I |- A : E
 
 |- I ok
 I |- A ok
-I |- E ok
 A |- E ok
 ------------
 I |- A : E
@@ -397,42 +396,15 @@ forall o in dom(OD),
 Well-formedness of export declarations
 ======================================
 
-Export declarations should provide declarations for every class that
-is mentionned in a method signature or in an object declaration,
-except when such a declaration is already part of the import
-declarations. They should not redefine imported declarations; as such,
-their domains should be disjoint with the ones of import declarations.
+Export declarations should mention every defined class or object, with
+the same type as in the matching definition.
 
-I = D
-D = (LD, OD)
-E = D'
-D' = (LD', OD')
-dom(LD) inter dom(LD') = empty_set
-dom(OD) inter dom(OD') = empty_set
-forall l in dom(LD'),
-  let class decl { N1, ..., Np } = LD'(l) in
-  forall i in [1,p],
-    let lr (la) = Ni in
-    (lr in dom(LD) \/ lr in dom(LD')) /\
-      (la in dom(LD) \/ la in dom(LD'))
-forall o in dom(OD'),
-  let obj decl l = OD'(o) in
-  l in dom(LD) \/ l in dom(LD')
---------------------------------------------
-I |- E ok
-
-
-Export declarations should be correctly implemented by the actual
-program, that is, every exported declaration should have a
-corresponding definition, and the types in every exported method
-signature or object declaration should match with the actual type in
-the corresponding definition.
 
 E = D
 D = (LD, OD)
 A = (LT, OT)
-dom(LD) included in dom(LT)
-dom(OD) included in dom(OT)
+dom(LD) = dom(LT)
+dom(OD) = dom(OT)
 forall l in dom(LD),
   let class decl { N1, ..., Np } = LD(l) in
   let class { ... ; M1, ..., Mp' } = LT(l) in
@@ -578,11 +550,10 @@ D; A; G |- (e1 == e2 ? e3 : e4) : l
 | Def.: Complete programs
 --------------------------------------------------------------------------------
 
-A program A is complete if it typechecks with no import and export
-declarations.
+A program A is complete if it typechecks with no import declarations.
 
-  (empty_map, empty_map) |- A : (empty_map, empty_map)
-  ----------------------------------------------------
+  (empty_map, empty_map) |- A : E
+  -------------------------------
   |- A complete
 
 
@@ -591,15 +562,15 @@ declarations.
 --------------------------------------------------------------------------------
 
 A program A is evaluable if typechecks with no import declarations
-and a particular choice of export declarations, MainSig, which
-correspond to the way program evaluation is performed.
+and a particular export declaration, which corresponds to the way
+program evaluation is performed.
 
-  MainSig ::= (LE, OE)
-    where LE = (0 => class decl { 0 (0) })
-          OE = (0 => obj decl 0)
-
-  (empty_map, empty_map) |- A : MainSig
-  -------------------------------------
+  (empty_map, empty_map) |- A : E
+  E = D
+  D = (LE, OE)
+  LE(0) = class decl { 0 (0) }
+  OE(0) = obj decl 0
+  -------------------------------
   |- A evaluable
 
 
@@ -622,8 +593,8 @@ Note:
   (I, A, E) evaluable ->  |- A evaluable.
 
   However, it is possible for A to be complete (resp. evaluable)
-  without having (I, A, E) complete (resp. evaluable), for instance if
-  the partial program has useless import declarations.
+  without having (I, A, E) complete (resp. evaluable), e.g. if the
+  partial program has useless import declarations.
 
 
 --------------------------------------------------------------------------------
@@ -647,9 +618,9 @@ the other also match with the other's declarations.
   |- linkable P Q
 
 Note: we don't need a notion of compatibility between E and E' because
-having  |- A : E ok  and  |- A' : E' ok  and  |- linkable A A'
+having  |- A : E ok  and  |- A' : E' ok  and  |- exclusive_defs A A'
 already entails that E and E' have disjoint domains, which is what we
-would require as a notion of linkability between E and E'.
+would require as a notion of compatibility between E and E'.
 
 
   A = (LT, OT)
