@@ -144,7 +144,7 @@ e2 ==> o2
 o1 <> o2
 e4 ==> o4
 ---------------------------------------- TESTNEQ
-A; (ot, oa) |- e1 == e2 ? e3 : e4 --> o4
+A; (ot, oa) |- e1 == e2 ? e3 : e4 ==> o4
 
 
 Small-step semantics
@@ -912,13 +912,21 @@ o ::= n                    instance name (where n is natural)
 f ::= n                    field index (where n is natural)
 m ::= n                    method index (where n is natural)
 
-LT ::=                     program
-  partial map from l to L    (a compartment table)
+P ::= (                    program
+    LT,                      the actual program (as a compartment table)
+    E                        type information (as export declarations)
+  )
 
-L ::=                      compartment
-| { M1, ..., Mp;             methods
+E as in the high-level language (export declarations)
+
+LT ::=                     compartment table
+  partial map from l to L
+
+L ::= {                    compartment
+    M1, ..., Mp;             methods
     LOT;                     local instance table
-    LS }                     local stack
+    LS                       local stack
+  }
 
   where   p >= 0
 
@@ -931,14 +939,16 @@ LOT ::=                    local instance table
 LO_n ::= (o1, ..., on)     local instance definition
 
 LS ::=                     local stack storing object references
-  [] | o :: local_stack
+    []
+  | o :: local_stack
 
 code ::=                   code
-  [] | instr :: code         list of instructions
+    []
+  | instr :: code            list of instructions
 
 
 Note: hereafter, "stack" always means "current local stack" when
-describing an instruction, similarly "push" and "pop" always refer to
+describing an instruction; similarly, "push" and "pop" always refer to
 operations on the current local stack.
 
 
@@ -971,17 +981,34 @@ be lower level.
 
 
 --------------------------------------------------------------------------------
-| Def: Well-formedness (outdated)
+| Def: Well-formedness
 --------------------------------------------------------------------------------
 
-A program is well-formed if all of its local object tables have
-pairwise disjoint domains.
+A program is well-formed if there is a bijection between definitions
+and declarations. In particular, local object tables should have
+pairwise disjoint domains. We also require the declarations to
+match the corresponding definitions (e.g. same number of methods in
+the case of a class).
 
-well_formed LT ::=
-  forall l l' in dom(LT), l <> l' ->
-    let {...; OLT; _} = LT(l) in
-    let {...; OLT'; _} = LT(l') in
-    dom(OLT) inter dom(OLT') = empty_set
+well_formed P ::=
+  let (LT, E) = P in
+  let (LE, OE) = E in
+  dom(LT) = dom(LE)
+  /\
+  forall l in dom(LE),
+    let class decl { N1, ..., Np } = LE(l) in
+    let { M1, ..., Mp'; _; _ } = LT(l) in
+    p = p'
+  /\
+  dom(OE) = disjoint_union
+              {dom(OLT) where {...; OLT; _} = LT(l) | l in dom(LT)}
+  /\
+  forall o in dom(OE),
+    let obj decl l = OE(o) in
+    l in dom(LT)
+    /\
+    let { ...; OLT; _ } = LT(l) in
+    o in dom(OLT)
 
 --------------------------------------------------------------------------------
 | Semantics
@@ -1006,39 +1033,41 @@ GS ::= [] | (              call stack: to restore execution after a call
 ) :: GS
 
 
-TODO: Think about the invariants we want; we probably need more sanity
-checks, e.g. that "this" and "arg" and all objects on local stacks
-always have a corresponding declaration and definition.
+TODO: Think about the invariants we want; e.g. that "this" and "arg"
+and all objects on local stacks always have a corresponding
+declaration and definition. We probably need more sanity
+checks, unless we can prove these invariants true when restricting to
+well-formed programs.
 
 Rules:
 
-  ---------------------------------------------------- NOP
-  E |- (RF, GS, LT, Nop :: code) -> (RF, GS, LT, code)
+  ----------------------------------------------------- NOP
+  E |- (RF, GS, LT, Nop :: code) --> (RF, GS, LT, code)
 
   code = i1 :: ... :: in :: code'
-  ------------------------------------------------------ B
-  E |- (RF, GS, LT, B n :: code) -> (RF, GS, LT', code')
+  ------------------------------------------------------- B
+  E |- (RF, GS, LT, B n :: code) --> (RF, GS, LT', code')
 
   E = (_, OE)
   OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; LS }
   LT' = LT with l => { M1, ..., Mp; LOT; o :: LS }
-  ------------------------------------------------------- REF
-  E |- (RF, GS, LT, Ref o :: code) -> (RF, GS, LT', code)
+  -------------------------------------------------------- REF
+  E |- (RF, GS, LT, Ref o :: code) --> (RF, GS, LT', code)
 
   E = (_, OE)
   OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; LS }
   LT' = LT with l => { M1, ..., Mp; LOT; RF(this) :: LS }
   ------------------------------------------------------- THIS
-  E |- (RF, GS, LT, This :: code) -> (RF, GS, LT', code)
+  E |- (RF, GS, LT, This :: code) --> (RF, GS, LT', code)
 
   E = (_, OE)
   OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; LS }
   LT' = LT with l => { M1, ..., Mp; LOT; RF(arg) :: LS }
   ------------------------------------------------------ ARG
-  E |- (RF, GS, LT, Arg :: code) -> (RF, GS, LT', code)
+  E |- (RF, GS, LT, Arg :: code) --> (RF, GS, LT', code)
 
   E = (_, OE)
   OE(RF(this)) = obj decl l
@@ -1047,8 +1076,8 @@ Rules:
   LOT(o) = (o1, ..., on)                                       privacy
   f <= n
   LT' = LT with l => { M1, ..., Mp; LOT; of :: LS }
-  ---------------------------------------------------------- SELECT
-  E |- (RF, GS, LT, Select f :: code) -> (RF, GS, LT', code)
+  ----------------------------------------------------------- SELECT
+  E |- (RF, GS, LT, Select f :: code) --> (RF, GS, LT', code)
 
   E = (LE, OE)
   OE(RF(this)) = obj decl l
@@ -1064,8 +1093,8 @@ Rules:
   LT' = LT with l => { M1, ..., Mp; LOT; LS }
   GS' = (lr, RF, code) :: GS
   RF' = (this => ot', arg => oa')
-  ----------------------------------------------------------- CALL
-  E |- (RF, GS, LT, Call m :: code) -> (RF', GS', LT', code')
+  ------------------------------------------------------------ CALL
+  E |- (RF, GS, LT, Call m :: code) --> (RF', GS', LT', code')
 
   E = (_, OE)
   GS = (lr, RF', code') :: GS'
@@ -1079,67 +1108,53 @@ Rules:
                   l' => { M'1, ..., M'p'; LOT'; o :: LS' }
   else
     LT' = LT
-  -------------------------------------------------------- RETURN
-  E |- (RF, GS, LT, Return :: _) -> (RF', GS', LT', code')
+  --------------------------------------------------------- RETURN
+  E |- (RF, GS, LT, Return :: _) --> (RF', GS', LT', code')
 
   E = (_, OE)
   OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; o :: o :: LS }
   LT' = LT with l => { M1, ..., Mp; LOT; LS }
   code = i1 :: ... :: in :: code'
-  --------------------------------------------------- BEQ-EQ
-  (RF, GS, LT, Beq n :: code) -> (RF, GS, LT', code')
+  --------------------------------------------------------- BEQ-EQ
+  E |- (RF, GS, LT, Beq n :: code) --> (RF, GS, LT', code')
 
   E = (_, OE)
   OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; o1 :: o2 :: LS }
   o1 <> o2
   LT' = LT with l => { M1, ..., Mp; LOT; LS }
-  -------------------------------------------------- BEQ-NEQ
-  (RF, GS, LT, Beq n :: code) -> (RF, GS, LT', code)
-
-
-
-CHECKPOINT: after this point most definitions are outdated for this
-section (intermediate language).
+  -------------------------------------------------------- BEQ-NEQ
+  E |- (RF, GS, LT, Beq n :: code) --> (RF, GS, LT', code)
 
 --------------------------------------------------------------------------------
 | Linking
 --------------------------------------------------------------------------------
 
-Note: At this level we have no distinction between programs and
-partial programs.
+linkable P P' ::=
+  well_formed P /\ well_formed P' /\
+  let (_, E) = P in
+  let (LE, OE) = E in
+  let (_, E') = P' in
+  let (LE', OE') = E' in
+  dom(LE) inter dom(LE') = empty_set /\
+  dom(OE) inter dom(OE') = empty_set
 
-Two programs (compartment tables) are linkable when they have disjoint
-domains, and their local object tables also have pairwise disjoint
-domains. Linking is defined as the disjoint union of compartment
-tables.
-
-linkable LT LT' ::=
-  dom(LT) inter dom(LT') = empty_set
-    /\
-  forall l in dom(LT), forall l' in dom(LT'),
-    let {...; OLT; _} = LT(l) in
-    let {...; OLT'; _} = LT'(l') in
-    dom(OLT) inter dom(OLT') = empty_set
-
-LT /\/\ LT ::==
-  LT disjoint_union LT'
-
-  when linkable LT LT'
+P /\/\ P' ::==
+  let (LT, E) = P in
+  let (LE, OE) = E in
+  let (LT', E') = P' in
+  let (LE', OE') = E' in
+  let LT'' = LT disjoint_union LT' in
+  let LE'' = LE disjoint_union LE' in
+  let OE'' = OE disjoint_union OE' in
+  let E'' = (LE'', OE'') in
+  (LT'', E'')
 
 --------------------------------------------------------------------------------
 | Prop.: Linking preserves well-formedness
 --------------------------------------------------------------------------------
-| forall LT LT', linkable LT LT' ->
-|                well_formed LT ->
-|                well_formed LT' ->
-|    well_formed (LT /\/\ LT')
-|      /\
-|    merge_instance_tables(LT /\/\ LT') =
-|      merge_instance_tables(LT)
-|        disjoint_union
-|      merge_instance_tables(LT')
+| forall P P', linkable P P' -> well_formed (P /\/\ P')
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
@@ -1215,21 +1230,22 @@ Compilation of programs
 Compilation of partial programs
 -------------------------------
 
-  Just forget the declarations:
+  We erase types in the actual program (A) and keep the type
+  information (E) separately.
 
-  comp_partprog(I, A, E) = comp_prog(A)
+  comp(I, A, E) = (comp_prog(A), E)
 
 --------------------------------------------------------------------------------
 | Prop.: Separate compilation
 --------------------------------------------------------------------------------
 | forall P Q, |- linkable P Q ->
-|   linkable (comp_partprog(P)) (comp_partprog(Q))
+|   linkable comp(P) comp(Q)
 |     /\
-|   comp_partprog(P /\/\ Q) = comp_partprog(P) /\/\ comp_partprog(Q)
+|   comp(P /\/\ Q) = comp(P) /\/\ comp(Q)
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-| Decompilation
+| Partial decompilation (failed attempt at a more direct approach)
 --------------------------------------------------------------------------------
 
 See decomp.ml.
@@ -1242,28 +1258,17 @@ See decomp.ml.
 
 Problems:
 
-* There are no types in the intermediate language, but we want to
-  prevent the context from giving ill-typed parameters to program
-  methods.
-
-* When decompiling a compiled method, we want to give it the very same
-  signature and not just one that works.
-
-* There are no export declarations in the intermediate language, but
-  we want to prevent the context from using non-exported classes or
-  objects.
+* Decompilation is only partial at the moment and seems hard for
+  tricky programs. Method bodies in the low-level may correspond to
+  ill-typed high-level expressions or even no high-level expressions
+  at all.
 
 * There are no import declarations in the intermediate language, but
   we don't want to run a program which has missing dependencies.
 
 * When decompiling a compiled partial program, we should be able to
-  recover I and E. Currently, we could generate a minimal I and a
-  maximal E, but these are not necessarily the ones used in the source
-  program.
-
-* Method bodies in the low-level may correspond to ill-typed
-  high-level expressions or even no high-level expressions at all.
-
+  recover I and E. Currently, we could generate a minimal I, but this
+  is not necessarily the one used in the source program.
 
 ================================================================================
 | Symbolic micro-policy (compartmentalization variant)
