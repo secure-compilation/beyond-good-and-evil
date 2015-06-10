@@ -1088,6 +1088,14 @@ forall o in dom(OE),
 ---------------------------------------------
 E |- LT wf
 
+
+Note: Because fields are private to the defining class we do not need
+to statically enforce that they have the right type, since there is no
+way for a class to trick another class into accessing its fields at
+the wrong type. Everything another class can do to an object is call
+its methods or test it for equality.
+
+
 --------------------------------------------------------------------------------
 | Semantics
 --------------------------------------------------------------------------------
@@ -1351,7 +1359,7 @@ all.
 --------------------------------------------------------------------------------
 
 Turn ::=
-    ProgTurn (RF, code)
+    ProgTurn (GS, RF, code)
   | CtxTurn
 
 State ::= (
@@ -1438,7 +1446,7 @@ else if o in dom(OI) then
   I' = I                                  with an appropriate type
 else
   lr in dom(LI)
-  OI' = OI with o => obj decl la          first time o is encountered
+  OI' = OI with o => obj decl lr          first time o is encountered
   I' = (LI, OI')                          keep track of its type
 fi
 -------------------------------------------------
@@ -1524,6 +1532,7 @@ E |- State' --> State''
            u.v
 E |- State ==> State''
 
+CH: We probably need to mark termination (just stuckness) in the trace
 
 --------------------------------------------------------------------------------
 | Trace equivalence
@@ -1532,7 +1541,7 @@ E |- State ==> State''
 Traces(I, LT, E) =
   let Init = ([], LT, CtxTurn, I) in
                                  u
-  { u | exists Final, E |- Init ==> Final }
+  { u | exists State, E |- Init ==> State }
 
 same_traces (I, LT, E) (I', LT', E') ::=
   Traces(I, LT, E) = Traces(I', LT', E')
@@ -1545,18 +1554,32 @@ First step:
 
   exists c. c[compile P] /~ c[compile Q]
     ->
-  Traces(compile P) delta Traces(compile Q) <> empty_set
-    where A delta B = (A union B) - (A inter B) : symmetric difference
+  Traces(compile P) `delta` Traces(compile Q) <> empty_set
+    where A `delta` B = (A union B) - (A inter B) : symmetric difference
 
   or equivalently
 
-  Traces(compile P) delta Traces(compile Q) = empty_set
+  Traces(compile P) `delta` Traces(compile Q) = empty_set
     ->
   forall c. c[compile P] ~ c[compile Q]
 
+[Failed Attempt]
+Property: from any execution derivation c[p] ~>* p' we can extract a
+          corresponding trace in Traces(p)
+
+exists c. c[p] /~ c[q] ==> Traces(p) != Traces(q)
+
+One of c[p] and c[q], say c[p], has a terminating execution c[p] ~>*
+p', while the other one (c[q]) doesn't (it loops forever). We can use
+extract to produce a trace tp = extract(c[p] ~>* p') in Traces(p). We
+still need to show that tp is not in Traces(q). Let's assume by
+contradiction that tp in Traces(q) ... stuck?
+- c[q] looping gives us an infinite trace tq in Traces(q)
+- this somehow prevents us from also having tp???
+
 Second step:
 
-  Traces(compile P) delta Traces(compile Q) <> empty_set
+  Traces(compile P) `delta` Traces(compile Q) <> empty_set
     ->
   exists C. C[P] /~ C[Q]
 
