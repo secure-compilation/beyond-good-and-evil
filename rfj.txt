@@ -720,13 +720,21 @@ can be linked to get a new partial program P /\/\ Q.
 | Encodings
 ================================================================================
 
+-------------------------------------------------------------------------------
+| Unit
+--------------------------------------------------------------------------------
+
+obj tt : Unit { }
+
+class Unit { }
+
 --------------------------------------------------------------------------------
 | Tuples
 --------------------------------------------------------------------------------
 
 For each tuple type T=(l1, ..., ln)
 
-class decl Unit {}
+class decl Unit { }
 
 class Tuple_T {
   l1 f1, ..., ln fn;
@@ -739,12 +747,57 @@ class Tuple_T {
 | Booleans
 --------------------------------------------------------------------------------
 
-class Bool {}
-
-obj true : Bool {}
-obj false : Bool {}
+obj true : Bool { }
+obj false : Bool { }
+class Bool { }
 
 If then else via identity test, e.g. (b == true ? e1 : e2).
+
+--------------------------------------------------------------------------------
+| Naturals : requires dynamic allocation
+--------------------------------------------------------------------------------
+
+class decl Unit { }
+obj decl tt
+
+obj z : Nat { z }
+class Nat {
+
+  Nat pred;
+
+  Nat pred(Unit) {
+    return this.pred;
+  }
+
+  /* auxiliary methods that could be defined outside */
+
+  Bool isZero(Unit) {
+    this.pred(tt) == this ? true : false;
+  }
+
+  Nat succ(Unit) {
+    new Nat(this)
+  }
+
+  Bool eq(Nat arg) {
+    this.isZero(tt) ?
+      arg.isZero(tt) :
+      (arg.isZero(tt) ? false : this.pred(tt).eq(arg))
+  }
+
+  Nat add(Nat arg) {
+    arg.isZero(tt) ?
+      this :
+      this.succ(tt).add(arg.pred(tt))
+  }
+
+  Nat mul(Nat arg) {
+    arg.isZero(tt) ?
+      z :
+      this.mul(arg.pred(tt)).add(this)
+  }
+
+}
 
 
 ================================================================================
