@@ -322,11 +322,11 @@ Note: We define later evaluable programs, which can be seen as
 
 
 ================================================================================
-| Type system
+| Partial programs
 ================================================================================
 
 --------------------------------------------------------------------------------
-| Partial programs
+| Syntax
 --------------------------------------------------------------------------------
 
 P ::= (                           partial program
@@ -359,96 +359,105 @@ N ::=
   lr (la)
 
 --------------------------------------------------------------------------------
-| Def.: Partial-program typing
+| Def.: Partial-program well-formedness
 --------------------------------------------------------------------------------
 
-P = (I, A, E)
-I |- A : E
--------------
-|- P ok
+|- I wf
+I |- E wf
+E |- A wf
+---------------
+|- (I, A, E) wf
 
-|- I ok
-I |- A ok
-A |- E ok
-------------
-I |- A : E
 
 Well-formedness of import declarations
 ======================================
 
-Import declarations should provide declarations for every class that
-is mentionned in a method signature or in an object declaration.
+Import declarations should be self-contained; that is, they should
+provide declarations for every class that is mentionned in a method
+signature or in an object declaration.
 
-I = D
-D = (LD, OD)
-forall l in dom(LD),
-  let class decl { N1, ..., Np } = LD(l) in
+I = (LI, OI)
+forall l in dom(LI),
+  let class decl { N1, ..., Np } = LI(l) in
   forall i in [1,p],
     let lr (la) = Ni in
-    lr in dom(LD) /\ la in dom(LD)
-forall o in dom(OD),
-  let obj decl l = OD(o) in
-  l in dom(LD)
+    lr in dom(LI) /\ la in dom(LI)
+forall o in dom(OI),
+  let obj decl l = OI(o) in
+  l in dom(LI)
 -------------------------------------------
-|- I ok
+|- I wf
 
 
-Well-formedness of export declarations
-======================================
+Well-formedness of export declarations (w.r.t. import declarations)
+===================================================================
 
-Export declarations should mention every defined class or object, with
-the same type as in the matching definition.
+Export declarations should not redeclare imported definitions, and
+should not mention classes that are neither imported nor exported.
+
+I = (LI, OI)
+E = (LE, OE)
+dom(LI) inter dom(LE) = empty_set
+dom(OI) inter dom(OE) = empty_set
+forall l in dom(LE),
+  let class decl { N1, ..., Np } = LE(l) in
+  forall i in [1,p],
+    let lr (la) = Ni in
+    (lr in dom(LE) \/ lr in dom(LI))
+    /\
+    (la in dom(LE) \/ la in dom(LI))
+forall o in dom(OE),
+  let obj decl l = OE(o) in
+  l in dom(LE)
+---------------------------------------------
+I |- E wf
 
 
-E = D
-D = (LD, OD)
+Well-formedness of high-level programs (w.r.t. export declarations)
+===================================================================
+
+Programs should have a direct match with their export declarations;
+that is all we require for well-formedness: we don't check the types
+of the method bodies nor of the instance fields.
+
+Note: in the high level, there is a unique matching export declaration
+for each program; this is because in this level programs already carry
+the types.
+
+E = (LE, OE)
 A = (LT, OT)
-dom(LD) = dom(LT)
-dom(OD) = dom(OT)
-forall l in dom(LD),
-  let class decl { N1, ..., Np } = LD(l) in
+dom(LE) = dom(LT)
+dom(OE) = dom(OT)
+forall l in dom(LE),
+  let class decl { N1, ..., Np } = LE(l) in
   let class { ... ; M1, ..., Mp' } = LT(l) in
   p = p' /\
     forall i in [1,p],
     let lr (la) = Ni in
     let lr' (la') { _ } = Mi in
     lr = lr' /\ la = la'
-forall o in dom(OD),
-  let obj decl l = OD(o) in
+forall o in dom(OE),
+  let obj decl l = OE(o) in
   let obj l' { ... } = OT(o) in
   l = l'
 ---------------------------------------------
-A |- E ok
+E |- A wf
 
 
-Well-formedness and -typing of programs
-=======================================
+================================================================================
+| Type system
+================================================================================
 
-Except when the corresponding class or object already has an import
-declaration, programs should provide definitions for every class
-mentionned in a field declaration, in a method definition or in an
-object definition, and for every object mentionned in a method body or
-in an object definition. They should not redefine imported
-declarations; as such, their domains should be disjoint with the ones
-of import declarations.
+Partial program typing
+======================
 
-In the case of object definition, objects can only be defined for
-classes defined in the program -- not for imported classes.
-
-We require moreover that every method body should be well-typed with
-respect to the corresponding method return and argument types.
-
-I = D
-D = (LD, OD)
-A = (LT, OT)
-dom(LD) inter dom(LT) = empty_set
-dom(OD) inter dom(OT) = empty_set
+|- (I, A, E) wf
 forall l in dom(LT),
-  D; A |- LT(l) @ l ok
+  I; A |- LT(l) @ l ok
 forall o in dom(OT),
-  D; A |- OT(o) ok
----------------------------------
-I |- A ok
+  I; A |- OT(o) ok
+----------------------
+I |- A : E
 
 
 Object definition typing
@@ -606,8 +615,8 @@ do not overlap, their common import declarations match, and the
 export declarations of one which correspond to import declarations of
 the other also match with the other's declarations.
 
-  |- P ok
-  |- Q ok
+  |- P wf
+  |- Q wf
   P = (I, A, E)
   Q = (I', A', E')
   |- exclusive_decls E E'
@@ -678,9 +687,9 @@ can be linked to get a new partial program P /\/\ Q.
       (M - M') disjoint_union M'
 
 --------------------------------------------------------------------------------
-| Th.: Linking preserves well-typing (composition lemma)
+| Th.: Linking preserves well-formedness
 --------------------------------------------------------------------------------
-| forall P Q, |- linkable P Q  ->  |- P /\/\ Q ok
+| forall P Q, |- linkable P Q  ->  |- P /\/\ Q wf
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
@@ -702,6 +711,21 @@ can be linked to get a new partial program P /\/\ Q.
 |                 <->
 |               (|- linkable Q R  /\  |- linkable P (Q /\/\ R))
 --------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+| Th.: Linking preserves well-typing (composition lemma)
+--------------------------------------------------------------------------------
+| forall P Q, |- linkable P Q  ->
+|   let (I, A, E) = P in
+|   let (I', A', E') = Q in
+|   let (I'', A'', E'') = P /\/\ Q in
+|   I |- A : E  ->
+|   I' |- A' : E'  ->
+|     I'' |- A'' : E''
+--------------------------------------------------------------------------------
+
+ (composition lemma)
+
 
 ================================================================================
 | Encodings
@@ -1043,41 +1067,12 @@ well with the intermediate level; well-formedness is similar in the
 intermediate language, but we don't care about static typing here (we
 have dynamic typing instead).
 
-|- I wf
-I |- E wf
-LT |- E wf
+|- I wf            same as in the high-level
+I |- E wf          same as in the high-level
+E |- LT wf
 ----------------
 |- (I, LT, E) wf
 
-
-I = (LI, OI)
-forall l in dom(LI),
-  let class decl { N1, ..., Np } = LI(l) in
-  forall i in [1,p],
-    let lr (la) = Ni in
-    lr in dom(LI) /\ la in dom(LI)
-forall o in dom(OI),
-  let obj decl l = OI(o) in
-  l in dom(LI)
--------------------------------------------
-|- I wf
-
-I = (LI, OI)
-E = (LE, OE)
-dom(LI) inter dom(LE) = empty_set
-dom(OI) inter dom(OE) = empty_set
-forall l in dom(LE),
-  let class decl { N1, ..., Np } = LE(l) in
-  forall i in [1,p],
-    let lr (la) = Ni in
-    (lr in dom(LE) \/ lr in dom(LI))
-    /\
-    (la in dom(LE) \/ la in dom(LI))
-forall o in dom(OE),
-  let obj decl l = OE(o) in
-  l in dom(LE)
----------------------------------------------
-I |- E wf
 
 E = (LE, OE)
 dom(LE) = dom(LT)
@@ -1092,7 +1087,7 @@ forall o in dom(OE),
   let { ...; OLT; _ } = LT(l) in
   o in dom(OLT)
 ---------------------------------------------
-LT |- E wf
+E |- LT wf
 
 --------------------------------------------------------------------------------
 | Semantics
