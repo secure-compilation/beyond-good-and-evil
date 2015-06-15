@@ -610,37 +610,24 @@ the other also match with the other's declarations.
   |- Q ok
   P = (I, A, E)
   Q = (I', A', E')
-  |- exclusive_defs A A'
+  |- exclusive_decls E E'
   |- import_export_compatible I E'
   |- import_export_compatible I' E
   |- same_common_decls I I'
   --------------------------------
   |- linkable P Q
 
-Note: we don't need a notion of compatibility between E and E' because
-having  |- A : E ok  and  |- A' : E' ok  and  |- exclusive_defs A A'
-already entails that E and E' have disjoint domains, which is what we
-would require as a notion of compatibility between E and E'.
 
-
-  A = (LT, OT)
-  A' = (LT', OT')
-  dom(LT) inter dom(LT') = empty_set
+  E = (LE, OE)
+  E' = (LE', OE')
+  dom(LE) inter dom(LE') = empty_set
+  dom(OE) inter dom(OE') = empty_set
   ----------------------------------
-  |- exclusive_defs A A'
-
-Note: we don't need to enforce that
-  dom(OT) inter dom(OT') = empty_set
-because it already entailed by condition
-  dom(LT) inter dom(LT') = empty_set
-since well-typed partial programs can only provide object definitions
-for classes that they actually define.
+  |- exclusive_decls E E'
 
 
-  I = D
-  D = (LI, OI)
-  E = D'
-  D' = (LE, OE)
+  I = (LI, OI)
+  E = (LE, OE)
   forall l in dom(LE) inter dom(LI),
     LE(l) = LI(l) /\
       forall o in dom(OI),
@@ -934,18 +921,22 @@ A machine state is formed by:
 
 * the currently running code;
 
-* two registers, this and arg, that can only be changed by calls and
+* two registers, this and arg, that can only be changed upon calls and
   returns, one holding a reference to the current object, the other
   holding a reference to the current argument;
 
-* a call stack that allows storing the current environment (registers
-  + continuation code) before performing a call, so that it can be
-  restored afterwards;
+* a call stack that allows storing the current environment [1] before
+  performing a call, so that it can be restored afterwards;
 
 * a program which is a compartment table, each compartment
-  corresponding to a high-level class and storing the code for its
-  methods, a local object table storing all of its instances, and a
-  local stack used when executing a method of this compartment.
+  corresponding to a high-level class and storing :
+
+   (i) the code for its methods ;
+   (ii) a local object table storing all of its instances ;
+   (iii) a local stack used when executing a method of this
+         compartment.
+
+[1] registers + continuation code + expected type for returned value
 
 The running code can only use the local stack owned by the class of
 the object that is currently referenced by register this. Upon call,
@@ -955,6 +946,15 @@ This prevents low-level methods from compromising the local stack used by a
 caller of a different compartment. An attacker compromising a given
 class won't be able to damage an uncompromised caller's user stack
 before control gets back to this caller.
+
+Partial programs are programs (compartment tables) together with
+import and export declarations -- which can be thought of as a
+contract. Only partial programs which have compatible contracts can be
+linked together. For performing linking, we require the partial
+programs to be *well-formed*, but their code is *not statically
+typed*; so at linking nothing forces a partial program to obey the
+typed part of its contract. It is at run time that the typed part of
+the contracts is enforced -- through dynamic type checking.
 
 --------------------------------------------------------------------------------
 | Syntax
@@ -966,11 +966,12 @@ f ::= n                    field index (where n is natural)
 m ::= n                    method index (where n is natural)
 
 P ::= (                    program
+    I                        import declarations
     LT,                      the actual program (as a compartment table)
-    E                        type information (as export declarations)
+    E                        export declarations
   )
 
-E as in the high-level language (export declarations)
+I, E as in the high-level language
 
 LT ::=                     compartment table
   partial map from l to L
@@ -1037,31 +1038,61 @@ be lower level.
 | Def: Well-formedness
 --------------------------------------------------------------------------------
 
-A program is well-formed if there is a bijection between definitions
-and declarations. In particular, local object tables should have
-pairwise disjoint domains. We also require the declarations to
-match the corresponding definitions (e.g. same number of methods in
-the case of a class).
+TODO: Separate well-formedness and typing in the high-level, to relate
+well with the intermediate level; well-formedness is similar in the
+intermediate language, but we don't care about static typing here (we
+have dynamic typing instead).
 
-well_formed P ::=
-  let (LT, E) = P in
-  let (LE, OE) = E in
-  dom(LT) = dom(LE)
-  /\
-  forall l in dom(LE),
-    let class decl { N1, ..., Np } = LE(l) in
-    let { M1, ..., Mp'; _; _ } = LT(l) in
-    p = p'
-  /\
-  dom(OE) = disjoint_union
-              {dom(OLT) where {...; OLT; _} = LT(l) | l in dom(LT)}
-  /\
-  forall o in dom(OE),
-    let obj decl l = OE(o) in
-    l in dom(LT)
+|- I wf
+I |- E wf
+LT |- E wf
+----------------
+|- (I, LT, E) wf
+
+
+I = (LI, OI)
+forall l in dom(LI),
+  let class decl { N1, ..., Np } = LI(l) in
+  forall i in [1,p],
+    let lr (la) = Ni in
+    lr in dom(LI) /\ la in dom(LI)
+forall o in dom(OI),
+  let obj decl l = OI(o) in
+  l in dom(LI)
+-------------------------------------------
+|- I wf
+
+I = (LI, OI)
+E = (LE, OE)
+dom(LI) inter dom(LE) = empty_set
+dom(OI) inter dom(OE) = empty_set
+forall l in dom(LE),
+  let class decl { N1, ..., Np } = LE(l) in
+  forall i in [1,p],
+    let lr (la) = Ni in
+    (lr in dom(LE) \/ lr in dom(LI))
     /\
-    let { ...; OLT; _ } = LT(l) in
-    o in dom(OLT)
+    (la in dom(LE) \/ la in dom(LI))
+forall o in dom(OE),
+  let obj decl l = OE(o) in
+  l in dom(LE)
+---------------------------------------------
+I |- E wf
+
+E = (LE, OE)
+dom(LE) = dom(LT)
+dom(OE) = disjoint_union
+            {dom(OLT) where {...; OLT; _} = LT(l) | l in dom(LT)}
+forall l in dom(LE),
+  let class decl { N1, ..., Np } = LE(l) in
+  let { M1, ..., Mp'; _; _ } = LT(l) in
+  p = p'
+forall o in dom(OE),
+  let obj decl l = OE(o) in
+  let { ...; OLT; _ } = LT(l) in
+  o in dom(OLT)
+---------------------------------------------
+LT |- E wf
 
 --------------------------------------------------------------------------------
 | Semantics
@@ -1140,7 +1171,7 @@ Rules:
   LT(l') = { M'1, ..., M'p'; LOT'; _ }
   LE(l') = class decl { N'1, ..., N'p' }
   m <= p'
-  N'm = lr (la)
+  N'm = lr (la)                               /!\ see remark below
   OE(oa') = la
   M'm = code'
   LT' = LT with l => { M1, ..., Mp; LOT; LS }
@@ -1148,6 +1179,11 @@ Rules:
   RF' = (this => ot', arg => oa')
   ------------------------------------------------------------ CALL
   E |- (RF, GS, LT, Call m :: code) --> (RF', GS', LT', code')
+
+  Here we are able to infer the expected return type because we can
+  only call methods that have a definition, and we have a matching
+  declaration for each definition.
+
 
   E = (_, OE)
   GS = (lr, RF', code') :: GS'
@@ -1161,6 +1197,7 @@ Rules:
                   l' => { M'1, ..., M'p'; LOT'; o :: LS' }
   else
     LT' = LT
+  fi
   --------------------------------------------------------- RETURN
   E |- (RF, GS, LT, Return :: _) --> (RF', GS', LT', code')
 
@@ -1184,14 +1221,16 @@ Rules:
 | Linking
 --------------------------------------------------------------------------------
 
-linkable P P' ::=
-  well_formed P /\ well_formed P' /\
-  let (_, E) = P in
-  let (LE, OE) = E in
-  let (_, E') = P' in
-  let (LE', OE') = E' in
-  dom(LE) inter dom(LE') = empty_set /\
-  dom(OE) inter dom(OE') = empty_set
+  |- P wf
+  |- Q wf
+  P = (I, LT, E)
+  Q = (I', LT', E')
+  |- exclusive_decls E E'
+  |- import_export_compatible I E'
+  |- import_export_compatible I' E
+  |- same_common_decls I I'
+  --------------------------------
+  |- linkable P Q
 
 P /\/\ P' ::==
   let (LT, E) = P in
@@ -1204,10 +1243,12 @@ P /\/\ P' ::==
   let E'' = (LE'', OE'') in
   (LT'', E'')
 
+  when |- linkable P P'
+
 --------------------------------------------------------------------------------
 | Prop.: Linking preserves well-formedness
 --------------------------------------------------------------------------------
-| forall P P', linkable P P' -> well_formed (P /\/\ P')
+| forall P Q, (|- linkable P Q) -> well_formed (P /\/\ Q)
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
@@ -1284,9 +1325,9 @@ Compilation of partial programs
 -------------------------------
 
   We erase types in the actual program (A) and keep the type
-  information (E) separately.
+  information (I and E) separately.
 
-  comp(I, A, E) = (comp_prog(A), E)
+  comp(I, A, E) = (I, comp_prog(A), E)
 
 --------------------------------------------------------------------------------
 | Prop.: Separate compilation
@@ -1309,19 +1350,228 @@ See decomp.ml.
 | forall e, decomp_code (comp_expr e) = e.
 --------------------------------------------------------------------------------
 
-Problems:
+Problem: Decompilation is only partial at the moment and seems hard
+for tricky programs. Method bodies in the low-level may correspond to
+ill-typed high-level expressions or even no high-level expressions at
+all.
 
-* Decompilation is only partial at the moment and seems hard for
-  tricky programs. Method bodies in the low-level may correspond to
-  ill-typed high-level expressions or even no high-level expressions
-  at all.
+================================================================================
+| Trace semantics
+================================================================================
 
-* There are no import declarations in the intermediate language, but
-  we don't want to run a program which has missing dependencies.
+--------------------------------------------------------------------------------
+| Labelled reduction
+--------------------------------------------------------------------------------
 
-* When decompiling a compiled partial program, we should be able to
-  recover I and E. Currently, we could generate a minimal I, but this
-  is not necessarily the one used in the source program.
+Turn ::=
+    ProgTurn (RF, code)
+  | CtxTurn
+
+State ::= (
+  GSs,         program stack frames (/!\ not context ones)
+  LT,          program compartment table (/!\ not context one)
+  Turn,        current ownership of the state (+ code being executed)
+  I            current information about the context
+)
+
+GSs ::= [] | GS :: GSs 
+
+We define a labelled reduction of the form:
+
+              a
+  E |- State --> State'
+
+
+a ::=          label
+  | tau          internal step
+  | o.m(o')      cross-boundary call
+  | o            cross-boundary return
+
+
+1 - Internal program reductions
+===============================
+
+
+E |- (RF, GS, LT, code) --> (RF', GS', LT', code')
+--------------------------------------------------
+                                            tau
+E |- (GSs, LT, ProgTurn (GS, RF, code), I) -->
+       (GSs, LT', ProgTurn (GS', RF', code'), I)
+
+
+2 - Call from context code to program code
+==========================================
+
+
+I = (LI, OI)
+E = (LE, OE)
+ot' in dom(OE)                            ot' is program-defined
+OE(ot') = obj decl l
+LE(l) = class decl { N1, ..., Np }
+LT(l) = class { M1, ..., Mp }
+m in [1,p]                                its class provides method m
+Nm = lr (la)                              with signature lr (la)
+Mm = code'
+RF' = (this => ot', arg => oa')
+if oa' in dom(OE) then
+  la in dom(LE)
+  OE(oa') = obj decl la                   oa' is program-defined
+  I' = I                                  with an appropriate type
+else if oa' in dom(OI) then
+  la in dom(LI)
+  OI(oa') = obj decl la                   oa' is context-defined
+  I' = I                                  with an appropriate type
+else
+  la in dom(LI)
+  OI' = OI with oa' => obj decl la        first time oa' is encountered
+  I' = (LI, OI')                          keep track of its type
+fi
+-----------------------------------------------
+                        ot'.m(oa')
+E |- (GSs, LT, CtxTurn, I) -->
+       (GSs, LT, ProgTurn ([], RF', code'), I')
+
+
+3 - Return from context code to program code
+============================================
+
+
+I = (LI, OI)
+E = (LE, OE)
+LT(l) = { M1, ..., Mp; OLT; LS }
+LT' = LT with l => { M1, ..., Mp; OLT; o :: LS }
+GS = (lr, RF', code') :: GS'
+if o in dom(OE) then
+  lr in dom(LE)
+  OE(o) = obj decl lr                     o is program-defined
+  I' = I                                  with an appropriate type
+else if o in dom(OI) then
+  lr in dom(LI)
+  OI(o) = obj decl lr                     o is context-defined
+  I' = I                                  with an appropriate type
+else
+  lr in dom(LI)
+  OI' = OI with o => obj decl la          first time o is encountered
+  I' = (LI, OI')                          keep track of its type
+fi
+-------------------------------------------------
+                                  o
+E |- (GS :: GSs, LT, CtxTurn, I) -->
+       (GSs, LT', ProgTurn (GS', RF', code'), I')
+
+
+4 - Call from program code to context code
+==========================================
+
+I = (LI, OI)
+E = (LE, OE)
+OE(RF(this)) = obj decl l
+LT(l) = { M1, ..., Mp; OLT; oa' :: ot' :: LS }
+LT' = LT with l => { M1, ..., Mp; OLT; LS }
+code = Call m :: code'
+ot' in dom(OI)
+OI(ot') = lt'
+lt' in dom(LI)
+LI(lt') = { N1, ..., Np }
+1 <= m <= p
+Nm = lr (la')
+if oa' in dom(OE) then
+  la' in dom(LE)
+  OE(oa') = obj decl la'
+else
+  oa' in dom(OI)
+  la' in dom(LI)
+  OI(oa') = obj decl la'
+fi
+GS' = (lr, RF, code') :: GS
+---------------------------------------------------
+                                         ot'.m(oa')
+E |- (GSs, LT, ProgTurn (GS, RF, code), I) -->
+          (GS' :: GSs, LT', CtxTurn, I)
+
+
+
+5 - Return from program code to context code
+============================================
+
+
+I = (LI, OI)
+E = (LE, OE)
+OE(RF(this)) = obj decl l
+LT(l) = { M1, ..., Mp; OLT; o :: LS }
+LT' = LT with l => { M1, ..., Mp; OLT; LS }
+code = Return :: _
+(* do we need to typecheck o against the
+   expected result type for our method?
+   or is it a job for the context? *)
+----------------------------------------------
+                                            o
+E |- (GSs, LT, ProgTurn ([], RF, code), I) -->
+       (GSs, LT', CtxTurn, I)
+
+
+
+--------------------------------------------------------------------------------
+| Traces
+--------------------------------------------------------------------------------
+
+--------------------
+       empty_word
+E |- State ==> State
+
+            a
+E |- State --> State'
+---------------------
+        as_word(a)
+E |- State ==> State'
+
+  where as_word(tau) = empty_word
+        as_word(o) = o (as a word of length 1)
+        as_word(o.m(o')) = o.m(o') (as a word of length 1)
+
+            u
+E |- State --> State'
+             v
+E |- State' --> State''
+-----------------------
+           u.v
+E |- State ==> State''
+
+
+--------------------------------------------------------------------------------
+| Trace equivalence
+--------------------------------------------------------------------------------
+
+Traces(I, LT, E) =
+  let Init = ([], LT, CtxTurn, I) in
+                                 u
+  { u | exists Final, E |- Init ==> Final }
+
+same_traces (I, LT, E) (I', LT', E') ::=
+  Traces(I, LT, E) = Traces(I', LT', E')
+
+--------------------------------------------------------------------------------
+| What we want to prove
+--------------------------------------------------------------------------------
+
+First step:
+
+  exists c. c[compile P] /~ c[compile Q]
+    ->
+  Traces(compile P) delta Traces(compile Q) <> empty_set
+    where A delta B = (A union B) - (A inter B) : symmetric difference
+
+  or equivalently
+
+  Traces(compile P) delta Traces(compile Q) = empty_set
+    ->
+  forall c. c[compile P] ~ c[compile Q]
+
+Second step:
+
+  Traces(compile P) delta Traces(compile Q) <> empty_set
+    ->
+  exists C. C[P] /~ C[Q]
 
 ================================================================================
 | Symbolic micro-policy (compartmentalization variant)
