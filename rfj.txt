@@ -438,8 +438,9 @@ forall l in dom(LE),
     lr = lr' /\ la = la'
 forall o in dom(OE),
   let obj decl l = OE(o) in
-  let obj l' { ... } = OT(o) in
-  l = l'
+  let class { l1, ..., ln'; ... } = LT(l) in
+  let obj l' { o1, ..., on } = OT(o) in
+  l = l' /\ n = n'
 ---------------------------------------------
 E |- A wf
 
@@ -724,8 +725,6 @@ can be linked to get a new partial program P /\/\ Q.
 |     I'' |- A'' : E''
 --------------------------------------------------------------------------------
 
- (composition lemma)
-
 
 ================================================================================
 | Encodings
@@ -820,7 +819,7 @@ class Nat {
 --------------------------------------------------------------------------------
 | Progress
 --------------------------------------------------------------------------------
-| forall e l I A G, I |- A ok ->
+| forall e l I A E G, I |- A : E ->
 |                   I; A; G |- e : l ->
 |                     is_value e \/ exists e', e -->_A e'
 --------------------------------------------------------------------------------
@@ -828,7 +827,7 @@ class Nat {
 --------------------------------------------------------------------------------
 | Preservation (Subject reduction)
 --------------------------------------------------------------------------------
-| forall e e' l I A G, I |- A ok ->
+| forall e e' l I A E G, I |- A : E ->
 |                      I; A; G |- e : l ->
 |                      e -->_A e' ->
 |                      P; G |- e' : l
@@ -837,7 +836,7 @@ class Nat {
 --------------------------------------------------------------------------------
 | Type safety
 --------------------------------------------------------------------------------
-| forall e l I A G, I |- A ok ->
+| forall e l I A E G, I |- A : E ->
 |                   I; A; G |- e : l ->
 |                     is_value e \/
 |                       (exists e', e -->_A e' /\ I; A; G |- e' : l)
@@ -989,7 +988,7 @@ o ::= n                    instance name (where n is natural)
 f ::= n                    field index (where n is natural)
 m ::= n                    method index (where n is natural)
 
-P ::= (                    program
+P ::= (                    partial program
     I                        import declarations
     LT,                      the actual program (as a compartment table)
     E                        export declarations
@@ -1227,18 +1226,11 @@ Rules:
   --------------------------------
   |- linkable P Q
 
-P /\/\ P' ::==
-  let (LT, E) = P in
-  let (LE, OE) = E in
-  let (LT', E') = P' in
-  let (LE', OE') = E' in
-  let LT'' = LT disjoint_union LT' in
-  let LE'' = LE disjoint_union LE' in
-  let OE'' = OE disjoint_union OE' in
-  let E'' = (LE'', OE'') in
-  (LT'', E'')
-
-  when |- linkable P P'
+  P /\/\ Q ::= (
+    ((LI - LE') union (LI' - LE), (OI - OE') union (OI' - OE)),
+    LT disjoint_union LT',
+    (LE disjoint_union LE', OE disjoint_union OE')
+  ) when |- linkable P Q
 
 --------------------------------------------------------------------------------
 | Prop.: Linking preserves well-formedness
