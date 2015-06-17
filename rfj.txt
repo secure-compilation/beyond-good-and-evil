@@ -1061,11 +1061,6 @@ be lower level.
 | Def: Well-formedness
 --------------------------------------------------------------------------------
 
-TODO: Separate well-formedness and typing in the high-level, to relate
-well with the intermediate level; well-formedness is similar in the
-intermediate language, but we don't care about static typing here (we
-have dynamic typing instead).
-
 |- I wf            same as in the high-level
 I |- E wf          same as in the high-level
 E |- LT wf
@@ -1358,29 +1353,60 @@ all.
 | Labelled reduction
 --------------------------------------------------------------------------------
 
-Turn ::=
-    ProgTurn (GS, RF, code)
-  | CtxTurn
-
-State ::= (
-  GSs,         program stack frames (/!\ not context ones)
-  LT,          program compartment table (/!\ not context one)
-  Turn,        current ownership of the state (+ code being executed)
-  I            current information about the context
-)
-
-GSs ::= [] | GS :: GSs 
-
 We define a labelled reduction of the form:
 
               a
   E |- State --> State'
 
-
 a ::=          label
   | tau          internal step
   | o.m(o')      cross-boundary call
   | o            cross-boundary return
+
+In a given State, the control is either held by the program or by the
+context. Internal steps always preserve control ownership, while
+cross-boundary calls and returns always transfer control (either from
+the program to the context, or from the context to the program).
+
+State ::=
+  ProgState (  the program has control
+    RF,          register file
+    GSP,         program's view on the call stack
+    LT,          program's compartment table
+    code,        code being executed
+    I            current information about the context's definitions
+                 (stored as import declarations)
+  )
+| CtxState (   the context has control
+    /,           unknown register file
+    GSC,         program's view on the call stack
+    LT,          program's compartment table
+    /,           unknown code being executed
+    I            current information about the context's definitions
+                 (stored as import declarations)
+  )
+
+GSP ::=        program's view on the call stack
+               when the program has control
+  []
+| GS ::          program internal call frames
+        GSC      remainder of the global stack
+
+GSC ::=        program's view on the call stack
+               when the context has control
+  []
+| lr?          
+      :: GSP
+
+lr? ::=        option type
+  lr | /
+
+State ::= (
+  LT,          the program's compartment table
+  Turn,        current ownership of the state
+  I            current information about the context
+)
+
 
 
 1 - Internal program reductions
@@ -1390,8 +1416,8 @@ a ::=          label
 E |- (RF, GS, LT, code) --> (RF', GS', LT', code')
 --------------------------------------------------
                                             tau
-E |- (GSs, LT, ProgTurn (GS, RF, code), I) -->
-       (GSs, LT', ProgTurn (GS', RF', code'), I)
+E |- ProgState (RF, GS :: GSC, LT, code, I) -->
+       ProgState (RF', GS' :: GSC, LT', code', I)
 
 
 2 - Call from context code to program code
@@ -1422,9 +1448,9 @@ else
   I' = (LI, OI')                          keep track of its type
 fi
 -----------------------------------------------
-                        ot'.m(oa')
-E |- (GSs, LT, CtxTurn, I) -->
-       (GSs, LT, ProgTurn ([], RF', code'), I')
+                                    ot'.m(oa')
+E |- CtxState (/, / :: GSP, LT, /, I) -->
+       ProgState (RF', [] :: lr :: GSP, LT, code', I')
 
 
 3 - Return from context code to program code
@@ -1450,9 +1476,9 @@ else
   I' = (LI, OI')                          keep track of its type
 fi
 -------------------------------------------------
-                                  o
-E |- (GS :: GSs, LT, CtxTurn, I) -->
-       (GSs, LT', ProgTurn (GS', RF', code'), I')
+                                       o
+E |- CtxState (/, / :: GSP, LT, /, I) -->
+       ProgState (RF', GSP, LT, code', I')
 
 
 4 - Call from program code to context code
@@ -1480,10 +1506,9 @@ else
 fi
 GS' = (lr, RF, code') :: GS
 ---------------------------------------------------
-                                         ot'.m(oa')
-E |- (GSs, LT, ProgTurn (GS, RF, code), I) -->
-          (GS' :: GSs, LT', CtxTurn, I)
-
+                                          ot'.m(oa')
+E |- ProgState (RF, GS :: GSC, LT, code, I) -->
+       CtxState (/, / :: GS' :: GSC, LT', /, I)
 
 
 5 - Return from program code to context code
@@ -1496,14 +1521,18 @@ OE(RF(this)) = obj decl l
 LT(l) = { M1, ..., Mp; OLT; o :: LS }
 LT' = LT with l => { M1, ..., Mp; OLT; LS }
 code = Return :: _
-(* do we need to typecheck o against the
-   expected result type for our method?
-   or is it a job for the context? *)
-----------------------------------------------
-                                            o
-E |- (GSs, LT, ProgTurn ([], RF, code), I) -->
-       (GSs, LT', CtxTurn, I)
-
+if o in dom(OE) then
+  lr in dom(LE)
+  OE(o) = obj decl lr
+else
+  o in dom(OI)
+  lr in dom(LI)
+  OI(o) = obj decl lr
+fi
+-----------------------------------------------------
+                                                   o
+E |- ProgState (RF, [] :: lr :: GSP, LT, code, I) -->
+       CtxState (/, / :: GSP, LT', /, I)
 
 
 --------------------------------------------------------------------------------
