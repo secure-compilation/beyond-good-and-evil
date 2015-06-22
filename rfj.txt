@@ -50,6 +50,8 @@ e ::=                            expressions
   | e.f                            field selection
   | e.m(e)                         method call
   | e == e ? e : e                 object identity test
+  | e.f = e                        field update
+  | e; e                           sequence
 
 ================================================================================
 | Operational semantics
@@ -79,11 +81,12 @@ Big-step semantics
 
 The big-step semantics is described by statements of the form:
 
-  A; (ot, oa) |- e ==> o
+  LT; (ot, oa) |- (OT, e) ==> (OT', o)
 
-where A is the program; ot is the current "this" object; oa is the
-current argument object; e is the expression to evaluate; and o is the
-result value.
+where LT is the code of the program; ot is the current "this" object;
+oa is the current argument object; OT is the state before evaluation;
+e is the expression to evaluate; OT' is the state after evaluation;
+and o is the result value.
 
 (1) Our fields are private with class granularity, i.e.:
 * two objects of different classes cannot access each other's fields;
@@ -94,57 +97,73 @@ private fields.
 (resp. methods) are referred by their position in the class definition
 of the object.
 
--------------------------- THIS
-A; (ot, oa) |- this ==> ot
+--------------------------------------- THIS
+LT; (ot, oa) |- (OT, this) ==> (OT, ot)
 
 
-------------------------- ARG
-A; (ot, oa) |- arg ==> oa
+-------------------------------------- ARG
+LT; (ot, oa) |- (OT, arg) ==> (OT, oa)
 
 
----------------------- OBJ
-A; (ot, oa) |- o ==> o
+----------------------------------- OBJ
+LT; (ot, oa) |- (OT, o) ==> (OT, o)
 
 
-A; (ot, oa) |- e ==> o
-A = (OT, LT)
-OT(o) = obj l { o1, ..., on }
-OT(ot) = obj l { ... }               field privacy (granularity: class) (BCP:??)
-f = i in [1,n]                       (BCP:??)
+LT; (ot, oa) |- (OT, e) ==> (OT', o)
+OT'(o) = obj l { o1, ..., on }
+OT'(ot) = obj l { ... }              ensures field privacy
+                                     (granularity: class) (BCP:??)
+f in [1,n]                           (BCP:??)
                                      (YJ: More explanations on this in
 				     (1) and (2) above, which we
 				     should keep in the document. If
 				     this is not enough, could I have
 				     a more explicit question?)
------------------------------ SEL
-A; (ot, oa) |- e.f ==> oi
+--------------------------------------- SEL
+LT; (ot, oa) |- (OT, e.f) ==> (OT', oi)
 
 
-A; (ot, oa) |- e1 ==> ot'
-A; (ot, oa) |- e2 ==> oa'
-A = (OT, LT)
-OT(ot') = obj l { o1, ..., on }
+LT; (ot, oa) |- (OT1, e1) ==> (OT2, ot')
+LT; (ot, oa) |- (OT2, e2) ==> (OT3, oa')
+OT3(ot') = obj l { o1, ..., on }
 LT(l) = class { ... ; M1, ..., Mp }
 Mj = lr (la) { e }
-m = j in [1,p]
-A; (ot', oa') |- e ==> o
------------------------------------ CALL
-A; (ot, oa) |- e1.m(e2) ==> o
+m in [1,p]
+LT; (ot', oa') |- (OT3, e) ==> (OT4, o)
+-------------------------------------------- CALL
+LT; (ot, oa) |- (OT1, e1.m(e2)) ==> (OT4, o)
 
 
-e1 ==> o12
-e2 ==> o12
-e3 ==> o3
----------------------------------------- TESTEQ
-A; (ot, oa) |- e1 == e2 ? e3 : e4 ==> o3
+LT; (ot, oa) |- (OT1, e1) ==> (OT2, o12)
+LT; (ot, oa) |- (OT2, e2) ==> (OT3, o12)
+LT; (ot, oa) |- (OT3, e3) ==> (OT4, o3)
+------------------------------------------------------- TESTEQ
+LT; (ot, oa) |- (OT1, e1 == e2 ? e3 : e4) ==> (OT4, o3)
 
 
-e1 ==> o1
-e2 ==> o2
+LT; (ot, oa) |- (OT1, e1) ==> (OT2, o1)
+LT; (ot, oa) |- (OT2, e2) ==> (OT3, o2)
 o1 <> o2
-e4 ==> o4
----------------------------------------- TESTNEQ
-A; (ot, oa) |- e1 == e2 ? e3 : e4 ==> o4
+LT; (ot, oa) |- (OT3, e4) ==> (OT4, o4)
+----------------------------------------- TESTNEQ
+LT; (ot, oa) |- e1 == e2 ? e3 : e4 ==> o4
+
+
+LT; (ot, oa) |- (OT1, e1) ==> (OT2, o)
+LT; (ot, oa) |- (OT2, e2) ==> (OT3, o')
+A = (LT, OT)
+OT3(o) = obj l { o1, ..., on }
+OT3(ot) = obj l { ... }
+f in [1,n]
+OT3' = OT3 with o => { o1, ..., of-1, o', of+1, ..., on }
+--------------------------------------------------------- UPD
+LT; (ot, oa) |- (OT1, e1.f = e2) ==> (OT3', o')
+
+
+LT; (ot, oa) |- (OT1, e1) ==> (OT2, o)
+LT; (ot, oa) |- (OT2, e2) ==> (OT3, o')
+--------------------------------------------- SEQ
+LT; (ot, oa) |- (OT1, (e1; e2)) ==> (OT3, o')
 
 
 Small-step semantics
@@ -152,10 +171,10 @@ Small-step semantics
 
 The small-step semantics is described by statements of the form:
 
-  A |- Cfg --> Cfg'
+  LT |- Cfg --> Cfg'
 
-where A is the program; Cfg is the configuration being reduced; and
-Cfg' the reduced configuration.
+where LT is the constant part of the program (its code); Cfg is the
+configuration being reduced; and Cfg' the reduced configuration.
 
 
 E ::=                            flat evaluation contexts
@@ -164,6 +183,10 @@ E ::=                            flat evaluation contexts
   | o.m([])
   | [] == e2 ? e3 : e4
   | o1 == [] ? e3 : e4
+  | [].f = e2
+  | o1.f = []
+  | []; e
+
 
 K ::= []                         continuations (lists of flat eval contexts)
   | E :: K
@@ -172,69 +195,105 @@ CS ::= []                        call stack
   | (ot, oa, K) :: CS
 
 Cfg ::=                          reduction configurations
-  | (CS, ot, oa, K, e)
+  | (OT, CS, ot, oa, K, e)
 
 
--------------------------------------------------- THIS
-A |- (CS, ot, oa, K, this) --> (CS, ot, oa, K, ot)
+----------------------------------- THIS
+LT |- (OT, CS, ot, oa, K, this) -->
+      (OT, CS, ot, oa, K, ot)
 
 
-------------------------------------------------- ARG
-A |- (CS, ot, oa, K, arg) --> (CS, ot, oa, K, oa)
+---------------------------------- ARG
+LT |- (OT, CS, ot, oa, K, arg) -->
+      (OT, CS, ot, oa, K,  oa)
 
 
--------------------------------------------------------- SEL_PUSH
-A |- (CS, ot, oa, K, e.f) --> (CS, ot, oa, [].f :: K, e)
+------------------------------------------ SEL_PUSH
+LT |- (OT, CS, ot, oa,         K, e.f) -->
+      (OT, CS, ot, oa, [].f :: K,   e)
 
 
-A = (OT, LT)
 OT(o) = obj l { o1, ..., on }
 OT(ot) = obj l { ... }               field privacy (granularity: class)
-f = i in [1,n]
-------------------------------------------------------- SEL_POP
-A |- (CS, ot, oa, [].f :: K, o) --> (CS, ot, oa, K, oi)
+f in [1,n]
+----------------------------------------- SEL_POP
+LT |- (OT, CS, ot, oa, [].f :: K,  o) -->
+      (OT, CS, ot, oa,         K, of)
 
 
------------------------------------------------------------------- CALL_PUSH1
-A |- (CS, ot, oa, K, e1.m(e2)) --> (CS, ot, oa, [].m(e2) :: K, e1)
+--------------------------------------------------- CALL_PUSH
+LT |- (OT, CS, ot, oa,             K, e1.m(e2)) -->
+      (OT, CS, ot, oa, [].m(e2) :: K,       e1)
 
 
------------------------------------------------------------------------- CALL_PUSH2
-A |- (CS, ot, oa, [].m(e2) :: K, o1) --> (CS, ot, oa, o1.m([]) :: K, e2)
+--------------------------------------------- CALL_SWITCH
+LT |- (OT, CS, ot, oa, [].m(e2) :: K, o1) -->
+      (OT, CS, ot, oa, o1.m([]) :: K, e2)
 
-A = (OT, LT)
 OT(ot') = obj l { o1, ..., on }
 LT(l) = class { ... ; M1, ..., Mp }
 Mj = lr (la) { e }
 m = j in [1,p]
------------------------------------------------------------ CALL_DO
-A |- (               CS, ot,  oa,  ot'.m([]) :: K, oa') -->
-     ((ot, oa, K) :: CS, ot', oa',              K, e)
+---------------------------------------------------------------- CALL_POP
+LT |- (OT,                CS, ot,  oa,  ot'.m([]) :: K, oa') -->
+      (OT, (ot, oa, K) :: CS, ot', oa',              K, e)
 
 
----------------------------------------------------------------- RETURN
-A |- ((ot', oa', K) :: CS, _, _, [], o) --> (CS, ot', oa', K, o)
+---------------------------------------------------- RETURN
+LT |- (OT, (ot', oa', K) :: CS, _,     _, [], o) -->
+      (OT,                  CS, ot', oa',  K, o)
 
 
------------------------------------------------------------------- TEST_PUSH1
-A |- (CS, ot, oa,                       K, e1 == e2 ? e3 : e4) -->
-     (CS, ot, oa, [] == e2 ? e3 : e4 :: K, e1)
+----------------------------------------------------------------------- TEST_PUSH
+LT |- (OT, CS, ot, oa,                       K, e1 == e2 ? e3 : e4) -->
+      (OT, CS, ot, oa, [] == e2 ? e3 : e4 :: K, e1)
 
 
--------------------------------------------------- TEST_PUSH2
-A |- (CS, ot, oa, [] == e2 ? e3 : e4 :: K, o1) -->
-     (CS, ot, oa, o1 == [] ? e3 : e4 :: K, e2)
+------------------------------------------------------- TEST_SWITCH
+LT |- (OT, CS, ot, oa, [] == e2 ? e3 : e4 :: K, o1) -->
+      (OT, CS, ot, oa, o1 == [] ? e3 : e4 :: K, e2)
 
 
------------------------------------------------- TEST_POP_EQ
-A |- (CS, ot, oa, o == [] ? e3 : e4 :: K, o) -->
-     (CS, ot, oa,                      K, e3)
+------------------------------------------------------ TEST_POP_EQ
+LT |- (OT, CS, ot, oa, o == [] ? e3 : e4 :: K,  o) -->
+      (OT, CS, ot, oa,                      K, e3)
 
 o <> o'
-------------------------------------------------- TEST_POP_NEQ
-A |- (CS, ot, oa, o == [] ? e3 : e4 :: K, o') -->
-     (CS, ot, oa, K,                      e4)
+------------------------------------------------------ TEST_POP_NEQ
+LT |- (OT, CS, ot, oa, o == [] ? e3 : e4 :: K, o') -->
+      (OT, CS, ot, oa,                      K, e4)
 
+
+-------------------------------------------------------- UPD_PUSH
+LT |- (OT, CS, ot, oa,                K, (e.f = e')) -->
+      (OT, CS, ot, oa, ([].f = e') :: K,          e)
+
+
+----------------------------------------------- UPD_SWITCH
+LT |- (OT, CS, ot, oa, ([].f = e') :: K,  o) -->
+      (OT, CS, ot, oa,  (o.f = []) :: K, e')
+
+
+OT(o) = obj l { o1, ..., on }
+OT(ot) = obj l { ... }
+f in [1,n]
+OT' = OT with o => { o1, ..., of-1, o', of+1, ..., on }
+------------------------------------------------------- UPD_POP
+LT |- (OT,  CS, ot, oa, (o.f = []) :: K, o') -->
+      (OT', CS, ot, oa,               K, o')
+
+
+-------------------------------------------------- SEQ_PUSH
+LT |- (OT, CS, ot, oa,             K, (e; e')) -->
+      (OT, CS, ot, oa, ([]; e') :: K,       e)
+
+
+--------------------------------------------- SEQ_POP
+LT |- (OT, CS, ot, oa, ([]; e') :: K,  o) -->
+      (OT, CS, ot, oa,             K, e')
+
+
+Checkpoint: After this point the document is outdated.
 
 Notations for reductions between configurations
 ===============================================
