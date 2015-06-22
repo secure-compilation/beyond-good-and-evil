@@ -1374,17 +1374,21 @@ State ::=
     GSP,         program's view on the call stack
     LT,          program's compartment table
     code,        code being executed
-    I            current information about the context's definitions
+    I,           current information about the context's definitions
                  (stored as import declarations)
+    status       informs whether program execution is over
   )
 | CtxState (   the context has control
-    /,           unknown register file
+    /,           register file unknown to the program
     GSC,         program's view on the call stack
     LT,          program's compartment table
-    /,           unknown code being executed
-    I            current information about the context's definitions
-                 (stored as import declarations)
+    /,           code being executed unknown to the program
+    I,           current information about the context's definitions
+                 (stored as import declarations),
+    status       informs whether program execution is over
   )
+
+status ::= Running | Done
 
 GSP ::=        program's view on the call stack
                when the program has control
@@ -1394,19 +1398,12 @@ GSP ::=        program's view on the call stack
 
 GSC ::=        program's view on the call stack
                when the context has control
-  []
-| lr?          
-      :: GSP
+  lr?
+| lr?            top context call frame return type, if known to the program
+      :: GSP     remainder of the call stack
 
 lr? ::=        option type
   lr | /
-
-State ::= (
-  LT,          the program's compartment table
-  Turn,        current ownership of the state
-  I            current information about the context
-)
-
 
 
 1 - Internal program reductions
@@ -1414,10 +1411,10 @@ State ::= (
 
 
 E |- (RF, GS, LT, code) --> (RF', GS', LT', code')
---------------------------------------------------
-                                            tau
-E |- ProgState (RF, GS :: GSC, LT, code, I) -->
-       ProgState (RF', GS' :: GSC, LT', code', I)
+----------------------------------------------------------
+                                                    tau
+E |- ProgState (RF, GS :: GSC, LT, code, I, Running) -->
+       ProgState (RF', GS' :: GSC, LT', code', I, Running)
 
 
 2 - Call from context code to program code
@@ -1447,10 +1444,16 @@ else
   OI' = OI with oa' => obj decl la        first time oa' is encountered
   I' = (LI, OI')                          keep track of its type
 fi
------------------------------------------------
-                                    ot'.m(oa')
-E |- CtxState (/, / :: GSP, LT, /, I) -->
-       ProgState (RF', [] :: lr :: GSP, LT, code', I')
+match GSC with
+| / :: GSP ->
+    GSP' = [] :: lr :: GSP
+| / ->
+    GSP' = [] :: lr
+end
+---------------------------------------------------------------
+                                        ot'.m(oa')
+E |- CtxState (/, GSC, LT, /, I, Running) -->
+       ProgState (RF', GSP', LT, code', I', Running)
 
 
 3 - Return from context code to program code
@@ -1475,10 +1478,10 @@ else
   OI' = OI with o => obj decl lr          first time o is encountered
   I' = (LI, OI')                          keep track of its type
 fi
--------------------------------------------------
-                                       o
-E |- CtxState (/, / :: GSP, LT, /, I) -->
-       ProgState (RF', GSP, LT, code', I')
+---------------------------------------------------
+                                                o
+E |- CtxState (/, / :: GSP, LT, /, I, Running) -->
+       ProgState (RF', GSP, LT, code', I', Running)
 
 
 4 - Call from program code to context code
@@ -1505,10 +1508,10 @@ else
   OI(oa') = obj decl la'
 fi
 GS' = (lr, RF, code') :: GS
----------------------------------------------------
-                                          ot'.m(oa')
-E |- ProgState (RF, GS :: GSC, LT, code, I) -->
-       CtxState (/, / :: GS' :: GSC, LT', /, I)
+-------------------------------------------------------------
+                                                   ot'.m(oa')
+E |- ProgState (RF, GS :: GSC, LT, code, I, Running) -->
+       CtxState (/, / :: GS' :: GSC, LT', /, I, Running)
 
 
 5 - Return from program code to context code
@@ -1529,11 +1532,35 @@ else
   lr in dom(LI)
   OI(o) = obj decl lr
 fi
------------------------------------------------------
-                                                   o
-E |- ProgState (RF, [] :: lr :: GSP, LT, code, I) -->
-       CtxState (/, / :: GSP, LT', /, I)
+match GSC with
+| lr' :: GSP ->
+    lr' = lr /\
+    GSC' = / :: GSP
+| lr' ->
+    lr' = lr /\
+    GSC' = /
+end
+--------------------------------------------------------
+                                                      o
+E |- ProgState (RF, [] :: GSC, LT, code, I, Running) -->
+       CtxState (/, GSC', LT', /, I, Running)
 
+
+6 - Termination from context code
+=================================
+
+-------------------------------------------
+                                       tick
+E |- CtxState (/, /, LT, /, I, Running) -->
+       CtxState (/, /, LT, /, I, Done)
+
+7 - Termination from program code
+=================================
+
+---------------------------------------------------------------
+                                                           tick
+E |- ProgState (RF, [] :: GSC, LT, Return :: _, I, Running) -->
+       ProgState (RF, [] :: GSC, LT, [], I, Done)
 
 --------------------------------------------------------------------------------
 | Traces
@@ -1554,26 +1581,146 @@ E |- State ==> State'
         as_word(o.m(o')) = o.m(o') (as a word of length 1)
 
             u
-E |- State --> State'
+E |- State ==> State'
              v
-E |- State' --> State''
+E |- State' ==> State''
 -----------------------
            u.v
 E |- State ==> State''
-
-CH: We probably need to mark termination (just stuckness) in the trace
 
 --------------------------------------------------------------------------------
 | Trace equivalence
 --------------------------------------------------------------------------------
 
 Traces(I, LT, E) =
-  let Init = ([], LT, CtxTurn, I) in
+  let Init = CtxState (/, [], LT, /, I) in
                                  u
   { u | exists State, E |- Init ==> State }
 
 same_traces (I, LT, E) (I', LT', E') ::=
   Traces(I, LT, E) = Traces(I', LT', E')
+
+--------------------------------------------------------------------------------
+| Mergeable states
+--------------------------------------------------------------------------------
+
+State = ProgState (RF, GSP, LT,  code, I,  status)
+State' = CtxState (/,  GSC, LT', /,    I', status)
+|- linkable (I, LT, E) (I', LT', E')
+|- compatible_views GSP GSC
+--------------------------------------------------
+E; E' |- mergeable State State'
+
+
+E'; E |- mergeable State' State
+------------------------------- SYM
+E; E' |- mergeable State State'
+
+
+-------------------------
+|- compatible_views [] []
+
+
+GSP = _ :: GSC'
+GSC = / :: GSP'
+|- compatible_views_rec GSP' GSC'
+---------------------------------
+|- compatible_views GSP GSC
+
+
+-----------------------------
+|- compatible_views_rec [] []
+
+
+GSP = ((lr, _, _) :: _) :: GSC'
+GSC = lr :: GSP'
+|- compatible_views_rec GSP' GSC
+-------------------------------
+|- compatible_views_rec GSP GSC
+
+--------------------------------------------------------------------------------
+| State merging
+--------------------------------------------------------------------------------
+
+merge (E, E', State, State') ::=
+  match (State, State') with
+  | ProgState (RF, GSP, LT,  code, I,  _),
+    CtxState  (/,  GSC, LT', /,    I', _) ->
+      let (I'', LT'', E'') = (I, LT, E) /\/\ (I', LT', E') in
+      (I'', (RF, merge GSP GSC, LT'', code), E'')
+  | CtxState _, ProgState _ ->
+      merge State' State
+   when E; E' |- mergeable State State'.
+
+merge GSP GSC ::=
+  match (GSP, GSC) with
+  | [], [] -> []
+  | GS :: GSC',
+    _  :: GSP' ->
+      GS ++ merge GSP' GSC'
+
+  when |- compatible_views GSP GSC
+
+--------------------------------------------------------------------------------
+| Trace composition
+--------------------------------------------------------------------------------
+
+forall E E1 E2 State1 State2 s t State1' State2',
+
+if E1; E2 |- mergeable State1 State2
+
+   /\ ((empty_map, empty_map), s, E, status) = merge (E1, E2, State1, State2)
+
+                    t
+   /\ E1 |- State1 ==> State1'
+
+                    t
+   /\ E2 |- State2 ==> State2'
+
+then |- mergeable State1' State2'
+
+     /\ exists s',
+
+          ((empty_map, empty_map), s', E, _) = merge (E1, E2, State1', State2')
+
+          /\ E |- s -->* s'
+
+--------------------------------------------------------------------------------
+| Trace decomposition
+--------------------------------------------------------------------------------
+
+forall E E1 E2 State1 State2 s s',
+
+if E1; E2 |- mergeable State1 State2
+
+   /\ ((empty_map, empty_map), s, E) = merge (E1, E2, State1, State2)
+
+   /\ E |- s -->* s'
+
+then exists t State1' State2',
+
+                     t
+       E1 |- State1 ==> State1'
+
+                        t
+       /\ E2 |- State2 ==> State2'
+
+       /\ |- mergeable State1' State2'
+
+       /\ ((empty_map, empty_map), s', E) = merge (E1, E2, State1', State2')
+
+
+--------------------------------------------------------------------------------
+| Trace semantics soundness
+--------------------------------------------------------------------------------
+| forall p q, Traces(p) = Traces(q) -> forall c, c[p] ~ c[q]
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+| Trace semantics completeness wrt high-level programs
+--------------------------------------------------------------------------------
+| forall P Q, (forall C, C[P] ~ C[Q]) -> Traces(compile P) = Traces(compile Q)
+--------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 | What we want to prove
