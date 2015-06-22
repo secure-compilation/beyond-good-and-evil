@@ -293,20 +293,18 @@ LT |- (OT, CS, ot, oa, ([]; e') :: K,  o) -->
       (OT, CS, ot, oa,             K, e')
 
 
-Checkpoint: After this point the document is outdated.
-
 Notations for reductions between configurations
 ===============================================
 
-For every program A, we define three relations -->_A, -/->_A and
--->*_A between configurations as follows:
+For every class table LT, we define three relations -->_LT, -/->_LT
+and -->*_LT between configurations as follows:
 
-Cfg -->_A Cfg' ::= A |- Cfg --> Cfg'
+Cfg -->_LT Cfg' ::= LT |- Cfg --> Cfg'
 
-Cfg -/->_A Cfg' ::= ~ (Cfg -->_A Cfg')
-                    i.e. (Cfg -->_A Cfg') -> _|_
+Cfg -/->_LT Cfg' ::= ~ (Cfg -->_LT Cfg')
+                    i.e. (Cfg -->_LT Cfg') -> _|_
 
--->*_A ::= reflexive and transitive closure of -->_A
+-->*_LT ::= the reflexive and transitive closure of -->_LT
 
 
 Properties
@@ -315,17 +313,17 @@ Properties
 --------------------------------------------------------------------------------
 | Prop.: Relation between big-step and small-step semantics (hopefully)
 --------------------------------------------------------------------------------
-| forall A ot oa e o,
-|   A; (ot, oa) |- e ==> o
+| forall LT OT OT' ot oa e o,
+|   LT; (ot, oa) |- (OT, e) ==> (OT', o)
 |     <->
-|   ([], ot, oa, [], e) -->*_A ([], ot, oa, [], o)
+|   (OT, [], ot, oa, [], e) -->*_LT (OT', [], ot, oa, [], o)
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 | Prop.: Values do not reduce
 --------------------------------------------------------------------------------
-| forall o A ot oa Cfg',
-|   ([], ot, oa, [], o) -/->_A Cfg'
+| forall o LT OT ot oa Cfg',
+|   (OT, [], ot, oa, [], o) -/->_LT Cfg'
 --------------------------------------------------------------------------------
 
 Proof: No rule applies with such a configuration in the left-hand side.
@@ -333,18 +331,19 @@ Proof: No rule applies with such a configuration in the left-hand side.
 --------------------------------------------------------------------------------
 | Prop.: Reduction is deterministic
 --------------------------------------------------------------------------------
-| forall Cfg Cfg' Cfg'',
-|    Cfg --> Cfg'  ->
-|    Cfg --> Cfg'' ->
+| forall LT Cfg Cfg' Cfg'',
+|    Cfg -->_LT Cfg'  ->
+|    Cfg -->_LT Cfg'' ->
 |      Cfg' = Cfg''
 --------------------------------------------------------------------------------
 
 Proof: We show that at most one rule applies with Cfg as the left-hand
-side. Let (_, _, _, K, e) = Cfg. By case on e:
+side. Let (_, _, _, _, K, e) = Cfg. By case on e:
 * if e is not an o:
     at most one rule applies depending on e (syntax-directed):
       this -> THIS, arg -> ARG, e.f -> SEL_PUSH,
-      e.m(e') -> CALL_PUSH1, e1 == e2 ? e3 : e4 -> TEST_PUSH1;
+      e.m(e') -> CALL_PUSH, e1 == e2 ? e3 : e4 -> TEST_PUSH,
+      e.f = e' -> UPD_PUSH, (e; e') -> SEQ_PUSH;
 * if e is an o:
   * if K is empty, only RETURN may apply;
   * otherwise, by case on the head E of K:
@@ -353,8 +352,10 @@ side. Let (_, _, _, K, e) = Cfg. By case on e:
       exclusive;
     * otherwise, at most one rule applies depending on E
       (syntax-directed):
-        [].f -> SEL_POP, [].m(e) -> CALL_PUSH2,
-        o.m([]) -> CALL_DO, [] == e2 ? e3 : e4 -> TEST_PUSH2.
+        [].f -> SEL_POP, [].m(e) -> CALL_SWITCH,
+        o.m([]) -> CALL_POP, [] == e2 ? e3 : e4 -> TEST_SWITCH,
+	[].f = e2 -> UPD_SWITCH, o1.f = [] -> UPD_POP,
+ 	[]; e -> SEQ_POP.
 
 
 Semantics of programs
@@ -369,9 +370,9 @@ We define a reduction relation between programs and values as follows:
   A = (LT, OT)
   LT(0) = class { ...; 0 (0) { e } }
   OT(0) = obj 0 { ... }
-  A; (0, 0) |- e ==> v
+  LT; (0, 0) |- (OT, e) ==> (OT', o)
   ----------------------------------
-  |- A ==> v
+  |- A ==> o
 
 Note: We define later evaluable programs, which can be seen as
   particular well-typed programs which trivially satisfy the two
@@ -503,7 +504,6 @@ forall o in dom(OE),
 ---------------------------------------------
 E |- A wf
 
-
 ================================================================================
 | Type system
 ================================================================================
@@ -614,6 +614,20 @@ D; A; G |- e4 : l
 ----------------------------------- TTEST
 D; A; G |- (e1 == e2 ? e3 : e4) : l
 
+
+D; A; G |- e : l
+G(this) = l                                   ensures field privacy
+A = (LT, _)
+LT(l) = class { l1, ..., ln; ... }
+f in [1,n]
+D; A; G |- e' : lf
+---------------------------------- TUPD
+D; A; G |- e.f = e' : lf
+
+D; A; G |- e : l
+D; A; G |- e' : l'
+---------------------------------- TSEQ
+D; A; G |- (e; e') : l'
 
 --------------------------------------------------------------------------------
 | Def.: Complete programs
@@ -868,6 +882,8 @@ class Nat {
 
 }
 
+
+Checkpoint: After this point the document is outdated.
 
 ================================================================================
 | Properties of our type system
