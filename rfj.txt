@@ -50,7 +50,7 @@ e ::=                            expressions
   | e.f                            field selection
   | e.m(e)                         method call
   | e == e ? e : e                 object identity test
-  | e.f = e                        field update
+  | e.f := e                       field update
   | e; e                           sequence
 
 ================================================================================
@@ -157,7 +157,7 @@ OT3(ot) = obj l { ... }
 f in [1,n]
 OT3' = OT3 with o => { o1, ..., of-1, o', of+1, ..., on }
 --------------------------------------------------------- UPD
-LT; (ot, oa) |- (OT1, e1.f = e2) ==> (OT3', o')
+LT; (ot, oa) |- (OT1, e1.f := e2) ==> (OT3', o')
 
 
 LT; (ot, oa) |- (OT1, e1) ==> (OT2, o)
@@ -622,7 +622,7 @@ LT(l) = class { l1, ..., ln; ... }
 f in [1,n]
 D; A; G |- e' : lf
 ---------------------------------- TUPD
-D; A; G |- e.f = e' : lf
+D; A; G |- e.f := e' : lf
 
 D; A; G |- e : l
 D; A; G |- e' : l'
@@ -1449,6 +1449,10 @@ a ::=          label
   | tau          internal step
   | o.m(o')      cross-boundary call
   | o            cross-boundary return
+
+CH: I think it would be useful for clarity to add back the "!" and
+    "?", I don't really care about saving one bit of information if we
+    need the whole trace to reconstruct it
 
 In a given State, the control is either held by the program or by the
 context. Internal steps always preserve control ownership, while
