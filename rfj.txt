@@ -48,9 +48,9 @@ e ::=                            expressions
   | x                              variables
   | o                              object reference
   | e.f                            field selection
+  | e.f := e                       field update
   | e.m(e)                         method call
   | e == e ? e : e                 object identity test
-  | e.f := e                       field update
   | e; e                           sequence
 
 ================================================================================
@@ -123,6 +123,17 @@ f in [1,n]                           (BCP:??)
 LT; (ot, oa) |- (OT, e.f) ==> (OT', oi)
 
 
+LT; (ot, oa) |- (OT1, e1) ==> (OT2, o)
+LT; (ot, oa) |- (OT2, e2) ==> (OT3, o')
+A = (LT, OT)
+OT3(o) = obj l { o1, ..., on }
+OT3(ot) = obj l { ... }
+f in [1,n]
+OT3' = OT3 with o => { o1, ..., of-1, o', of+1, ..., on }
+--------------------------------------------------------- UPD
+LT; (ot, oa) |- (OT1, e1.f := e2) ==> (OT3', o')
+
+
 LT; (ot, oa) |- (OT1, e1) ==> (OT2, ot')
 LT; (ot, oa) |- (OT2, e2) ==> (OT3, oa')
 OT3(ot') = obj l { o1, ..., on }
@@ -151,17 +162,6 @@ LT; (ot, oa) |- e1 == e2 ? e3 : e4 ==> o4
 
 LT; (ot, oa) |- (OT1, e1) ==> (OT2, o)
 LT; (ot, oa) |- (OT2, e2) ==> (OT3, o')
-A = (LT, OT)
-OT3(o) = obj l { o1, ..., on }
-OT3(ot) = obj l { ... }
-f in [1,n]
-OT3' = OT3 with o => { o1, ..., of-1, o', of+1, ..., on }
---------------------------------------------------------- UPD
-LT; (ot, oa) |- (OT1, e1.f := e2) ==> (OT3', o')
-
-
-LT; (ot, oa) |- (OT1, e1) ==> (OT2, o)
-LT; (ot, oa) |- (OT2, e2) ==> (OT3, o')
 --------------------------------------------- SEQ
 LT; (ot, oa) |- (OT1, (e1; e2)) ==> (OT3, o')
 
@@ -179,12 +179,12 @@ configuration being reduced; and Cfg' the reduced configuration.
 
 E ::=                            flat evaluation contexts
   | [].f
+  | [].f := e2
+  | o1.f := []
   | [].m(e)
   | o.m([])
   | [] == e2 ? e3 : e4
   | o1 == [] ? e3 : e4
-  | [].f = e2
-  | o1.f = []
   | []; e
 
 
@@ -219,6 +219,25 @@ f in [1,n]
 ----------------------------------------- SEL_POP
 LT |- (OT, CS, ot, oa, [].f :: K,  o) -->
       (OT, CS, ot, oa,         K, of)
+
+
+---------------------------------------------------------- UPD_PUSH
+LT |- (OT, CS, ot, oa,               K, e.f := e') -->
+      (OT, CS, ot, oa, [].f := e' :: K,         e)
+
+
+----------------------------------------------- UPD_SWITCH
+LT |- (OT, CS, ot, oa, [].f := e' :: K,  o) -->
+      (OT, CS, ot, oa,  o.f := [] :: K, e')
+
+
+OT(o) = obj l { o1, ..., on }
+OT(ot) = obj l { ... }
+f in [1,n]
+OT' = OT with o => { o1, ..., of-1, o', of+1, ..., on }
+------------------------------------------------------- UPD_POP
+LT |- (OT,  CS, ot, oa, o.f := [] :: K, o') -->
+      (OT', CS, ot, oa,              K, o')
 
 
 --------------------------------------------------- CALL_PUSH
@@ -262,25 +281,6 @@ o <> o'
 ------------------------------------------------------ TEST_POP_NEQ
 LT |- (OT, CS, ot, oa, o == [] ? e3 : e4 :: K, o') -->
       (OT, CS, ot, oa,                      K, e4)
-
-
--------------------------------------------------------- UPD_PUSH
-LT |- (OT, CS, ot, oa,                K, (e.f = e')) -->
-      (OT, CS, ot, oa, ([].f = e') :: K,          e)
-
-
------------------------------------------------ UPD_SWITCH
-LT |- (OT, CS, ot, oa, ([].f = e') :: K,  o) -->
-      (OT, CS, ot, oa,  (o.f = []) :: K, e')
-
-
-OT(o) = obj l { o1, ..., on }
-OT(ot) = obj l { ... }
-f in [1,n]
-OT' = OT with o => { o1, ..., of-1, o', of+1, ..., on }
-------------------------------------------------------- UPD_POP
-LT |- (OT,  CS, ot, oa, (o.f = []) :: K, o') -->
-      (OT', CS, ot, oa,               K, o')
 
 
 -------------------------------------------------- SEQ_PUSH
@@ -341,9 +341,9 @@ Proof: We show that at most one rule applies with Cfg as the left-hand
 side. Let (_, _, _, _, K, e) = Cfg. By case on e:
 * if e is not an o:
     at most one rule applies depending on e (syntax-directed):
-      this -> THIS, arg -> ARG, e.f -> SEL_PUSH,
+      this -> THIS, arg -> ARG, e.f -> SEL_PUSH, e.f := e' -> UPD_PUSH,
       e.m(e') -> CALL_PUSH, e1 == e2 ? e3 : e4 -> TEST_PUSH,
-      e.f = e' -> UPD_PUSH, (e; e') -> SEQ_PUSH;
+      (e; e') -> SEQ_PUSH;
 * if e is an o:
   * if K is empty, only RETURN may apply;
   * otherwise, by case on the head E of K:
@@ -352,10 +352,11 @@ side. Let (_, _, _, _, K, e) = Cfg. By case on e:
       exclusive;
     * otherwise, at most one rule applies depending on E
       (syntax-directed):
-        [].f -> SEL_POP, [].m(e) -> CALL_SWITCH,
-        o.m([]) -> CALL_POP, [] == e2 ? e3 : e4 -> TEST_SWITCH,
-	[].f = e2 -> UPD_SWITCH, o1.f = [] -> UPD_POP,
- 	[]; e -> SEQ_POP.
+        [].f -> SEL_POP,
+        [].f := e2 -> UPD_SWITCH, o1.f := [] -> UPD_POP,
+        [].m(e) -> CALL_SWITCH, o.m([]) -> CALL_POP,
+        [] == e2 ? e3 : e4 -> TEST_SWITCH,
+        []; e -> SEQ_POP.
 
 
 Semantics of programs
@@ -587,6 +588,17 @@ f in [1,n]
 D; A; G |- e.f : lf
 
 
+
+D; A; G |- e : l
+G(this) = l                                   ensures field privacy
+A = (LT, _)
+LT(l) = class { l1, ..., ln; ... }
+f in [1,n]
+D; A; G |- e' : lf
+---------------------------------- TUPD
+D; A; G |- e.f := e' : lf
+
+
 D; A; G |- e : l
 A = (LT, _)
 LT(l) = class { ...; M1, ..., Mp }
@@ -614,15 +626,6 @@ D; A; G |- e4 : l
 ----------------------------------- TTEST
 D; A; G |- (e1 == e2 ? e3 : e4) : l
 
-
-D; A; G |- e : l
-G(this) = l                                   ensures field privacy
-A = (LT, _)
-LT(l) = class { l1, ..., ln; ... }
-f in [1,n]
-D; A; G |- e' : lf
----------------------------------- TUPD
-D; A; G |- e.f := e' : lf
 
 D; A; G |- e : l
 D; A; G |- e' : l'
@@ -1012,9 +1015,6 @@ behave the same with respect to termination. That is:
    terminates A ::= exists o, |- A ==> o
 
 
-Checkpoint: After this point the document is outdated (no field
-assignment nor sequence).
-
 ================================================================================
 | Intermediate machine
 ================================================================================
@@ -1138,6 +1138,10 @@ instr ::=                  instruction
                                pop twice, then skip n instructions
 			       (forward jump) if the two references
 			       refer to the same object
+  | Update f                 field update
+                               pop twice, push back
+  | Drop                     drop
+                               pop, do nothing with the popped object
 
 Note: At this level we make no distinction between inter- and intra-
 compartment calls. If we were to need this distinction it would anyway
@@ -1247,6 +1251,17 @@ Rules:
   ----------------------------------------------------------- SELECT
   E |- (RF, GS, LT, Select f :: code) --> (RF, GS, LT', code)
 
+  E = (_, OE)
+  OE(RF(this)) = obj decl l
+  LT(l) = { M1, ..., Mp; LOT; o' :: o :: LS }
+  OE(o) = obj decl l                    requiring l here ensures field
+  LOT(o) = (o1, ..., on)                                       privacy
+  1 <= f <= n
+  LOT' = LOT with o => (o1, ..., of-1, o', of+1, ..., on)
+  LT' = LT with l => { M1, ..., Mp; LOT'; o' :: LS }
+  ----------------------------------------------------------- UPD
+  E |- (RF, GS, LT, Update f :: code) --> (RF, GS, LT', code)
+
   E = (LE, OE)
   OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; oa' :: ot' :: LS }
@@ -1300,6 +1315,13 @@ Rules:
   LT' = LT with l => { M1, ..., Mp; LOT; LS }
   -------------------------------------------------------- BEQ-NEQ
   E |- (RF, GS, LT, Beq n :: code) --> (RF, GS, LT', code)
+
+  E = (_, OE)
+  OE(RF(this)) = obj decl l
+  LT(l) = { M1, ..., Mp; LOT; o :: LS }
+  LT' = LT with l => { M1, ..., Mp; LOT; LS }
+  ------------------------------------------------------- DROP
+  E |- (RF, GS, LT, Drop :: code) --> (RF, GS, LT', code)
 
 --------------------------------------------------------------------------------
 | Linking
@@ -1359,6 +1381,11 @@ Compilation of expressions
      comp_expr(e);
      Select f
 
+  comp_expr(e.f := e') =
+     comp_expr(e);
+     comp_expr(e');
+     Update f
+
   comp_expr(e.m(e')) =
      comp_expr(e);
      comp_expr(e');
@@ -1373,6 +1400,10 @@ Compilation of expressions
 EQ:  comp_expr(e3);
 END: Nop
 
+  comp_expr(e; e') =
+     comp_expr(e);
+     Drop;
+     comp_expr(e')
 
 Compilation of methods
 ----------------------
