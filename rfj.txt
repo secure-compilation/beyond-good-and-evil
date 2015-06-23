@@ -835,7 +835,21 @@ class Tuple_T {
 
 obj true : Bool { }
 obj false : Bool { }
-class Bool { }
+class Bool {
+  /* auxiliary methods that could be defined outside */
+  Bool neg(Unit) {
+    this == true ? false : true;
+  }
+
+  Bool and(Bool b) {
+    this == true ? b : false;
+  }
+
+  Bool or(Bool b) {
+    /* this.neg(tt).and(b.neg(tt)).neg(tt); */
+    this == true ? true : b;
+  }
+}
 
 If then else via identity test, e.g. (b == true ? e1 : e2).
 
@@ -1473,17 +1487,21 @@ all.
 
 We define a labelled reduction of the form:
 
-              a
+            gamma
   E |- State --> State'
 
-a ::=          label
-  | tau          internal step
+alpha ::=
+  | tau        internal step taken by the program
+  | a          observable action and origin
+
+a ::=          observable action and origin
+  | gamma ?      observable action performed by the context
+  | gamma !      observable action performed by the program
+
+gamma ::=          observable action
   | o.m(o')      cross-boundary call
   | o            cross-boundary return
-
-CH: I think it would be useful for clarity to add back the "!" and
-    "?", I don't really care about saving one bit of information if we
-    need the whole trace to reconstruct it
+  | tick         program termination
 
 In a given State, the control is either held by the program or by the
 context. Internal steps always preserve control ownership, while
@@ -1534,7 +1552,7 @@ lr? ::=        option type
 
 E |- (RF, GS, LT, code) --> (RF', GS', LT', code')
 ----------------------------------------------------------
-                                                    tau
+                                                     tau
 E |- ProgState (RF, GS :: GSC, LT, code, I, Running) -->
        ProgState (RF', GS' :: GSC, LT', code', I, Running)
 
@@ -1572,8 +1590,8 @@ match GSC with
 | / ->
     GSP' = [] :: lr
 end
----------------------------------------------------------------
-                                        ot'.m(oa')
+----------------------------------------------------
+                                       ot'.m(oa') ?
 E |- CtxState (/, GSC, LT, /, I, Running) -->
        ProgState (RF', GSP', LT, code', I', Running)
 
@@ -1601,7 +1619,7 @@ else
   I' = (LI, OI')                          keep track of its type
 fi
 ---------------------------------------------------
-                                                o
+                                               o ?
 E |- CtxState (/, / :: GSP, LT, /, I, Running) -->
        ProgState (RF', GSP, LT, code', I', Running)
 
@@ -1631,7 +1649,7 @@ else
 fi
 GS' = (lr, RF, code') :: GS
 -------------------------------------------------------------
-                                                   ot'.m(oa')
+                                                 ot'.m(oa') !
 E |- ProgState (RF, GS :: GSC, LT, code, I, Running) -->
        CtxState (/, / :: GS' :: GSC, LT', /, I, Running)
 
@@ -1663,7 +1681,7 @@ match GSC with
     GSC' = /
 end
 --------------------------------------------------------
-                                                      o
+                                                     o !
 E |- ProgState (RF, [] :: GSC, LT, code, I, Running) -->
        CtxState (/, GSC', LT', /, I, Running)
 
@@ -1671,16 +1689,16 @@ E |- ProgState (RF, [] :: GSC, LT, code, I, Running) -->
 6 - Termination from context code
 =================================
 
--------------------------------------------
-                                       tick
+---------------------------------------------
+                                       tick ?
 E |- CtxState (/, /, LT, /, I, Running) -->
        CtxState (/, /, LT, /, I, Done)
 
 7 - Termination from program code
 =================================
 
----------------------------------------------------------------
-                                                           tick
+-----------------------------------------------------------------
+                                                           tick !
 E |- ProgState (RF, [] :: GSC, LT, Return :: _, I, Running) -->
        ProgState (RF, [] :: GSC, LT, [], I, Done)
 
@@ -1688,27 +1706,39 @@ E |- ProgState (RF, [] :: GSC, LT, Return :: _, I, Running) -->
 | Traces
 --------------------------------------------------------------------------------
 
+t ::= a word over alphabet a (as defined above).
+
 --------------------
        empty_word
 E |- State ==> State
 
-            a
+          alpha
 E |- State --> State'
 ---------------------
-        as_word(a)
+      as_word(alpha)
 E |- State ==> State'
 
   where as_word(tau) = empty_word
-        as_word(o) = o (as a word of length 1)
-        as_word(o.m(o')) = o.m(o') (as a word of length 1)
+        forall a, as_word(a) = a (as a word of length 1)
 
-            u
+            t
 E |- State ==> State'
-             v
+             u
 E |- State' ==> State''
 -----------------------
-           u.v
+           t.u
 E |- State ==> State''
+
+--------------------------------------------------------------------------------
+| Trace dualization
+--------------------------------------------------------------------------------
+
+We define dualization on letters as:
+
+/(gamma ?) = gamma !
+/(gamma !) = gamma ?
+
+And extend it to words, so that every trace t has a dual trace /t.
 
 --------------------------------------------------------------------------------
 | Trace equivalence
@@ -1796,7 +1826,7 @@ if E1; E2 |- mergeable State1 State2
                     t
    /\ E1 |- State1 ==> State1'
 
-                    t
+                   /t
    /\ E2 |- State2 ==> State2'
 
 then |- mergeable State1' State2'
@@ -1824,7 +1854,7 @@ then exists t State1' State2',
                      t
        E1 |- State1 ==> State1'
 
-                        t
+                       /t
        /\ E2 |- State2 ==> State2'
 
        /\ |- mergeable State1' State2'
