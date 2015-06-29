@@ -1742,8 +1742,7 @@ E |- CtxState (/, /, LT, /, I, Running) -->
 
 E = (LE, OE)
 LE(0) = class decl { 0 (0) } 
-OE(RF(0)) = obj decl 0
-LT(l) = { M1, ..., Mp; OLT; o :: [] }
+LT(0) = { M1, ..., Mp; OLT; o :: [] }
 OE(o) = obj decl 0
 ---------------------------------------------------------------- TICK!
                                                           tick !
@@ -2040,7 +2039,7 @@ Proof that c[q] terminates without getting stuck:
     s'_cq = ((0, 0), [], LT'_cq, Return :: _)
     E = (LE, OE)
     LE(0) = class decl { 0 (0) } 
-    OE(RF(0)) = obj decl 0
+    OE(0) = obj decl 0
     LT(l) = { M1, ..., Mp; OLT; o :: [] }
     OE(o) = obj decl 0
 
