@@ -375,6 +375,9 @@ We define a reduction relation between programs and values as follows:
   ----------------------------------
   |- A ==> o
 
+Note: Only terminating programs that don't get stuck have a semantics;
+this is actually a definition of termination for programs.
+
 Note: We later define evaluable programs, which can be seen as
   particular well-typed programs which trivially satisfy the two
   extra conditions we ask for, that is:
@@ -389,8 +392,6 @@ Note: Small-step variant:
   (OT, [], 0, 0, [], e) -->*_LT (OT', [], 0, 0, [], o)
   ----------------------------------------------------
   |- A ==> o
-
-Note: Only terminating programs that don't get stuck have a semantics.
 
 ================================================================================
 | Partial programs
@@ -1347,6 +1348,30 @@ Rules:
   ------------------------------------------------------- DROP
   E |- (RF, GS, LT, Drop :: code) --> (RF, GS, LT', code)
 
+Semantics of programs
+=====================
+
+--------------------------------------------------------------------------------
+| Def.: Reduction of programs (until termination)
+--------------------------------------------------------------------------------
+
+We define a reduction relation between programs and values as follows:
+
+  E = (_, OE)
+  LT(0) = { M1; _; _ }
+  M1 = code
+  OE(0) = obj decl 0
+  s -->*_E s'
+  s = ((0, 0), [], LT, code)
+  s' = ((0, 0), [], LT', Return :: _)
+  LT'(0) = { M1; OT'; o :: [] }
+  OE(o) = obj decl 0
+  -----------------------------------------------------
+  E |- LT ==> o
+
+Note: Only terminating programs that don't get stuck have a semantics;
+this is actually a definition of termination for programs.
+
 --------------------------------------------------------------------------------
 | Linking
 --------------------------------------------------------------------------------
@@ -1519,7 +1544,7 @@ cross-boundary calls and returns always transfer control (either from
 the program to the context, or from the context to the program).
 
 State ::=
-  ProgState (  the program has control
+  PrgState (  the program has control
     RF,          register file
     GSP,         program's view on the call stack
     LT,          program's compartment table
@@ -1566,10 +1591,10 @@ match GSP with
     GSP' = GS'
 | GS :: GSC ->
     GSP' = GS' :: GSC
-------------------------------------------------------
-                                                   tau
-E |- ProgState ( RF,  GSP,  LT,  code, I, Running) -->
-     ProgState (RF', GSP', LT', code', I, Running)
+----------------------------------------------------- TAU
+                                                  tau
+E |- PrgState ( RF,  GSP,  LT,  code, I, Running) -->
+     PrgState (RF', GSP', LT', code', I, Running)
 
 
 2 - Call from context code to program code
@@ -1605,10 +1630,10 @@ match GSC with
 | / ->
     GSP' = [] :: lr
 end
------------------------------------------------------------
+----------------------------------------------------------- CALL?
                                                ot'.m(oa') ?
-E |- CtxState  (  /,  GSC, LT,     /,  I, Running) -->
-     ProgState (RF', GSP', LT, code', I', Running)
+E |- CtxState (  /,  GSC, LT,     /,  I, Running) -->
+     PrgState (RF', GSP', LT, code', I', Running)
 
 
 3 - Return from context code to program code
@@ -1633,10 +1658,10 @@ else
   OI' = OI with o => obj decl lr          first time o is encountered
   I' = (LI, OI')                          keep track of its type
 fi
-----------------------------------------------------------
-                                                       o ?
-E |- CtxState  (  /, / :: GSP, LT,     /,  I, Running) -->
-     ProgState (RF',      GSP, LT, code', I', Running)
+--------------------------------------------------------- RET?
+                                                      o ?
+E |- CtxState (  /, / :: GSP, LT,     /,  I, Running) -->
+     PrgState (RF',      GSP, LT, code', I', Running)
 
 
 4 - Call from program code to context code
@@ -1668,10 +1693,10 @@ match GSP with
     GSP' = GS' :: GSC
 | GS ->
     GSP' = GS'
---------------------------------------------------------------
+-------------------------------------------------------------- CALL!
                                                   ot'.m(oa') !
-E |- ProgState (RF,       GSP,  LT, code, I, Running) -->
-     CtxState  ( /, / :: GSP', LT',    /, I, Running)
+E |- PrgState (RF,       GSP,  LT, code, I, Running) -->
+     CtxState ( /, / :: GSP', LT',    /, I, Running)
 
 
 5 - Return from program code to context code
@@ -1698,41 +1723,32 @@ match GSC with
 | lr ->
     GSC' = /
 end
----------------------------------------------------------
-                                                      o !
-E |- ProgState (RF, [] :: GSC,  LT, code, I, Running) -->
-     CtxState  ( /,      GSC', LT',    /, I, Running)
+-------------------------------------------------------- RET!
+                                                     o !
+E |- PrgState (RF, [] :: GSC,  LT, code, I, Running) -->
+     CtxState ( /,      GSC', LT',    /, I, Running)
 
 
 6 - Termination from context code
 =================================
 
-I = (LI, OI)
-LI(0) = class decl { 0 (0) } 
-if o in dom(OI) then
-  OI(o) = obj decl 0
-else
-  OI' = OI with o => obj decl 0
-  I' = (LI, OI')
-fi
-----------------------------------------------
-                                        tick ?
-E |- CtxState (/, /, LT, /, I,  Running) -->
-     CtxState (/, /, LT, /, I', Done o)
+--------------------------------------------- TICK?
+                                       tick ?
+E |- CtxState (/, /, LT, /, I, Running) -->
+     CtxState (/, /, LT, /, I,    Done)
 
 7 - Termination from program code
 =================================
 
 E = (LE, OE)
 LE(0) = class decl { 0 (0) } 
-OE(RF(this)) = obj decl l
+OE(RF(0)) = obj decl 0
 LT(l) = { M1, ..., Mp; OLT; o :: [] }
 OE(o) = obj decl 0
-LT' = LT with l => { M1, ..., Mp; OLT; [] }
-----------------------------------------------------------
-                                                    tick !
-E |- ProgState (RF, [],  LT, Return :: _, I, Running) -->
-     ProgState (RF, [], LT',          [], I, Done o)
+---------------------------------------------------------------- TICK!
+                                                          tick !
+E |- PrgState ((0, 0), [], LT, Return :: code, I, Running) -->
+     PrgState ((0, 0), [], LT, Return :: code, I,    Done)
 
 --------------------------------------------------------------------------------
 | Traces
@@ -1777,9 +1793,17 @@ And extend it to words, so that every trace t has a dual trace /t.
 --------------------------------------------------------------------------------
 
 Traces(I, LT, E) =
-  let Init = CtxState (/, [], LT, /, I) in
-                                 u
-  { u | exists State, E |- Init ==> State }
+  let (LE, _) = E in
+  let Init =
+    if 0 in dom(LE) then
+      let { M1; _; _ } = LT(0) in
+      let code = M1 in
+      PrgState ((0, 0), [], LT, code, I)
+    else
+      CtxState (     /,  /, LT,    /, I)
+  in
+                                 t
+  { t | exists State, E |- Init ==> State }
 
 same_traces (I, LT, E) (I', LT', E') ::=
   Traces(I, LT, E) = Traces(I', LT', E')
@@ -1788,7 +1812,7 @@ same_traces (I, LT, E) (I', LT', E') ::=
 | Mergeable states
 --------------------------------------------------------------------------------
 
-State = ProgState (RF, GSP, LT,  code, I,  status)
+State = PrgState (RF, GSP, LT,  code, I,  status)
 State' = CtxState (/,  GSC, LT', /,    I', status)
 |- linkable (I, LT, E) (I', LT', E')
 |- compatible_views GSP GSC
@@ -1828,11 +1852,11 @@ GSC = lr :: GSP'
 
 merge (E, E', State, State') ::=
   match (State, State') with
-  | ProgState (RF, GSP, LT,  code, I,  _),
-    CtxState  (/,  GSC, LT', /,    I', _) ->
+  | PrgState (RF, GSP, LT,  code, I,  _),
+    CtxState (/,  GSC, LT', /,    I', _) ->
       let (I'', LT'', E'') = (I, LT, E) /\/\ (I', LT', E') in
       (I'', (RF, merge GSP GSC, LT'', code), E'')
-  | CtxState _, ProgState _ ->
+  | CtxState _, PrgState _ ->
       merge State' State
    when E; E' |- mergeable State State'.
 
@@ -1849,49 +1873,50 @@ merge GSP GSC ::=
 | Trace composition
 --------------------------------------------------------------------------------
 
-forall E E1 E2 State1 State2 s t State1' State2',
+forall E E1 E2 State1 State2 s t State'1 State'2,
 
 if E1; E2 |- mergeable State1 State2
 
    /\ ((empty_map, empty_map), s, E, status) = merge (E1, E2, State1, State2)
 
                     t
-   /\ E1 |- State1 ==> State1'
+   /\ E1 |- State1 ==> State'1
 
                    /t
-   /\ E2 |- State2 ==> State2'
+   /\ E2 |- State2 ==> State'2
 
-then |- mergeable State1' State2'
+then |- mergeable State'1 State'2
 
      /\ exists s',
 
-          ((empty_map, empty_map), s', E, _) = merge (E1, E2, State1', State2')
+          ((empty_map, empty_map), s', E, _) = merge (E1, E2, State'1, State'2)
 
-          /\ E |- s -->* s'
+          /\ s -->*_E s'
 
 --------------------------------------------------------------------------------
 | Trace decomposition
 --------------------------------------------------------------------------------
 
-forall E E1 E2 State1 State2 s s',
+forall E E1 E2 State1 State2 s s' status,
 
 if E1; E2 |- mergeable State1 State2
 
-   /\ ((empty_map, empty_map), s, E) = merge (E1, E2, State1, State2)
+   /\ ((empty_map, empty_map), s, E, status) = merge (E1, E2, State1, State2)
 
-   /\ E |- s -->* s'
+   /\ s -->*_E s'
 
-then exists t State1' State2',
+then exists t State'1 State'2 status',
 
                      t
-       E1 |- State1 ==> State1'
+       E1 |- State1 ==> State'1
 
                        /t
-       /\ E2 |- State2 ==> State2'
+       /\ E2 |- State2 ==> State'2
 
-       /\ |- mergeable State1' State2'
+       /\ |- mergeable State'1 State'2
 
-       /\ ((empty_map, empty_map), s', E) = merge (E1, E2, State1', State2')
+       /\ ((empty_map, empty_map), s', E, status') =
+            merge (E1, E2, State'1, State'2)
 
 
 --------------------------------------------------------------------------------
@@ -1899,6 +1924,131 @@ then exists t State1' State2',
 --------------------------------------------------------------------------------
 | forall p q, Traces(p) = Traces(q) -> forall c, c[p] ~ c[q]
 --------------------------------------------------------------------------------
+
+Proof:
+
+Let p, q be low-level programs such that Traces(p) = Traces(q).
+
+Lemma: Traces(p) = Traces(q) -> same_interface p q.
+
+Let c be a low-level context linkable with both p and q.
+
+Assume that c[p] terminates without getting stuck. We will show that
+c[q] terminates without getting stuck as well. Symmetrically, when
+c[q] terminates without getting stuck as well, so does c[p]. Hence,
+c[p] and c[q] are observationnally-equivalent for termination (QED).
+
+Proof that c[q] terminates without getting stuck:
+
+{
+  Let (I_p, LT_p, E_p) = p,
+      (I_q, LT_q, E_q) = q,
+      (I_c, LT_c, E_c) = c.
+
+  Let (State_p, State_c) =
+        if 0 in dom(OE_p) then
+          let { M1; _; _ } = LT_p(0) in
+          let code = M1 in
+          (PrgState ((0, 0), [], LT_p, code, Running),
+           CtxState (     /,  /, LT_c,    /, Running))
+        else
+          let { M1; _; _ } = LT_c(0) in
+          let code = M1 in
+          (CtxState (     /,  /, LT_p,    /, Running),
+           PrgState ((0, 0), [], LT_c, code, Running)).
+
+  Let ((empty_map, empty_map), LT_cp, E) = c[p].
+
+  Let s_cp =
+    let LT_cp(0) = { M1; _; _ } in
+    let code = M1 in
+    ((0, 0), [], LT_cp, code).
+
+  Lemma: E_p; E_c |- mergeable State_p State_c
+           /\
+         ((empty_map, empty_map), s_cp, E, Running) =
+           merge (E_p, E_c, State_p, State_c)
+
+  By hypothesis (termination of c[p])
+    s_cp -->*_E s'_cp
+  with
+    s'_cp = ((0, 0), [], LT', Return :: _).
+
+  We can hence apply the trace decomposition lemma to get
+    t, State'_p, State'_c, status'
+  such that
+
+                       t
+       E_p |- State_p ==> State'_p
+
+                         /t
+       /\ E_c |- State_c ==> State'_c
+
+       /\ |- mergeable State'_p State'_c
+
+       /\ ((empty_map, empty_map), s'_cp, E, status') =
+            merge (E_p, E_c, State'_p, State'_c)
+
+  We can wlog assume that status' = Done and that t ends with a tick
+  (if it is not already the case, because of the shape of s'_cp we can
+  extend t with a tick and get a Done status).
+
+  Now, because Traces(p) = Traces(q), there must be a State'_q such
+  that
+
+                       t
+       E_q |- State_q ==> State'_q
+
+  Lemma: same_interfaces p q ->
+         |- mergeable State_p State_c ->
+         |- mergeable State_q State_c
+
+  Let ((empty_map, empty_map), LT_cq, E) = c[q].
+
+  Let s_cq =
+    let LT_cq(0) = { M1; _; _ } in
+    let code = M1 in
+    ((0, 0), [], LT_cq, code).
+
+  We can now apply trace composition knowing that
+
+       E_q; E_c |- mergeable State_q State_c
+
+       ((empty_map, empty_map), s_cq, E, status) =
+         merge (E_q, E_c, State_q, State_c)
+
+                       t
+       E_q |- State_q ==> State'_q
+
+                      /t
+       E_c |- State_c ==> State'_c
+
+  to get that
+
+       |- mergeable State'_q State'_c
+  and
+       exists s'_cq,
+
+          ((empty_map, empty_map), s'_cq, E, _) =
+            merge (E_p, E_c, State'_q, State'_c)
+
+          /\ s_cq -->*_E s'_cq.
+
+  Finally, because t ends with a tick, we know from the TICK! rule
+  that:
+
+    s'_cq = ((0, 0), [], LT'_cq, Return :: _)
+    E = (LE, OE)
+    LE(0) = class decl { 0 (0) } 
+    OE(RF(0)) = obj decl 0
+    LT(l) = { M1, ..., Mp; OLT; o :: [] }
+    OE(o) = obj decl 0
+
+  Thus, we can conclude that:
+
+    E |- LT ==> o
+}
+
 
 --------------------------------------------------------------------------------
 | Trace semantics completeness wrt high-level programs
