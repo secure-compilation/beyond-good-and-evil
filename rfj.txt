@@ -363,7 +363,7 @@ Semantics of programs
 =====================
 
 --------------------------------------------------------------------------------
-| Def.: Reduction of programs
+| Def.: Reduction of programs (until termination)
 --------------------------------------------------------------------------------
 
 We define a reduction relation between programs and values as follows:
@@ -375,12 +375,22 @@ We define a reduction relation between programs and values as follows:
   ----------------------------------
   |- A ==> o
 
-Note: We define later evaluable programs, which can be seen as
+Note: We later define evaluable programs, which can be seen as
   particular well-typed programs which trivially satisfy the two
   extra conditions we ask for, that is:
     LT(0) = class { ...; 0 (0) { e } }
     OT(0) = obj 0 { ... }.
 
+Note: Small-step variant:
+
+  A = (LT, OT)
+  LT(0) = class { ...; 0 (0) { e } }
+  OT(0) = obj 0 { ... }
+  (OT, [], 0, 0, [], e) -->*_LT (OT', [], 0, 0, [], o)
+  ----------------------------------------------------
+  |- A ==> o
+
+Note: Only terminating programs that don't get stuck have a semantics.
 
 ================================================================================
 | Partial programs
@@ -629,7 +639,7 @@ D; A; G |- (e1 == e2 ? e3 : e4) : l
 
 D; A; G |- e : l
 D; A; G |- e' : l'
----------------------------------- TSEQ
+----------------------- TSEQ
 D; A; G |- (e; e') : l'
 
 --------------------------------------------------------------------------------
@@ -675,7 +685,7 @@ where
   E = (LE, OE).
 
 Note:
-  (I, A, E) complete ->  |- A complete.
+  (I, A, E) complete ->   |- A complete.
   (I, A, E) evaluable ->  |- A evaluable.
 
   However, it is possible for A to be complete (resp. evaluable)
@@ -1528,11 +1538,11 @@ State ::=
     status       informs whether program execution is over
   )
 
-status ::= Running | Done
+status ::= Running | Done o
 
 GSP ::=        program's view on the call stack
                when the program has control
-  []
+  GS
 | GS ::          program internal call frames
         GSC      remainder of the global stack
 
@@ -1551,10 +1561,15 @@ lr? ::=        option type
 
 
 E |- (RF, GS, LT, code) --> (RF', GS', LT', code')
-----------------------------------------------------------
-                                                     tau
-E |- ProgState (RF, GS :: GSC, LT, code, I, Running) -->
-       ProgState (RF', GS' :: GSC, LT', code', I, Running)
+match GSP with
+| GS ->
+    GSP' = GS'
+| GS :: GSC ->
+    GSP' = GS' :: GSC
+------------------------------------------------------
+                                                   tau
+E |- ProgState ( RF,  GSP,  LT,  code, I, Running) -->
+     ProgState (RF', GSP', LT', code', I, Running)
 
 
 2 - Call from context code to program code
@@ -1590,10 +1605,10 @@ match GSC with
 | / ->
     GSP' = [] :: lr
 end
-----------------------------------------------------
-                                       ot'.m(oa') ?
-E |- CtxState (/, GSC, LT, /, I, Running) -->
-       ProgState (RF', GSP', LT, code', I', Running)
+-----------------------------------------------------------
+                                               ot'.m(oa') ?
+E |- CtxState  (  /,  GSC, LT,     /,  I, Running) -->
+     ProgState (RF', GSP', LT, code', I', Running)
 
 
 3 - Return from context code to program code
@@ -1618,10 +1633,10 @@ else
   OI' = OI with o => obj decl lr          first time o is encountered
   I' = (LI, OI')                          keep track of its type
 fi
----------------------------------------------------
-                                               o ?
-E |- CtxState (/, / :: GSP, LT, /, I, Running) -->
-       ProgState (RF', GSP, LT, code', I', Running)
+----------------------------------------------------------
+                                                       o ?
+E |- CtxState  (  /, / :: GSP, LT,     /,  I, Running) -->
+     ProgState (RF',      GSP, LT, code', I', Running)
 
 
 4 - Call from program code to context code
@@ -1648,10 +1663,15 @@ else
   OI(oa') = obj decl la'
 fi
 GS' = (lr, RF, code') :: GS
--------------------------------------------------------------
-                                                 ot'.m(oa') !
-E |- ProgState (RF, GS :: GSC, LT, code, I, Running) -->
-       CtxState (/, / :: GS' :: GSC, LT', /, I, Running)
+match GSP with
+| GS :: GSC ->
+    GSP' = GS' :: GSC
+| GS ->
+    GSP' = GS'
+--------------------------------------------------------------
+                                                  ot'.m(oa') !
+E |- ProgState (RF,       GSP,  LT, code, I, Running) -->
+     CtxState  ( /, / :: GSP', LT',    /, I, Running)
 
 
 5 - Return from program code to context code
@@ -1673,34 +1693,46 @@ else
   OI(o) = obj decl lr
 fi
 match GSC with
-| lr' :: GSP ->
-    lr' = lr /\
+| lr :: GSP ->
     GSC' = / :: GSP
-| lr' ->
-    lr' = lr /\
+| lr ->
     GSC' = /
 end
---------------------------------------------------------
-                                                     o !
-E |- ProgState (RF, [] :: GSC, LT, code, I, Running) -->
-       CtxState (/, GSC', LT', /, I, Running)
+---------------------------------------------------------
+                                                      o !
+E |- ProgState (RF, [] :: GSC,  LT, code, I, Running) -->
+     CtxState  ( /,      GSC', LT',    /, I, Running)
 
 
 6 - Termination from context code
 =================================
 
----------------------------------------------
-                                       tick ?
-E |- CtxState (/, /, LT, /, I, Running) -->
-       CtxState (/, /, LT, /, I, Done)
+I = (LI, OI)
+LI(0) = class decl { 0 (0) } 
+if o in dom(OI) then
+  OI(o) = obj decl 0
+else
+  OI' = OI with o => obj decl 0
+  I' = (LI, OI')
+fi
+----------------------------------------------
+                                        tick ?
+E |- CtxState (/, /, LT, /, I,  Running) -->
+     CtxState (/, /, LT, /, I', Done o)
 
 7 - Termination from program code
 =================================
 
------------------------------------------------------------------
-                                                           tick !
-E |- ProgState (RF, [] :: GSC, LT, Return :: _, I, Running) -->
-       ProgState (RF, [] :: GSC, LT, [], I, Done)
+E = (LE, OE)
+LE(0) = class decl { 0 (0) } 
+OE(RF(this)) = obj decl l
+LT(l) = { M1, ..., Mp; OLT; o :: [] }
+OE(o) = obj decl 0
+LT' = LT with l => { M1, ..., Mp; OLT; [] }
+----------------------------------------------------------
+                                                    tick !
+E |- ProgState (RF, [],  LT, Return :: _, I, Running) -->
+     ProgState (RF, [], LT',          [], I, Done o)
 
 --------------------------------------------------------------------------------
 | Traces
