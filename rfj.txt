@@ -1934,18 +1934,21 @@ Let c be a low-level context linkable with both p and q.
 
 Assume that c[p] terminates without getting stuck. We will show that
 c[q] terminates without getting stuck as well. Symmetrically, when
-c[q] terminates without getting stuck as well, so does c[p]. Hence,
-c[p] and c[q] are observationnally-equivalent for termination (QED).
+c[q] terminates without getting stuck, so does c[p]. Hence, c[p] and
+c[q] are observationnally equivalent for termination (QED).
+
 
 Proof that c[q] terminates without getting stuck:
 
 {
-  Let (I_p, LT_p, E_p) = p,
-      (I_q, LT_q, E_q) = q,
+  Let (I_pq, LT_p, E_pq) = p,      p and q share I, E since they are
+      (I_pq, LT_q, E_pq) = q,      interface equivalent
       (I_c, LT_c, E_c) = c.
 
+  Let (LE_pq, OE_pq) = E_pq.
+
   Let (State_p, State_c) =
-        if 0 in dom(OE_p) then
+        if 0 in dom(OE_pq) then
           let { M1; _; _ } = LT_p(0) in
           let code = M1 in
           (PrgState ((0, 0), [], LT_p, code, Running),
@@ -1963,10 +1966,10 @@ Proof that c[q] terminates without getting stuck:
     let code = M1 in
     ((0, 0), [], LT_cp, code).
 
-  Lemma: E_p; E_c |- mergeable State_p State_c
+  Lemma: E_pq; E_c |- mergeable State_p State_c
            /\
          ((empty_map, empty_map), s_cp, E, Running) =
-           merge (E_p, E_c, State_p, State_c)
+           merge (E_pq, E_c, State_p, State_c)
 
   By hypothesis (termination of c[p])
     s_cp -->*_E s'_cp
@@ -1977,8 +1980,8 @@ Proof that c[q] terminates without getting stuck:
     t, State'_p, State'_c, status'
   such that
 
-                       t
-       E_p |- State_p ==> State'_p
+                        t
+       E_pq |- State_p ==> State'_p
 
                          /t
        /\ E_c |- State_c ==> State'_c
@@ -1986,7 +1989,7 @@ Proof that c[q] terminates without getting stuck:
        /\ |- mergeable State'_p State'_c
 
        /\ ((empty_map, empty_map), s'_cp, E, status') =
-            merge (E_p, E_c, State'_p, State'_c)
+            merge (E_pq, E_c, State'_p, State'_c)
 
   We can wlog assume that status' = Done and that t ends with a tick
   (if it is not already the case, because of the shape of s'_cp we can
@@ -1995,8 +1998,8 @@ Proof that c[q] terminates without getting stuck:
   Now, because Traces(p) = Traces(q), there must be a State'_q such
   that
 
-                       t
-       E_q |- State_q ==> State'_q
+                        t
+       E_pq |- State_q ==> State'_q
 
   Lemma: same_interfaces p q ->
          |- mergeable State_p State_c ->
@@ -2011,13 +2014,13 @@ Proof that c[q] terminates without getting stuck:
 
   We can now apply trace composition knowing that
 
-       E_q; E_c |- mergeable State_q State_c
+       E_pq; E_c |- mergeable State_q State_c
 
        ((empty_map, empty_map), s_cq, E, status) =
-         merge (E_q, E_c, State_q, State_c)
+         merge (E_pq, E_c, State_q, State_c)
 
-                       t
-       E_q |- State_q ==> State'_q
+                        t
+       E_pq |- State_q ==> State'_q
 
                       /t
        E_c |- State_c ==> State'_c
@@ -2029,7 +2032,7 @@ Proof that c[q] terminates without getting stuck:
        exists s'_cq,
 
           ((empty_map, empty_map), s'_cq, E, _) =
-            merge (E_p, E_c, State'_q, State'_c)
+            merge (E_pq, E_c, State'_q, State'_c)
 
           /\ s_cq -->*_E s'_cq.
 
@@ -2040,12 +2043,12 @@ Proof that c[q] terminates without getting stuck:
     E = (LE, OE)
     LE(0) = class decl { 0 (0) } 
     OE(0) = obj decl 0
-    LT(l) = { M1, ..., Mp; OLT; o :: [] }
+    LT_cq(l) = { M1, ..., Mp; OLT; o :: [] }
     OE(o) = obj decl 0
 
   Thus, we can conclude that:
 
-    E |- LT ==> o
+    E |- LT_cq ==> o
 }
 
 
@@ -2054,6 +2057,7 @@ Proof that c[q] terminates without getting stuck:
 --------------------------------------------------------------------------------
 | forall P Q, (forall C, C[P] ~ C[Q]) -> Traces(compile P) = Traces(compile Q)
 --------------------------------------------------------------------------------
+
 
 --------------------------------------------------------------------------------
 | What we want to prove
