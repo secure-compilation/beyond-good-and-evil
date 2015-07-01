@@ -703,10 +703,10 @@ do not overlap, their common import declarations match, and the
 export declarations of one which correspond to import declarations of
 the other also match with the other's declarations.
 
-  |- P wf
-  |- Q wf
   P = (I, A, E)
   Q = (I', A', E')
+  I |- A : E
+  I' |- A' : E'
   |- exclusive_decls E E'
   |- import_export_compatible I E'
   |- import_export_compatible I' E
@@ -915,8 +915,6 @@ class Nat {
 | Properties of our type system
 ================================================================================
 
-(To be proved)
-
 --------------------------------------------------------------------------------
 | Progress
 --------------------------------------------------------------------------------
@@ -990,7 +988,7 @@ linkable with P and inserting P in C gives an evaluable partial
 program, that is:
 
    |- linkable C P
-   |- C[P] evaluable
+   C[P] evaluable
    -----------------
    |- closes C P
 
@@ -1010,7 +1008,9 @@ share the same import and export definitions.
 --------------------------------------------------------------------------------
 | Prop.: Characterization of interface equivalence for well-typed programs
 --------------------------------------------------------------------------------
-| forall P Q,  |- P ok  ->  |- Q ok  ->
+| forall ((I,A,E) = P) ((I',A',E') = Q),
+|   I |- A : E  ->
+|   I' |- A' : E'  ->
 |     same_interface P Q <-> (closing_contexts P = closing_contexts Q)
 --------------------------------------------------------------------------------
 
@@ -1026,13 +1026,14 @@ when separately placing the two in C, the two resulting programs
 behave the same with respect to termination. That is:
 
 
-  |- P ok
-  |- Q ok
-  same_interface P Q
+  P = (I, A, E)                  Note: same_interface P Q
+  Q = (I, A', E)
+  I |- A : E
+  I |- A' : E
   forall C in closing_contexts P,
-    let (_, A, _) = C[P] in
-    let (_, B, _) = C[Q] in
-    terminates A <-> terminates B
+    let (_, B, _) = C[P] in
+    let (_, B', _) = C[Q] in
+    terminates B <-> terminates B'
   ---------------------------------------------------------
   |- P ~ Q
 
@@ -1100,7 +1101,7 @@ o ::= n                    instance name (where n is natural)
 f ::= n                    field index (where n is natural)
 m ::= n                    method index (where n is natural)
 
-P ::= (                    partial program
+p ::= (                    partial program
     I                        import declarations
     LT,                      the actual program (as a compartment table)
     E                        export declarations
@@ -1376,27 +1377,27 @@ this is actually a definition of termination for programs.
 | Linking
 --------------------------------------------------------------------------------
 
-  |- P wf
-  |- Q wf
-  P = (I, LT, E)
-  Q = (I', LT', E')
+  |- p wf
+  |- q wf
+  p = (I, LT, E)
+  q = (I', LT', E')
   |- exclusive_decls E E'
   |- import_export_compatible I E'
   |- import_export_compatible I' E
   |- same_common_decls I I'
   --------------------------------
-  |- linkable P Q
+  |- linkable p q
 
-  P /\/\ Q ::= (
+  p /\/\ q ::= (
     ((LI - LE') union (LI' - LE), (OI - OE') union (OI' - OE)),
     LT disjoint_union LT',
     (LE disjoint_union LE', OE disjoint_union OE')
-  ) when |- linkable P Q
+  ) when |- linkable p q
 
 --------------------------------------------------------------------------------
 | Prop.: Linking preserves well-formedness
 --------------------------------------------------------------------------------
-| forall P Q, (|- linkable P Q) -> well_formed (P /\/\ Q)
+| forall p q, (|- linkable p q) -> well_formed (p /\/\ q)
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
@@ -1869,7 +1870,7 @@ merge GSP GSC ::=
   when |- compatible_views GSP GSC
 
 --------------------------------------------------------------------------------
-| Trace composition
+| Trace composition lemma
 --------------------------------------------------------------------------------
 
 forall E E1 E2 State1 State2 s t State'1 State'2,
@@ -1893,7 +1894,7 @@ then |- mergeable State'1 State'2
           /\ s -->*_E s'
 
 --------------------------------------------------------------------------------
-| Trace decomposition
+| Trace decomposition lemma
 --------------------------------------------------------------------------------
 
 forall E E1 E2 State1 State2 s s' status,
@@ -1917,6 +1918,42 @@ then exists t State'1 State'2 status',
        /\ ((empty_map, empty_map), s', E, status') =
             merge (E1, E2, State'1, State'2)
 
+--------------------------------------------------------------------------------
+| Trace turn
+--------------------------------------------------------------------------------
+
+trace_turn(empty_word, p) =
+  let (_, _, E) = p in
+  let (LE, _) = E in
+  if 0 in dom(LE) then
+    Prg
+  else
+    Ctx
+
+trace_turn(t.a, p) =
+  let prev = trace_turn(t, p) in
+  match a with
+  | gamma ? | gamma ! ->
+      match prev with
+      | Ctx -> Prg
+      | Prg -> Ctx
+  | _ -> prev
+
+--------------------------------------------------------------------------------
+| Definability lemma
+--------------------------------------------------------------------------------
+| forall t p,
+|   t in Traces(p) ->
+|     exists C, |- linkable p (compile C)
+|                 /\
+|               forall /u in Traces(compile C),
+|                 u ends with a context action (gamma ?) ->
+|                 u is a prefix of t
+--------------------------------------------------------------------------------
+
+Intuition: We can only constrain the actions that the context will
+take, and hence only the traces that end with a context action,
+i.e. those such that trace_turn(u, p) = Prg.
 
 --------------------------------------------------------------------------------
 | Trace semantics soundness
@@ -2053,48 +2090,72 @@ Proof that c[q] terminates without getting stuck:
 
 
 --------------------------------------------------------------------------------
-| Trace semantics completeness wrt high-level programs
+| Trace semantics completeness wrt high-level programs (requires exit)
 --------------------------------------------------------------------------------
 | forall P Q, (forall C, C[P] ~ C[Q]) -> Traces(compile P) = Traces(compile Q)
 --------------------------------------------------------------------------------
 
+Let P Q be programs such that (forall C, C[P] ~ C[Q]).
 
---------------------------------------------------------------------------------
-| What we want to prove
---------------------------------------------------------------------------------
+Let t be a trace in Traces(compile P).
 
-First step:
+Goal: t in Traces(compile Q).
 
-  exists c. c[compile P] /~ c[compile Q]
-    ->
-  Traces(compile P) `delta` Traces(compile Q) <> empty_set
-    where A `delta` B = (A union B) - (A inter B) : symmetric difference
+Case: trace_turn(t, compile P) = Ctx.
 
-  or equivalently
+Extend t with an observable action taken by the context : a tick.
+The extended trace t' is still in Traces(compile P).
 
-  Traces(compile P) `delta` Traces(compile Q) = empty_set
-    ->
-  forall c. c[compile P] ~ c[compile Q]
+Apply the definability lemma to get a C such that
 
-[Failed Attempt]
-Property: from any execution derivation c[p] ~>* p' we can extract a
-          corresponding trace in Traces(p)
+   |- linkable (compile C) (compile P)
 
-exists c. c[p] /~ c[q] ==> Traces(p) != Traces(q)
+   forall /u in Traces(compile C),
+     trace_turn(u, p) = Prg ->
+       u is a prefix of t
 
-One of c[p] and c[q], say c[p], has a terminating execution c[p] ~>*
-p', while the other one (c[q]) doesn't (it loops forever). We can use
-extract to produce a trace tp = extract(c[p] ~>* p') in Traces(p). We
-still need to show that tp is not in Traces(q). Let's assume by
-contradiction that tp in Traces(q) ... stuck?
-- c[q] looping gives us an infinite trace tq in Traces(q)
-- this somehow prevents us from also having tp???
+Hence (lemma about compilation and linkability)
 
-Second step:
+   |- linkable C P
 
-  Traces(compile P) `delta` Traces(compile Q) <> empty_set
-    ->
-  exists C. C[P] /~ C[Q]
+Hence (same_interface P Q)
+
+   |- linkable C Q
+
+By hypothesis,
+
+   same_behaviors C[P] C[Q]
+
+By compiler correctness/completeness + separate compilation,
+
+   same_behaviors (compile C)[compile P] C[P]
+
+   same_behaviors C[Q] (compile C)[compile Q]
+
+Hence (transitivity)
+
+   same_behaviors (compile C)[compile P] (compile C)[compile Q]
+
+We can thus run program (compile C)[compile Q] until the expected
+behavior appears.
+
+   s -->* s'
+
+   where s = (compile C)[compile Q]
+
+Now apply trace decomposition to get a trace u such that
+
+   /u in Traces(compile C)
+
+   u in Traces(compile Q)
+
+   s' = c'[q']
+
+Thus u in Traces(compile Q), but since s' exhibits termination
+behavior, u must end with a tick. But it's also a prefix of t', and
+the only prefix of t' that ends with a tick is t' itself. So t' in
+Traces(compile Q) which also implies that t in Traces(compile Q) by
+prefix-closedness.
 
 ================================================================================
 | Symbolic micro-policy (compartmentalization variant)
