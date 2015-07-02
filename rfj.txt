@@ -52,6 +52,7 @@ e ::=                            expressions
   | e.m(e)                         method call
   | e == e ? e : e                 object identity test
   | e; e                           sequence
+  | exit e                         exit
 
 ================================================================================
 | Operational semantics
@@ -81,12 +82,35 @@ Big-step semantics
 
 The big-step semantics is described by statements of the form:
 
-  LT; (ot, oa) |- (OT, e) ==> (OT', o)
+  LT; (ot, oa) |- (OT, e) ==> (OT', r)
+
+  where r ::= Val o | Exit o
 
 where LT is the code of the program; ot is the current "this" object;
 oa is the current argument object; OT is the state before evaluation;
 e is the expression to evaluate; OT' is the state after evaluation;
-and o is the result value.
+and r is the result, embedding the result value o that was obtained
+either by an regular evaluation of e (Val o) or by a premature call to
+exit (Exit o).
+
+Evaluations to (Val o) and (Exit o) are both proper ways to
+terminate. Thus we define proper evaluation and termination in terms
+of those by a statement
+
+  LT; (ot, oa) |- (OT, e) ==> (OT', o)
+
+defined as follows:
+
+  LT; (ot, oa) |- (OT, e) ==> (OT', Val o)
+  ---------------------------------------- EVALVAL
+  LT; (ot, oa) |- (OT, e) ==> (OT', o)
+
+  LT; (ot, oa) |- (OT, e) ==> (OT', Exit o)
+  ----------------------------------------- EVALEXIT
+  LT; (ot, oa) |- (OT, e) ==> (OT', o)
+
+
+Notes:
 
 (1) Our fields are private with class granularity, i.e.:
 * two objects of different classes cannot access each other's fields;
@@ -97,21 +121,22 @@ private fields.
 (resp. methods) are referred by their position in the class definition
 of the object.
 
---------------------------------------- THIS
-LT; (ot, oa) |- (OT, this) ==> (OT, ot)
+
+------------------------------------------- THIS
+LT; (ot, oa) |- (OT, this) ==> (OT, Val ot)
 
 
--------------------------------------- ARG
-LT; (ot, oa) |- (OT, arg) ==> (OT, oa)
+------------------------------------------ ARG
+LT; (ot, oa) |- (OT, arg) ==> (OT, Val oa)
 
 
------------------------------------ OBJ
-LT; (ot, oa) |- (OT, o) ==> (OT, o)
+--------------------------------------- OBJ
+LT; (ot, oa) |- (OT, o) ==> (OT, Val o)
 
 
-LT; (ot, oa) |- (OT, e) ==> (OT', o)
-OT'(o) = obj l { o1, ..., on }
-OT'(ot) = obj l { ... }              ensures field privacy
+LT; (ot, oa) |- (OT1, e) ==> (OT2, o)
+OT2(o) = obj l { o1, ..., on }
+OT2(ot) = obj l { ... }              ensures field privacy
                                      (granularity: class) (BCP:??)
 f in [1,n]                           (BCP:??)
                                      (YJ: More explanations on this in
@@ -119,51 +144,99 @@ f in [1,n]                           (BCP:??)
 				     should keep in the document. If
 				     this is not enough, could I have
 				     a more explicit question?)
---------------------------------------- SEL
-LT; (ot, oa) |- (OT, e.f) ==> (OT', oi)
+-------------------------------------------- SEL
+LT; (ot, oa) |- (OT1, e.f) ==> (OT2, Val oi)
 
 
-LT; (ot, oa) |- (OT1, e1) ==> (OT2, o)
-LT; (ot, oa) |- (OT2, e2) ==> (OT3, o')
+LT; (ot, oa) |- (OT1, e1) ==> (OT2, Val o)
+LT; (ot, oa) |- (OT2, e2) ==> (OT3, Val o')
 A = (LT, OT)
 OT3(o) = obj l { o1, ..., on }
 OT3(ot) = obj l { ... }
 f in [1,n]
 OT3' = OT3 with o => { o1, ..., of-1, o', of+1, ..., on }
 --------------------------------------------------------- UPD
-LT; (ot, oa) |- (OT1, e1.f := e2) ==> (OT3', o')
+LT; (ot, oa) |- (OT1, e1.f := e2) ==> (OT3', Val o')
 
 
-LT; (ot, oa) |- (OT1, e1) ==> (OT2, ot')
-LT; (ot, oa) |- (OT2, e2) ==> (OT3, oa')
+LT; (ot, oa) |- (OT1, e1) ==> (OT2, Val ot')
+LT; (ot, oa) |- (OT2, e2) ==> (OT3, Val oa')
 OT3(ot') = obj l { o1, ..., on }
 LT(l) = class { ... ; M1, ..., Mp }
 Mj = lr (la) { e }
 m in [1,p]
-LT; (ot', oa') |- (OT3, e) ==> (OT4, o)
+LT; (ot', oa') |- (OT3, e) ==> (OT4, r)
 -------------------------------------------- CALL
-LT; (ot, oa) |- (OT1, e1.m(e2)) ==> (OT4, o)
+LT; (ot, oa) |- (OT1, e1.m(e2)) ==> (OT4, r)
 
 
-LT; (ot, oa) |- (OT1, e1) ==> (OT2, o12)
-LT; (ot, oa) |- (OT2, e2) ==> (OT3, o12)
-LT; (ot, oa) |- (OT3, e3) ==> (OT4, o3)
-------------------------------------------------------- TESTEQ
-LT; (ot, oa) |- (OT1, e1 == e2 ? e3 : e4) ==> (OT4, o3)
+LT; (ot, oa) |- (OT1, e1) ==> (OT2, Val o12)
+LT; (ot, oa) |- (OT2, e2) ==> (OT3, Val o12)
+LT; (ot, oa) |- (OT3, e3) ==> (OT4, r)
+------------------------------------------------------ TESTEQ
+LT; (ot, oa) |- (OT1, e1 == e2 ? e3 : e4) ==> (OT4, r)
 
 
-LT; (ot, oa) |- (OT1, e1) ==> (OT2, o1)
-LT; (ot, oa) |- (OT2, e2) ==> (OT3, o2)
+LT; (ot, oa) |- (OT1, e1) ==> (OT2, Val o1)
+LT; (ot, oa) |- (OT2, e2) ==> (OT3, Val o2)
 o1 <> o2
-LT; (ot, oa) |- (OT3, e4) ==> (OT4, o4)
------------------------------------------ TESTNEQ
-LT; (ot, oa) |- e1 == e2 ? e3 : e4 ==> o4
+LT; (ot, oa) |- (OT3, e4) ==> (OT4, r)
+----------------------------------------------- TESTNEQ
+LT; (ot, oa) |- e1 == e2 ? e3 : e4 ==> (OT4, r)
 
 
-LT; (ot, oa) |- (OT1, e1) ==> (OT2, o)
-LT; (ot, oa) |- (OT2, e2) ==> (OT3, o')
---------------------------------------------- SEQ
-LT; (ot, oa) |- (OT1, (e1; e2)) ==> (OT3, o')
+LT; (ot, oa) |- (OT1, e1) ==> (OT2, Val o)
+LT; (ot, oa) |- (OT2, e2) ==> (OT3, r)
+-------------------------------------------- SEQ
+LT; (ot, oa) |- (OT1, (e1; e2)) ==> (OT3, r)
+
+
+LT; (ot, oa) |- (OT, e) ==> (OT', Val o)
+---------------------------------------------- EXIT
+LT; (ot, oa) |- (OT, exit e) ==> (OT', Exit o)
+
+
+LT; (ot, oa) |- (OT, e) ==> (OT', Exit o)
+------------------------------------------- EXITSEL
+LT; (ot, oa) |- (OT, e.f) ==> (OT', Exit o)
+
+
+LT; (ot, oa) |- (OT, e) ==> (OT', Exit o)
+------------------------------------------------- EXITUPDLEFT
+LT; (ot, oa) |- (OT, e.f := e') ==> (OT', Exit o)
+
+
+LT; (ot, oa) |- (OT1, e) ==> (OT2, Val o)
+LT; (ot, oa) |- (OT2, e') ==> (OT3, Exit o')
+--------------------------------------------------- EXITUPDRIGHT
+LT; (ot, oa) |- (OT1, e.f := e') ==> (OT3, Exit o')
+
+
+LT; (ot, oa) |- (OT1, e) ==> (OT2, Exit o)
+----------------------------------------------- EXITCALLLEFT
+LT; (ot, oa) |- (OT1, e.m(e')) ==> (OT2, Exit o)
+
+
+LT; (ot, oa) |- (OT1, e) ==> (OT2, Val o)
+LT; (ot, oa) |- (OT2, e') ==> (OT3, Exit o)
+----------------------------------------------- EXITCALLRIGHT
+LT; (ot, oa) |- (OT, e.m(e')) ==> (OT', Exit o)
+
+
+LT; (ot, oa) |- (OT1, e1) ==> (OT2, Exit o)
+----------------------------------------------------------- EXITTESTLEFT
+LT; (ot, oa) |- (OT1, e1 == e2 ? e3 : e4) ==> (OT2, Exit o)
+
+
+LT; (ot, oa) |- (OT1, e1) ==> (OT2, Val o1)
+LT; (ot, oa) |- (OT2, e2) ==> (OT3, Exit o)
+----------------------------------------------------------- EXITTESTRIGHT
+LT; (ot, oa) |- (OT1, e1 == e2 ? e3 : e4) ==> (OT3, Exit o)
+
+
+LT; (ot, oa) |- (OT1, e1) ==> (OT2, Exit o)
+------------------------------------------------- EXITSEQ
+LT; (ot, oa) |- (OT1, (e1; e2)) ==> (OT3, Exit o)
 
 
 Small-step semantics
@@ -186,6 +259,7 @@ E ::=                            flat evaluation contexts
   | [] == e2 ? e3 : e4
   | o1 == [] ? e3 : e4
   | []; e
+  | exit []
 
 
 K ::= []                         continuations (lists of flat eval contexts)
@@ -200,7 +274,7 @@ Cfg ::=                          reduction configurations
 
 ----------------------------------- THIS
 LT |- (OT, CS, ot, oa, K, this) -->
-      (OT, CS, ot, oa, K, ot)
+      (OT, CS, ot, oa, K,   ot)
 
 
 ---------------------------------- ARG
@@ -221,7 +295,7 @@ LT |- (OT, CS, ot, oa, [].f :: K,  o) -->
       (OT, CS, ot, oa,         K, of)
 
 
----------------------------------------------------------- UPD_PUSH
+------------------------------------------------------ UPD_PUSH
 LT |- (OT, CS, ot, oa,               K, e.f := e') -->
       (OT, CS, ot, oa, [].f := e' :: K,         e)
 
@@ -255,7 +329,7 @@ Mj = lr (la) { e }
 m = j in [1,p]
 ---------------------------------------------------------------- CALL_POP
 LT |- (OT,                CS, ot,  oa,  ot'.m([]) :: K, oa') -->
-      (OT, (ot, oa, K) :: CS, ot', oa',              K, e)
+      (OT, (ot, oa, K) :: CS, ot', oa',              K,   e)
 
 
 ---------------------------------------------------- RETURN
@@ -265,7 +339,7 @@ LT |- (OT, (ot', oa', K) :: CS, _,     _, [], o) -->
 
 ----------------------------------------------------------------------- TEST_PUSH
 LT |- (OT, CS, ot, oa,                       K, e1 == e2 ? e3 : e4) -->
-      (OT, CS, ot, oa, [] == e2 ? e3 : e4 :: K, e1)
+      (OT, CS, ot, oa, [] == e2 ? e3 : e4 :: K,                 e1)
 
 
 ------------------------------------------------------- TEST_SWITCH
@@ -293,6 +367,11 @@ LT |- (OT, CS, ot, oa, ([]; e') :: K,  o) -->
       (OT, CS, ot, oa,             K, e')
 
 
+------------------------------------------------ EXIT_PUSH
+LT |- (OT, CS, ot, oa,            K, exit e) -->
+      (OT, CS, ot, oa, exit [] :: K,      e)
+
+
 Notations for reductions between configurations
 ===============================================
 
@@ -307,6 +386,45 @@ Cfg -/->_LT Cfg' ::= ~ (Cfg -->_LT Cfg')
 -->*_LT ::= the reflexive and transitive closure of -->_LT
 
 
+Semantics of programs
+=====================
+
+--------------------------------------------------------------------------------
+| Def.: Final configurations
+--------------------------------------------------------------------------------
+
+  LT(0) = class { 0 (0) { _ } }
+  OT(o) = obj 0 { ... }
+  ---------------------------------
+  LT |- final (OT, [], 0, 0, [], o)
+
+  LT(0) = class { 0 (0) { _ } }
+  OT(o) = obj 0 { ... }
+  ---------------------------------------------
+  LT |- final (OT, CS, ot, oa, exit [] :: K, o)
+
+--------------------------------------------------------------------------------
+| Def.: Program termination
+--------------------------------------------------------------------------------
+
+  A = (LT, OT)
+  LT(0) = class { ...; 0 (0) { e } }
+  OT(0) = obj 0 { ... }
+  (OT, [], 0, 0, [], e) -->*_LT Cfg
+  LT |- final Cfg
+  ----------------------------------------------------
+  |- terminates A
+
+Note: We later define evaluable programs, which can be seen as
+  particular well-typed programs which trivially satisfy the two
+  extra conditions we ask for, that is:
+    LT(0) = class { ...; 0 (0) { e } }
+    OT(0) = obj 0 { ... }.
+
+Note: Programs also have a result value, but in this document we only
+care about termination.
+
+
 Properties
 ==========
 
@@ -315,8 +433,11 @@ Properties
 --------------------------------------------------------------------------------
 | forall LT OT OT' ot oa e o,
 |   LT; (ot, oa) |- (OT, e) ==> (OT', o)
-|     <->
-|   (OT, [], ot, oa, [], e) -->*_LT (OT', [], ot, oa, [], o)
+|      <->
+|   exists Cfg = (OT', _, _, _, _, o),
+|     (OT, [], ot, oa, [], e) -->*_LT Cfg
+|     /\ LT |- final Cfg
+|   )
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
@@ -343,7 +464,7 @@ side. Let (_, _, _, _, K, e) = Cfg. By case on e:
     at most one rule applies depending on e (syntax-directed):
       this -> THIS, arg -> ARG, e.f -> SEL_PUSH, e.f := e' -> UPD_PUSH,
       e.m(e') -> CALL_PUSH, e1 == e2 ? e3 : e4 -> TEST_PUSH,
-      (e; e') -> SEQ_PUSH;
+      (e; e') -> SEQ_PUSH, exit e -> EXIT_PUSH;
 * if e is an o:
   * if K is empty, only RETURN may apply;
   * otherwise, by case on the head E of K:
@@ -356,42 +477,9 @@ side. Let (_, _, _, _, K, e) = Cfg. By case on e:
         [].f := e2 -> UPD_SWITCH, o1.f := [] -> UPD_POP,
         [].m(e) -> CALL_SWITCH, o.m([]) -> CALL_POP,
         [] == e2 ? e3 : e4 -> TEST_SWITCH,
-        []; e -> SEQ_POP.
+        []; e -> SEQ_POP,
+        exit [] -> no rule.
 
-
-Semantics of programs
-=====================
-
---------------------------------------------------------------------------------
-| Def.: Reduction of programs (until termination)
---------------------------------------------------------------------------------
-
-We define a reduction relation between programs and values as follows:
-
-  A = (LT, OT)
-  LT(0) = class { ...; 0 (0) { e } }
-  OT(0) = obj 0 { ... }
-  LT; (0, 0) |- (OT, e) ==> (OT', o)
-  ----------------------------------
-  |- A ==> o
-
-Note: Only terminating programs that don't get stuck have a semantics;
-this is actually a definition of termination for programs.
-
-Note: We later define evaluable programs, which can be seen as
-  particular well-typed programs which trivially satisfy the two
-  extra conditions we ask for, that is:
-    LT(0) = class { ...; 0 (0) { e } }
-    OT(0) = obj 0 { ... }.
-
-Note: Small-step variant:
-
-  A = (LT, OT)
-  LT(0) = class { ...; 0 (0) { e } }
-  OT(0) = obj 0 { ... }
-  (OT, [], 0, 0, [], e) -->*_LT (OT', [], 0, 0, [], o)
-  ----------------------------------------------------
-  |- A ==> o
 
 ================================================================================
 | Partial programs
@@ -535,14 +623,14 @@ I |- A : E
 Object definition typing
 ------------------------
 
-D = (_, OD)
+I = (_, OI)
 A = (LT, OT)
 LT(l) = class { l1, ..., ln; ... }            can only define objects of classes
 forall i in [1,n],                                           in the same program
   OD(oi) = obj decl li \/
     OT(oi) = obj li { ... }
 ----------------------------------
-D; A |- obj l { o1, ..., on } ok
+I; A |- obj l { o1, ..., on } ok
 
 
 Class definition typing
@@ -643,16 +731,12 @@ D; A; G |- e' : l'
 ----------------------- TSEQ
 D; A; G |- (e; e') : l'
 
---------------------------------------------------------------------------------
-| Def.: Complete programs
---------------------------------------------------------------------------------
 
-A program A is complete if it typechecks with no import declarations.
+Note: Class 0 is the main class, see Evaluable programs right below.
 
-  (empty_map, empty_map) |- A : E
-  -------------------------------
-  |- A complete
-
+D; A; G |- e : 0
+--------------------- TEXIT
+D; A; G |- exit e : l
 
 --------------------------------------------------------------------------------
 | Def.: Evaluable programs
@@ -672,26 +756,22 @@ program evaluation is performed.
 
 
 --------------------------------------------------------------------------------
-| Def: Complete and evaluable partial programs
+| Def: Evaluable partial programs
 --------------------------------------------------------------------------------
 
-We say that a well-typed partial program (I, A, E) is complete when
-  I = (empty_map, empty_map).
-
-We say that it is evaluable when moreover
+We say that a well-typed partial program (I, A, E) is evaluable when
+  I = (empty_map, empty_map)
   LE(0) = class decl { 0 (0) }
-and
   OE(0) = obj decl 0
 where
   E = (LE, OE).
 
 Note:
-  (I, A, E) complete ->   |- A complete.
   (I, A, E) evaluable ->  |- A evaluable.
 
-  However, it is possible for A to be complete (resp. evaluable)
-  without having (I, A, E) complete (resp. evaluable), e.g. if the
-  partial program has useless import declarations.
+  However, it is possible for A to be evaluable without having
+  (I, A, E) evaluable, e.g. if the partial program has useless import
+  declarations.
 
 
 --------------------------------------------------------------------------------
@@ -912,7 +992,7 @@ class Nat {
 
 
 ================================================================================
-| Properties of our type system
+| Properties of our type system (bogus -- way too weak)
 ================================================================================
 
 --------------------------------------------------------------------------------
@@ -1026,19 +1106,16 @@ when separately placing the two in C, the two resulting programs
 behave the same with respect to termination. That is:
 
 
-  P = (I, A, E)                  Note: same_interface P Q
-  Q = (I, A', E)
-  I |- A : E
-  I |- A' : E
+  P = (I0, A0, E0)                  Note: same_interface P Q
+  Q = (I0, A0', E0)
+  I0 |- A0 : E0
+  I0 |- A0' : E0
   forall C in closing_contexts P,
-    let (_, B, _) = C[P] in
-    let (_, B', _) = C[Q] in
-    terminates B <-> terminates B'
+    let ((empty_map, empty_map), A, E) = C[P] in
+    let ((empty_map, empty_map), A', E) = C[Q] in
+    (E |- terminates B) <-> (E |- terminates B')
   ---------------------------------------------------------
   |- P ~ Q
-
-  where
-   terminates A ::= exists o, |- A ==> o
 
 
 ================================================================================
@@ -1168,6 +1245,9 @@ instr ::=                  instruction
                                pop twice, push back
   | Drop                     drop
                                pop, do nothing with the popped object
+  | Halt                     halt the machine
+                               top of current local stack is the
+			       result
 
 Note: At this level we make no distinction between inter- and intra-
 compartment calls. If we were to need this distinction it would anyway
@@ -1239,33 +1319,38 @@ well-formed programs.
 
 Rules:
 
-  ----------------------------------------------------- NOP
-  E |- (RF, GS, LT, Nop :: code) --> (RF, GS, LT, code)
+  ---------------------------------- NOP
+  E |- (RF, GS, LT, Nop :: code) -->
+       (RF, GS, LT,        code)
 
   code = i1 :: ... :: in :: code'
-  ------------------------------------------------------- B
-  E |- (RF, GS, LT, B n :: code) --> (RF, GS, LT', code')
+  ----------------------------------- B
+  E |- (RF, GS,  LT, B n :: code) -->
+       (RF, GS, LT',       code')
 
   E = (_, OE)
   OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; LS }
   LT' = LT with l => { M1, ..., Mp; LOT; o :: LS }
-  -------------------------------------------------------- REF
-  E |- (RF, GS, LT, Ref o :: code) --> (RF, GS, LT', code)
+  ------------------------------------------------ REF
+  E |- (RF, GS,  LT, Ref o :: code) -->
+       (RF, GS, LT',          code)
 
   E = (_, OE)
   OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; LS }
   LT' = LT with l => { M1, ..., Mp; LOT; RF(this) :: LS }
   ------------------------------------------------------- THIS
-  E |- (RF, GS, LT, This :: code) --> (RF, GS, LT', code)
+  E |- (RF, GS,  LT, This :: code) -->
+       (RF, GS, LT',         code)
 
   E = (_, OE)
   OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; LS }
   LT' = LT with l => { M1, ..., Mp; LOT; RF(arg) :: LS }
   ------------------------------------------------------ ARG
-  E |- (RF, GS, LT, Arg :: code) --> (RF, GS, LT', code)
+  E |- (RF, GS,  LT, Arg :: code) -->
+       (RF, GS, LT', code)
 
   E = (_, OE)
   OE(RF(this)) = obj decl l
@@ -1274,8 +1359,9 @@ Rules:
   LOT(o) = (o1, ..., on)                                       privacy
   f <= n
   LT' = LT with l => { M1, ..., Mp; LOT; of :: LS }
-  ----------------------------------------------------------- SELECT
-  E |- (RF, GS, LT, Select f :: code) --> (RF, GS, LT', code)
+  ------------------------------------------------- SELECT
+  E |- (RF, GS,  LT, Select f :: code) -->
+       (RF, GS, LT',             code)
 
   E = (_, OE)
   OE(RF(this)) = obj decl l
@@ -1285,8 +1371,9 @@ Rules:
   1 <= f <= n
   LOT' = LOT with o => (o1, ..., of-1, o', of+1, ..., on)
   LT' = LT with l => { M1, ..., Mp; LOT'; o' :: LS }
-  ----------------------------------------------------------- UPD
-  E |- (RF, GS, LT, Update f :: code) --> (RF, GS, LT', code)
+  ------------------------------------------------------- UPD
+  E |- (RF, GS,  LT, Update f :: code) -->
+       (RF, GS, LT',             code)
 
   E = (LE, OE)
   OE(RF(this)) = obj decl l
@@ -1302,8 +1389,9 @@ Rules:
   LT' = LT with l => { M1, ..., Mp; LOT; LS }
   GS' = (lr, RF, code) :: GS
   RF' = (this => ot', arg => oa')
-  ------------------------------------------------------------ CALL
-  E |- (RF, GS, LT, Call m :: code) --> (RF', GS', LT', code')
+  ------------------------------------------- CALL
+  E |- ( RF,  GS, LT,  Call m :: code) -->
+       (RF', GS', LT',          code')
 
   Here we are able to infer the expected return type because we can
   only call methods that have a definition, and we have a matching
@@ -1323,55 +1411,77 @@ Rules:
   else
     LT' = LT
   fi
-  --------------------------------------------------------- RETURN
-  E |- (RF, GS, LT, Return :: _) --> (RF', GS', LT', code')
+  -------------------------------------------------------- RETURN
+  E |- ( RF,  GS,  LT,  Return :: _) -->
+       (RF', GS', LT',        code')
 
   E = (_, OE)
   OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; o :: o :: LS }
   LT' = LT with l => { M1, ..., Mp; LOT; LS }
   code = i1 :: ... :: in :: code'
-  --------------------------------------------------------- BEQ-EQ
-  E |- (RF, GS, LT, Beq n :: code) --> (RF, GS, LT', code')
+  ------------------------------------------- BEQ-EQ
+  E |- (RF, GS,  LT, Beq n :: code) -->
+       (RF, GS, LT',         code')
 
   E = (_, OE)
   OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; o1 :: o2 :: LS }
   o1 <> o2
   LT' = LT with l => { M1, ..., Mp; LOT; LS }
-  -------------------------------------------------------- BEQ-NEQ
-  E |- (RF, GS, LT, Beq n :: code) --> (RF, GS, LT', code)
+  -------------------------------------------- BEQ-NEQ
+  E |- (RF, GS,  LT, Beq n :: code) -->
+       (RF, GS, LT',          code)
 
   E = (_, OE)
   OE(RF(this)) = obj decl l
   LT(l) = { M1, ..., Mp; LOT; o :: LS }
   LT' = LT with l => { M1, ..., Mp; LOT; LS }
-  ------------------------------------------------------- DROP
-  E |- (RF, GS, LT, Drop :: code) --> (RF, GS, LT', code)
+  ------------------------------------------- DROP
+  E |- (RF, GS,  LT, Drop :: code) -->
+       (RF, GS, LT',         code)
+
 
 Semantics of programs
 =====================
 
 --------------------------------------------------------------------------------
-| Def.: Reduction of programs (until termination)
+| Def.: Final states
 --------------------------------------------------------------------------------
 
-We define a reduction relation between programs and values as follows:
+  E = (LE, OE)
+  LE(0) = class decl { 0 (0) }
+  LT(0) = { M1; LOT; o :: [] }
+  OE(o) = obj decl 0
+  -------------------------------------------
+  E |- final ((0, 0), [], LT, Return :: code)
 
-  E = (_, OE)
+
+  E = (LE, OE)
+  LE(0) = class decl { 0 (0) }
+  OE(RF(this)) = obj decl l
+  LT(l) = { ...; LOT; o :: _ }
+  OE(o) = obj decl 0
+  -------------------------------------
+  E |- final (RF, GS, LT, Halt :: code)
+
+
+--------------------------------------------------------------------------------
+| Def.: Program termination
+--------------------------------------------------------------------------------
+
+  E = (LE, OE)
+  LE(0) = class decl { 0(0) }
+  OE(0) = obj decl 0
   LT(0) = { M1; _; _ }
   M1 = code
-  OE(0) = obj decl 0
-  s -->*_E s'
-  s = ((0, 0), [], LT, code)
-  s' = ((0, 0), [], LT', Return :: _)
-  LT'(0) = { M1; OT'; o :: [] }
-  OE(o) = obj decl 0
-  -----------------------------------------------------
-  E |- LT ==> o
+  ((0, 0), [], LT, code, Running) -->*_E s'
+  E |- final s'
+  -----------------------------------------
+  E |- terminates LT
 
-Note: Only terminating programs that don't get stuck have a semantics;
-this is actually a definition of termination for programs.
+Note: Programs also have a final result, but here we only care about
+termination.
 
 --------------------------------------------------------------------------------
 | Linking
@@ -1454,6 +1564,10 @@ END: Nop
      comp_expr(e);
      Drop;
      comp_expr(e')
+
+  comp_expr(exit e) =
+     comp_expr(e);
+     Halt
 
 Compilation of methods
 ----------------------
@@ -1564,7 +1678,7 @@ State ::=
     status       informs whether program execution is over
   )
 
-status ::= Running | Done o
+status ::= Running | Halted
 
 GSP ::=        program's view on the call stack
                when the program has control
@@ -1668,6 +1782,7 @@ E |- CtxState (  /, / :: GSP, LT,     /,  I, Running) -->
 4 - Call from program code to context code
 ==========================================
 
+
 I = (LI, OI)
 E = (LE, OE)
 OE(RF(this)) = obj decl l
@@ -1736,7 +1851,7 @@ E |- PrgState (RF, [] :: GSC,  LT, code, I, Running) -->
 --------------------------------------------- TICK?
                                        tick ?
 E |- CtxState (/, /, LT, /, I, Running) -->
-     CtxState (/, /, LT, /, I,    Done)
+     CtxState (/, /, LT, /, I,  Halted)
 
 7 - Termination from program code
 =================================
@@ -1745,10 +1860,25 @@ E = (LE, OE)
 LE(0) = class decl { 0 (0) } 
 LT(0) = { M1, ..., Mp; OLT; o :: [] }
 OE(o) = obj decl 0
----------------------------------------------------------------- TICK!
+---------------------------------------------------------------- TICK!RET
                                                           tick !
 E |- PrgState ((0, 0), [], LT, Return :: code, I, Running) -->
-     PrgState ((0, 0), [], LT, Return :: code, I,    Done)
+     PrgState ((0, 0), [], LT,           code, I,  Halted)
+
+E = (LE, OE)
+I = (LI, OI)
+OE(RF(this)) = obj decl l
+LT(l) = { M1, ..., Mp; OLT; o :: [] }
+if 0 in dom(LE) then
+  OE(o) = obj decl 0
+else
+  0 in dom(LI)
+  o in dom(OI)
+---------------------------------------------------------- TICK!HALT
+                                                    tick !
+E |- PrgState (RF, [], LT, Halt :: code, I, Running) -->
+     PrgState (RF, [], LT, Halt :: code, I,  Halted)
+
 
 --------------------------------------------------------------------------------
 | Traces
@@ -1812,8 +1942,8 @@ same_traces (I, LT, E) (I', LT', E') ::=
 | Mergeable states
 --------------------------------------------------------------------------------
 
-State = PrgState (RF, GSP, LT,  code, I,  status)
-State' = CtxState (/,  GSC, LT', /,    I', status)
+State  = PrgState (RF, GSP, LT,  code,  I, status)
+State' = CtxState (/,  GSC, LT',    /, I', status)
 |- linkable (I, LT, E) (I', LT', E')
 |- compatible_views GSP GSC
 --------------------------------------------------
@@ -1852,8 +1982,8 @@ GSC = lr :: GSP'
 
 merge (E, E', State, State') ::=
   match (State, State') with
-  | PrgState (RF, GSP, LT,  code, I,  _),
-    CtxState (/,  GSC, LT', /,    I', _) ->
+  | PrgState (RF, GSP, LT,  code, I,  status),
+    CtxState (/,  GSC, LT', /,    I', status) ->
       let (I'', LT'', E'') = (I, LT, E) /\/\ (I', LT', E') in
       (I'', (RF, merge GSP GSC, LT'', code), E'')
   | CtxState _, PrgState _ ->
@@ -2152,10 +2282,10 @@ Now apply trace decomposition to get a trace u such that
    s' = c'[q']
 
 Thus u in Traces(compile Q), but since s' exhibits termination
-behavior, u must end with a tick. But it's also a prefix of t', and
-the only prefix of t' that ends with a tick is t' itself. So t' in
-Traces(compile Q) which also implies that t in Traces(compile Q) by
-prefix-closedness.
+behavior, u ends with a tick (or can be extended to end with a
+tick). But it's also a prefix of t', and the only prefix of t' that
+ends with a tick is t' itself. So t' is in Traces(compile Q) which
+also implies that t in Traces(compile Q) by prefix-closedness.
 
 ================================================================================
 | Symbolic micro-policy (compartmentalization variant)
