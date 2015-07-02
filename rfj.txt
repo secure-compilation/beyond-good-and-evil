@@ -992,44 +992,91 @@ class Nat {
 
 
 ================================================================================
-| Properties of our type system (bogus -- way too weak)
+| Properties of our type system
 ================================================================================
+
+We assume a statement for typing flat contexts E (easy to define --
+very similar to expression typing):
+
+  D; A; G |- E : l -> l'
+
+
+We deduce one for K:
+
+  ----------------------
+  D; A; G |- [] : l -> l
+
+
+  D; A; G |- K : l' -> l''
+  D; A; G |- E : l -> l'
+  ---------------------------
+  D; A; G |- E :: K : l -> l'
+
+Then one for CS:
+
+  -------------------
+  D; A |- [] : l -> l
+
+
+  D; A |- CS : l' -> l''
+  D; A; empty |- ot : lt
+  D; A; empty |- oa : la
+  G = {this: lt; arg: la}
+  D; A; G |- K : l -> l'
+  ----------------------------------------
+  D; A |- (ot, oa, K) :: CS : l -> l''
+
+
+And finally one for Cfg:
+
+  A = (LT, OT)
+  D; A; empty |- ot : lt
+  D; A; empty |- oa : la
+  G = {this: lt; arg: la}
+  D; A; G |- e : l
+  D; A; G |- K : l -> l'
+  D; A |- CS : l' -> l''
+  -------------------------------------
+  D; LT |- (OT, CS, ot, oa, K, e) : l''
 
 --------------------------------------------------------------------------------
 | Progress
 --------------------------------------------------------------------------------
 | forall Cfg l I LT E G,
-|   let (OT, _, _, _, _, e) = Cfg in
+|   let (OT, _, _, _, _, _) = Cfg in
 |   I |- (LT, OT) : E ->
-|   I; (LT, OT); G |- e : l ->
-|     is_value e \/ (exists Cfg', Cfg -->_LT Cfg')
+|   I; LT |- Cfg : l ->
+|     LT |- final Cfg
+|       \/
+|     exists Cfg', Cfg -->_LT Cfg'
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 | Preservation (Subject reduction)
 --------------------------------------------------------------------------------
 | forall Cfg Cfg' l I LT E G,
-|   let (OT, _, _, _, _, e) = Cfg in
-|   let (OT', _, _, _, _, e') = Cfg' in
+|   let (OT, _, _, _, _, _) = Cfg in
+|   let (OT', _, _, _, _, _) = Cfg' in
 |   I |- (LT, OT) : E ->
-|   I; (LT, OT); G |- e : l ->
+|   I; LT |- Cfg : l ->
 |   Cfg -->_LT Cfg' ->
 |     I |- (LT, OT') : E /\
-|     I; (LT, OT'); G |- e' : l
+|     I; LT |- Cfg' : l
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 | Type safety
 --------------------------------------------------------------------------------
 | forall Cfg l I LT E G,
-|   let (OT, _, _, _, _, e) = Cfg in
+|   let (OT, _, _, _, _, _) = Cfg in
 |   I |- (LT, OT) : E ->
-|   I; (LT, OT); G |- e : l ->
-|     is_value e \/
+|   I; LT |- Cfg : l ->
+|     LT |- final Cfg
+|       \/
 |     (exists Cfg', Cfg -->_LT Cfg' /\
-|        let (OT', _, _, _, _, e') = Cfg' in
+|          let (OT', _, _, _, _, _) = Cfg' in
 |          I |- (LT, OT') : E /\
-|          I; (LT, OT'); G |- e' : l)
+|          I; LT |- Cfg' : l)
 --------------------------------------------------------------------------------
 
 ================================================================================
