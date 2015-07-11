@@ -2346,7 +2346,7 @@ Many differences with respect to Oakland 2015 policy:
   - Extensions:
     - prohibiting all intra-compartment reads
     - protected call stack in monitor space
-    - monitor services for call, return, and select
+    - monitor services for call and return [drop select?]
   - Differences:
     - monitor services that return in a different compartment (call and return)
 
