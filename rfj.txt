@@ -2335,7 +2335,7 @@ ends with a tick is t' itself. So t' is in Traces(compile Q) which
 also implies that t in Traces(compile Q) by prefix-closedness.
 
 ================================================================================
-| Symbolic micro-policy (compartmentalization variant)
+| Symbolic micro-policy #1 (simple compartmentalization variant)
 ================================================================================
 
 Many differences with respect to Oakland 2015 policy:
@@ -2346,7 +2346,8 @@ Many differences with respect to Oakland 2015 policy:
   - Extensions:
     - prohibiting all intra-compartment reads
     - protected call stack in monitor space
-    - monitor services for call and return [drop select?]
+    - monitor services for call and return,
+      and even local field select and update
   - Differences:
     - monitor services that return in a different compartment (call and return)
 
@@ -2360,7 +2361,7 @@ Tpc ::= c            Q: do we need to switch to <F,c> where F in {Jal,NoJal}?
 Ts  ::= ()
 
 --------------------------------------------------------------------------------
-| Symbolic rules
+| Symbolic rules (very boring)
 --------------------------------------------------------------------------------
 
 Nop: {tpc=c, tci=c} -> {tpc'=c}
@@ -2387,7 +2388,9 @@ Service: {tpc=c, tci=()} -> {}
 | Extra state
 --------------------------------------------------------------------------------
 
-call_stack : list (word, word, word)
+extra state = (call_stack, lookup_method, lookup_field)
+
+call_stack : list (word, word, word)       -- return address, old this, old arg
 
 lookup_method : obj -> nat -> option addr
 
@@ -2405,7 +2408,7 @@ call(mem, reg, pc@c, (call_stack, lookup_method, lookup_field)) =
   if tag mem[reg[ra]] = c then
     let call_stack' = (reg[ra], reg[r_this], reg[r_arg]) :: call_stack in
     let reg' = (clear_registers reg)[r_this := o, r_arg := arg] in
-    let c' = mem[ma] in
+    let c' = tag_of mem[ma] in
     Some (mem, reg', ma@c', (call_stack', lookup_method, lookup_field))
   else None
 
@@ -2414,14 +2417,15 @@ return(mem, reg, pc@c, (call_stack, lookup_method, lookup_field)) =
   | (ret, this, arg) :: call_stack' ->
     let reg' = (clear_registers reg)[r_ret := reg[r_ret],
                                      r_this := this, r_arg := arg] in
-    let c' = mem[ret] in
+    let c' = tag_of mem[ret] in
     Some (mem, reg', ret@c', (call_stack', lookup_method, lookup_field))
   | [] -> None
 
   is this useful??
     |   if we remove it, then lookup_field shouldn't be extra state,
     |   we should have a fixed scheme instead
-    v
+    v   CH: local objects also accessed using monitor services
+            might give a simpler starting compilation scheme
 
 select(mem, reg, pc@c, (call_stack, lookup_method, lookup_field)) =
   let o = reg[r_arg1] in
@@ -2432,6 +2436,9 @@ select(mem, reg, pc@c, (call_stack, lookup_method, lookup_field)) =
     Some (mem, reg', ra@c, (call_stack, lookup_method, lookup_field))
   else
     None
+
+update(mem, reg, pc@c, (call_stack, lookup_method, lookup_field)) =
+  ... TODO ...
 
 Note: allowing returns to forged ra addresses seem ok because:
 - for call we enforce that ra points to the caller's compartment
@@ -2447,6 +2454,141 @@ Note: allowing returns to forged ra addresses seem ok because:
   abstraction proof might be hard (or impossible if the intuition
   happens to be wrong), in which case we should require that monitor
   services are only reached via Jal
+
+================================================================================
+| Symbolic micro-policy #2 (the real thing)
+================================================================================
+
+This micro-policy puts together:
+  + isolated compartments (classes) with designated entry points
+  + adherence to a call and return discipline via linear return capabilities
+  + dynamic type safety
+
+--------------------------------------------------------------------------------
+| Step 1: isolated compartments with entry points, no monitor services
+| (no returns, no register cleaning, no type checking)
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+| Symbolic tags
+--------------------------------------------------------------------------------
+
+e ::= EntryPoint | NotEntryPoint
+
+j ::= Jalled | NotJalled
+
+Tm  ::= (c, e)      -- the owning compartment + entry point or not
+Tr  ::= ()
+Tpc ::= (c', j)     -- the old compartment + whether we jalled or not
+Ts  ::= ()
+
+--------------------------------------------------------------------------------
+| Symbolic rules (a bit less boring)
+--------------------------------------------------------------------------------
+
+General check on all instruction opcodes: c'=c \/ (j=Jalled /\ e=EntryPoint)
+
+Nop: {tpc=(c',j), tci=(c,e)} -> {tpc'=(c,NotJalled)}
+
+Const: {tpc=(c',j), tci=(c,e)} -> {tpc'=(c,NotJalled), trd'=()}
+
+Mov: {tpc=(c',j), tci=(c,e), trs=(), trd=()} -> {tpc'=(c,NotJalled), trd'=()}
+
+Binop: {tpc=(c',j), tci=(c,e), tr1=(), tr2=()} -> {tpc'=(c,NotJalled), trd'=()}
+
+Load: {tpc=(c',j), tci=(c,e), trp=(), tm=(c,_), trd=()}
+-> {tpc'=(c,NotJalled), trd'=()}
+
+Store: {tpc=(c',j), tci=(c,e), trp=(), trs=(), tm=(c,em)}
+-> {tpc'=(c,NotJalled), tm'=(c,em)}
+
+Jump: {tpc=(c',j), tci=(c,e), tr=()} -> {tpc'=(c,NotJalled)}
+
+Jal: {tpc=(c',j), tci=(c,e), tr=(), tra=()} -> {tpc'=(c,Jalled), tra=()}
+
+Bnz: {tpc=(c',j), tci=(c,e), tr=()} -> {tpc'=(c,NotJalled)}
+
+--------------------------------------------------------------------------------
+| Step 2: linear return capabilities (no register cleaning, no type checking)
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+| Symbolic tags
+--------------------------------------------------------------------------------
+
+e ::= EntryPoint | NotEntryPoint
+
+j ::= Jalled | Returned | Other
+
+r ::= Ret n | Word      -- return capability for call depth n or normal word
+
+v ::= r | Clear         -- ... or a moved value
+
+Tm  ::= (c, e, v)       -- ... + tag on the contents
+Tr  ::= r               -- tag on the contents
+Tpc ::= (c', j, n)      -- ... + current call depth n
+Ts  ::= ()
+
+--------------------------------------------------------------------------------
+| Symbolic rules (a bit less boring)
+--------------------------------------------------------------------------------
+
+clear v = { Clear, if v=Ret n or v=Clear
+          { Word, if v=Word
+
+General check on all instruction opcodes:
+c'=c \/ (j=Jalled /\ e=EntryPoint) \/ j=Returned
+
+Nop: {tpc=(c',j,n), tci=(c,e,r)} -> {tpc'=(c,Other,n)}
+
+Const: {tpc=(c',j,n), tci=(c,e,r)} -> {tpc'=(c,Other,n), trd'=Word}
+
+Mov: {tpc=(c',j,n), tci=(c,e,r), trs=v, trd=v'}
+-> {tpc'=(c,Other,n), trd'=v, trs'=clear v }
+
+Binop: {tpc=(c',j,n), tci=(c,e,r), tr1=Word, tr2=Word}
+-> {tpc'=(c,Other,n), trd'=Word}
+
+Load: {tpc=(c',j,n), tci=(c,e,r), trp=Word, tm=(c,em,v), trd=v'}
+-> {tpc'=(c,Other,n), trd'=v, tm'= (c,em,clear v) }
+
+Store: {tpc=(c',j,n), tci=(c,e,r), trp=Word, trs=v, tm=(c,em,v')}
+-> {tpc'=(c,Other,n), tm'=(c,em,v), trs=clear v}
+
+Jump: {tpc=(c',j,n), tci=(c,e,r), tr=Word} -> {tpc'=(c,Other,n)}
+
+Jump: {tpc=(c',j,n), tci=(c,e,r), tr=Ret (S n)}
+-> {tpc'=(c,Other,n), tr'=Clear}
+
+Jal: {tpc=(c',j,n), tci=(c,e,r), tr=Word, tra=v'}
+-> {tpc'=(c,Jalled,S n), tra=Ret n}
+
+Bnz: {tpc=(c',j,n), tci=(c,e,r), tr=Word} -> {tpc'=(c,Other,n)}
+
+
+Q: Are we too restrictive (linear) about Jals inside compartments?
+   Yes! And this could easily break transparency!
+Potential solutions:
+- tag Jal instructions in memory: inside vs cross compartment
+- address problem on the next instruction, retag ra to Word if c'=c
+  + lots of corner cases, ra could already be used by the instruction
+  + only gets worse with register cleaning
+  + for monitor services we're cheating by starting with a Nop
+- simple but no transparency:
+  require Nop or ra not used after cross compartment Jal
+- hardware extension: jumps also get label of next instruction
+  + can this be simulated in software? policy compiler could
+    use the pc and take care of corner cases
+
+Q: Can we really allow r in tci=(c,e,r)?
+
+
+
+
+
+
+
+
 
 
 ================================================================================
