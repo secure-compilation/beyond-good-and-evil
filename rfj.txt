@@ -2539,32 +2539,31 @@ clear v = { Clear, if v=Ret n or v=Clear
 General check on all instruction opcodes:
 c'=c \/ (j=Jalled /\ e=EntryPoint) \/ j=Returned
 
-Nop: {tpc=(c',j,n), tci=(c,e,r)} -> {tpc'=(c,Other,n)}
+Nop: {tpc=(c',j,n), tci=(c,e,Word)} -> {tpc'=(c,Other,n)}
 
-Const: {tpc=(c',j,n), tci=(c,e,r)} -> {tpc'=(c,Other,n), trd'=Word}
+Const: {tpc=(c',j,n), tci=(c,e,Word)} -> {tpc'=(c,Other,n), trd'=Word}
 
-Mov: {tpc=(c',j,n), tci=(c,e,r), trs=v, trd=v'}
+Mov: {tpc=(c',j,n), tci=(c,e,Word), trs=v, trd=v'}
 -> {tpc'=(c,Other,n), trd'=v, trs'=clear v }
 
-Binop: {tpc=(c',j,n), tci=(c,e,r), tr1=Word, tr2=Word}
+Binop: {tpc=(c',j,n), tci=(c,e,Word), tr1=Word, tr2=Word}
 -> {tpc'=(c,Other,n), trd'=Word}
 
-Load: {tpc=(c',j,n), tci=(c,e,r), trp=Word, tm=(c,em,v), trd=v'}
+Load: {tpc=(c',j,n), tci=(c,e,Word), trp=Word, tm=(c,em,v), trd=v'}
 -> {tpc'=(c,Other,n), trd'=v, tm'= (c,em,clear v) }
 
-Store: {tpc=(c',j,n), tci=(c,e,r), trp=Word, trs=v, tm=(c,em,v')}
+Store: {tpc=(c',j,n), tci=(c,e,Word), trp=Word, trs=v, tm=(c,em,v')}
 -> {tpc'=(c,Other,n), tm'=(c,em,v), trs=clear v}
 
-Jump: {tpc=(c',j,n), tci=(c,e,r), tr=Word} -> {tpc'=(c,Other,n)}
+Jump: {tpc=(c',j,n), tci=(c,e,Word), tr=Word} -> {tpc'=(c,Other,n)}
 
-Jump: {tpc=(c',j,n), tci=(c,e,r), tr=Ret (S n)}
--> {tpc'=(c,Other,n), tr'=Clear}
+Jump: {tpc=(c',j,S n), tci=(c,e,Word), tr=Ret n}
+-> {tpc'=(c,Returned,n), tr'=Clear}
 
-Jal: {tpc=(c',j,n), tci=(c,e,r), tr=Word, tra=v'}
+Jal: {tpc=(c',j,n), tci=(c,e,Word), tr=Word, tra=v'}
 -> {tpc'=(c,Jalled,S n), tra=Ret n}
 
-Bnz: {tpc=(c',j,n), tci=(c,e,r), tr=Word} -> {tpc'=(c,Other,n)}
-
+Bnz: {tpc=(c',j,n), tci=(c,e,Word), tr=Word} -> {tpc'=(c,Other,n)}
 
 Q: Are we too restrictive (linear) about Jals inside compartments?
    Yes! And this could easily break transparency!
@@ -2578,10 +2577,129 @@ Potential solutions:
   require Nop or ra not used after cross compartment Jal
 - hardware extension: jumps also get label of next instruction
   + can this be simulated in software? policy compiler could
-    use the pc and take care of corner cases
+    use the pc tag and take care of corner cases
 
-Q: Can we really allow r in tci=(c,e,r)?
+--------------------------------------------------------------------------------
+| Step 2': linear return capabilities (no register cleaning, no type checking)
+--------------------------------------------------------------------------------
 
+We're assuming that the symbolic micro-policy compiler allows us to
+access the tag of the memory location of the next pc (not just for
+jumps but for all instructions). We assume an additional input: the
+tag of the next instruction (tni).
+
+--------------------------------------------------------------------------------
+| Symbolic tags
+--------------------------------------------------------------------------------
+
+e ::= EntryPoint | NotEntryPoint
+
+r ::= Ret n | Word      -- return capability for call depth n or normal word
+
+v ::= r | Clear         -- ... or a moved value
+
+Tm  ::= (c, e, v)       -- ... + tag on the contents
+Tr  ::= r               -- tag on the contents
+Tpc ::= n               -- current call depth n
+Ts  ::= ()
+
+--------------------------------------------------------------------------------
+| Symbolic rules (a bit less boring)
+--------------------------------------------------------------------------------
+
+Nop: {tpc=n, tci=(c,e,Word), tni=(c,e',r')} -> {tpc'=n}
+
+Const: {tpc=n, tci=(c,e,Word), tni=(c,e',r')} -> {tpc'=n, trd'=Word}
+
+Mov: {tpc=n, tci=(c,e,Word), tni=(c,e',r'), trs=v, trd=v'}
+-> {tpc'=n, trd'=v, trs'=clear v }
+
+Binop: {tpc=n, tci=(c,e,Word), tni=(c,e',r'), tr1=Word, tr2=Word}
+-> {tpc'=n, trd'=Word}
+
+Load: {tpc=n, tci=(c,e,Word), tni=(c,e',r'), trp=Word, tm=(c,em,v), trd=v'}
+-> {tpc'=n, trd'=v, tm'= (c,em,clear v) }
+
+Store: {tpc=n, tci=(c,e,Word), tni=(c,e',r'), trp=Word, trs=v, tm=(c,em,v')}
+-> {tpc'=n, tm'=(c,em,v), trs=clear v}
+
+Jump: {tpc=n, tci=(c,e,Word), tni=(c,e',r'), tr=Word} -> {tpc'=n}
+
+Jump: {tpc=S n, tci=(c,e,Word), tni=(c',e',r'), tr=Ret n}
+-> {tpc'=n, tr'=Clear}  when c <> c'
+
+Jal: {tpc=n, tci=(c,e,Word), tni=(c,e',r'), tr=Word, tra=v'}
+-> {tpc'=n, tra=Word}
+
+Jal: {tpc=n, tci=(c,e,Word), tni=(c',EntryPoint,r'), tr=Word, tra=v'}
+-> {tpc'=S n, tra=Ret n}  when c <> c'
+
+Bnz: {tpc=n, tci=(c,e,Word), tni=(c,e',r'), tr=Word} -> {tpc'=n}
+
+--------------------------------------------------------------------------------
+| Step 3: Type checking (no register cleaning)
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+| Symbolic tags
+--------------------------------------------------------------------------------
+
+e ::= EntryPoint c1 -> c2 | NotEntryPoint
+
+r ::= Ret n c | Word | Obj c   -- ... or an object pointer tagged with its type
+
+v ::= r | Clear         -- ... or a moved value
+
+b ::= Bless c | NoBless -- whether the Const should load an object pointer
+
+Tm  ::= (b, c, e, v)    -- ... + tag on the contents
+Tr  ::= r               -- tag on the contents
+Tpc ::= n               -- current call depth n
+Ts  ::= ()
+
+Invariant: the loader only blesses correct Const instructions
+
+clear v = { Clear, if v=Ret n or v=Clear
+          { Word, if v=Word
+          { Obj c, if v=Obj c
+
+--------------------------------------------------------------------------------
+| Symbolic rules (a bit less boring)
+--------------------------------------------------------------------------------
+
+Nop: {tpc=n, tci=(NoBless,c,e,Word), tni=(b',c,e',r')} -> {tpc'=n}
+
+Const: {tpc=n, tci=(NoBless,c,e,Word), tni=(b',c,e',r')} -> {tpc'=n, trd'=Word}
+
+Const: {tpc=n, tci=(Bless c',c,e,Word), tni=(b',c,e',r')} -> {tpc'=n, trd'=Obj c'}
+
+Mov: {tpc=n, tci=(NoBless,c,e,Word), tni=(b',c,e',r'), trs=v, trd=v'}
+-> {tpc'=n, trd'=v, trs'=clear v }
+
+Binop: {tpc=n, tci=(NoBless,c,e,Word), tni=(b',c,e',r'), tr1=Word, tr2=Word}
+-> {tpc'=n, trd'=Word}
+
+Load: {tpc=n, tci=(NoBless,c,e,Word), tni=(b',c,e',r'), trp=Word,
+       tm=(b,c,em,v), trd=v'}
+-> {tpc'=n, trd'=v, tm'= (c,em,clear v) }
+
+Store: {tpc=n, tci=(NoBless,c,e,Word), tni=(b',c,e',r'), trp=Word, trs=v,
+        tm=(b,c,em,v')}
+-> {tpc'=n, tm'=(NoBless,c,em,v), trs=clear v}
+
+Jump: {tpc=n, tci=(NoBless,c,e,Word), tni=(b',c,e',r'), tr=Word} -> {tpc'=n}
+
+Jump: {tpc=S n, tci=(NoBless,c,e,Word), tni=(c',e',r'), tr=Ret n c, trret=Obj c}
+-> {tpc'=n, tr'=Clear}  when c <> c'
+
+Jal: {tpc=n, tci=(NoBless,c,e,Word), tni=(b',c,e',r'), tr=Word, tra=v'}
+-> {tpc'=n, tra=Word}
+
+Jal: {tpc=n, tci=(NoBless,c,e,Word), tni=(c',EntryPoint c1 -> c2,r'), tr=Word,
+      tra=v', trarg=Obj c1}
+-> {tpc'=S n, tra=Ret n c2}  when c <> c'
+
+Bnz: {tpc=n, tci=(NoBless,c,e,Word), tni=(b',c,e',r'), tr=Word} -> {tpc'=n}
 
 
 
