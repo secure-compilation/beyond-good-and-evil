@@ -2335,6 +2335,74 @@ ends with a tick is t' itself. So t' is in Traces(compile Q) which
 also implies that t in Traces(compile Q) by prefix-closedness.
 
 ================================================================================
+| Compilation to machine code
+================================================================================
+
+Several passes:
+
+  - source language to intermediate language;
+  - intermediate language to assembly with labels;
+ (- code optimization of assembly with labels;)
+  - linking, where labels get replaced by actual memory locations.
+
+--------------------------------------------------------------------------------
+| Assembly with labels
+--------------------------------------------------------------------------------
+
+label ::=
+ | LObj o       object label
+ | LField o f   field label
+ | LMeth l m    method label
+ | LExtra n     extra, freshly generated labels
+
+extended_label ::= label + n
+
+i ::= n | extended_label
+
+  Q: Is this OK? Usually i_max << sizeof word, so we can't be sure our
+  final memory addresses will fit in an i.
+
+inst ::=
+  Nop | Const i rd | Mov rs rd | Binop_op r1 r2 rd
+  | Load rp rd | Store rp rs | Jump r | Jal r | Bnz r i | Halt
+
+labels ::= [] | label :: labels
+
+labeled_inst ::= labels : inst
+
+labeled_code ::= [] | labeled_inst : labeled_code
+
+--------------------------------------------------------------------------------
+| Compilation from intermediate language to assembly with labels
+--------------------------------------------------------------------------------
+
+(* generate a fresh label *)
+
+gen_label : unit -> label
+
+let gen_label =
+  let rn = ref 0 in
+  fun () -> let n = !rn in
+            rn := n + 1; LExtra n
+
+(* compile code knowing its pc *)
+
+compile_code : intermediate_code -> extended_label -> labelled_code
+
+
+(* compile a method *)
+
+compile_method : class -> method -> intermediate_code -> labelled_code
+
+let compile_method l m icode =
+  let label = LMeth l m in
+  let lcode = compile_code icode (label + 0) in
+  match lcode with
+  | (labels : inst) :: lcode' ->
+      ((label :: labels) : inst) :: lcode'
+  | [] -> [[label] : Nop]
+
+================================================================================
 | Symbolic micro-policy #1 (simple compartmentalization variant)
 ================================================================================
 
