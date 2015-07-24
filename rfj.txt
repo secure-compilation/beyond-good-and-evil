@@ -2593,7 +2593,7 @@ r ::= Ret n | Word      -- return capability for call depth n or normal word
 v ::= r | Clear         -- ... or a moved value
 
 Tm  ::= (c, e, v)       -- ... + tag on the contents
-Tr  ::= r               -- tag on the contents
+Tr  ::= v               -- tag on the contents
 Tpc ::= (c', j, n)      -- ... + current call depth n
 Ts  ::= ()
 
@@ -2667,7 +2667,7 @@ r ::= Ret n | Word      -- return capability for call depth n or normal word
 v ::= r | Clear         -- ... or a moved value
 
 Tm  ::= (c, e, v)       -- ... + tag on the contents
-Tr  ::= r               -- tag on the contents
+Tr  ::= v               -- tag on the contents
 Tpc ::= n               -- current call depth n
 Ts  ::= ()
 
@@ -2721,7 +2721,7 @@ v ::= r | Clear         -- ... or a moved value
 b ::= Bless c | NoBless -- whether the Const should load an object pointer
 
 Tm  ::= (b, c, e, v)    -- ... + tag on the contents
-Tr  ::= r               -- tag on the contents
+Tr  ::= v               -- tag on the contents
 Tpc ::= n               -- current call depth n
 Ts  ::= ()
 
@@ -2732,7 +2732,7 @@ clear v = { Clear, if v=Ret n or v=Clear
           { Obj c, if v=Obj c
 
 --------------------------------------------------------------------------------
-| Symbolic rules (a bit less boring)
+| Symbolic rules (still surprisingly simple with our new trick)
 --------------------------------------------------------------------------------
 
 Nop: {tpc=n, tci=(NoBless,c,e,Word), tni=(b',c,e',r')} -> {tpc'=n}
@@ -2764,7 +2764,7 @@ Jal: {tpc=n, tci=(NoBless,c,e,Word), tni=(b',c,e',r'), tr=Word, tra=v'}
 -> {tpc'=n, tra=Word}
 
 Jal: {tpc=n, tci=(NoBless,c,e,Word), tni=(c',EntryPoint c1 -> c2,r'), tr=Word,
-      tra=v', trarg=Obj c1}
+      tra=v', trthis=Obj c, trarg=Obj c1}
 -> {tpc'=S n, tra=Ret n c2}  when c <> c'
 
 Bnz: {tpc=n, tci=(NoBless,c,e,Word), tni=(b',c,e',r'), tr=Word} -> {tpc'=n}
