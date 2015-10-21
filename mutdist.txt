@@ -1,9 +1,10 @@
 Interesting symbols for Unicode proofs: ∀∃∄∈∉≈∼⊢
 
+M-x set-input-method RET TeX RET
+
 ⋈ is partial programs linking.
 
 ↓ is compilation.
-
 
 Full abstraction
 ----------------
