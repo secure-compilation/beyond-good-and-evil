@@ -6,7 +6,8 @@ Parameter fpm_as_function : forall {T: Set} (m: fpm T), nat -> (unit + T).
 Parameter (language: Set).
 Parameter (component: forall (L: language), Set).
 Definition prog (L: language): Set := fpm (component L).
-Parameter (link: forall {L: language} (P Q: prog L), unit + prog L).
+Parameter (link: forall {L: language} (P Q: prog L), prog L).
+(* TODO obs becomes beh *)
 Parameter (obs_eq: forall {L: language} (P Q: prog L), Prop).
 
 Parameter (compatible: forall {L: language}, prog L -> prog L -> Prop).
