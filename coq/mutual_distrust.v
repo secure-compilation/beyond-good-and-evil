@@ -2,148 +2,79 @@ Require Import Coq.Lists.List.
 Import ListNotations.
 Require Import Coq.Sorting.Permutation.
 
-(* First we define a type for non-empty lists together with some *)
-(* lemmas about it. This is useful to define a n-ary operator out of *)
-(* a 2-ary operation, without having to take care of the empty *)
-(* list. *)
+(* Let's define how to map a binary operator to a n-ary one. We define
+   it as follows:
+     nary_op [x1; ...; xn] =
+       (...((x1 `op` x2) `op` x3) `op`  ... ) `op` xn
+     nary_op [] = e
 
-Section NonEmptyList.
+   The choice of e does not matter much; e is only present to fix a
+   convention regarding what should happen when provided an empty
+   list.
+*)
 
-  (* Main definitions *)
-
-  Inductive nelist (T: Type): Type :=
-  | nelist_cons: T -> list T -> nelist T.
-
-  Arguments nelist_cons [_] _ _.
-
-  Definition nary {T: Type} (op: T -> T -> T): nelist T -> T :=
+Section BinaryToNary.
+  
+  Variables (T: Type) (op: T -> T -> T) (e: T).
+  
+  (* Main definition *)
+  
+  Definition nary: list T -> T :=
     fun xs =>
       match xs with
-        | nelist_cons x xs' => fold_left op xs' x
+        | [] => e
+        | x :: xs' => fold_left op xs' x
       end.
 
+    (* Lemmas *)
 
-  (* Auxiliary functions *)
-
-  Fixpoint nelist_to_list {T: Type} (xs: nelist T): list T :=
-    match xs with
-      | nelist_cons x xs' => x :: xs'
-    end.
-
-  Definition nelist_concat_list {T: Type} (xs: nelist T) (ys: list T): nelist T :=
-    match xs with
-      | nelist_cons x xs' => nelist_cons x (xs' ++ ys)
-    end.
-
-  Definition list_concat_nelist {T: Type} (xs: list T) (ys: nelist T): nelist T :=
-    match xs with
-      | [] => ys
-      | x :: xs' => nelist_cons x (xs' ++ nelist_to_list ys)
-    end.
-
-    Definition nelist_concat_nelist {T: Type} (xs: nelist T) (ys: nelist T): nelist T :=
-      nelist_concat_list xs (nelist_to_list ys).
-
-    Definition nelist_length {T: Type} (xs: nelist T): nat :=
-      length (nelist_to_list xs).
-
-    Definition nelist_map {A B: Type} (f: A -> B) (xs: nelist A): nelist B :=
-      match xs with
-        | nelist_cons x xs' => nelist_cons (f x) (map f xs')
-      end.
-
-    Definition nelist_permutation {T: Type} (xs ys: nelist T) :=
-      Permutation (nelist_to_list xs) (nelist_to_list ys).
-
-
-    (* Lemmas about concatenation *)
-
-    Lemma nelist_concat_nil {T: Type}:
-      forall (xs: nelist T), nelist_concat_list xs [] = xs.
+    Lemma nary_append:
+      forall (x: T) (xs ys: list T),
+        nary ((x :: xs) ++ ys) = nary ((nary (x :: xs)) :: ys).
     Proof.
-      intro xs.
-      unfold nelist_concat_list.
-      destruct xs as [x xs'].
-      assert (xs' ++ [] = xs') as H by apply app_nil_r.
-      now rewrite H.
-    Qed.
-
-    Lemma nelist_concat_list_to_list {T: Type}:
-      forall (xs: nelist T) (ys: list T),
-        nelist_to_list (nelist_concat_list xs ys) = (nelist_to_list xs) ++ ys.
-    Proof.
-      intros xs ys.
-      destruct xs as [x xs'].
-      unfold nelist_concat_list.
-      unfold nelist_to_list.
-      now apply app_comm_cons.
-    Qed.
-
-    Lemma nelist_concat_nelist_to_list {T: Type}:
-      forall (xs ys: nelist T),
-        nelist_to_list (nelist_concat_nelist xs ys) = (nelist_to_list xs) ++ (nelist_to_list ys).
-    Proof.
-      intros xs ys.
-      unfold nelist_concat_nelist.
-      now apply nelist_concat_list_to_list.
-    Qed.
-
-    Lemma nelist_concat_nelist_permutation {T: Type}:
-      forall (xs ys: nelist T),
-        nelist_permutation (nelist_concat_nelist xs ys) (nelist_concat_nelist ys xs).
-    Proof.
-      intros xs ys.
-      unfold nelist_permutation.
-      rewrite (nelist_concat_nelist_to_list xs ys).
-      rewrite (nelist_concat_nelist_to_list ys xs).
-      now apply Permutation_app_comm.
-    Qed.
-
-    Lemma nelist_concat_nelist_nelist_concat_list {T: Type}:
-      forall (xs: nelist T) (y: T) (ys': list T),
-        nelist_concat_nelist xs (nelist_cons y ys') = nelist_concat_list xs (y :: ys').
-    Proof.
-      intros xs y ys.
-      unfold nelist_concat_nelist.
-      now compute.
-    Qed.
-
-
-    (* Lemmas about nary *)
-
-    Lemma nary_nelist_concat_list {T: Type}:
-      forall (op: T -> T -> T) (xs: nelist T) (ys: list T),
-        nary op (nelist_concat_list xs ys)
-        = nary op (nelist_cons (nary op xs) ys).
-    Proof.
-      intros op xs ys.
-      destruct xs as [x xs'].
-      unfold nelist_concat_list.
+      intros x xs ys.
       unfold nary.
       now apply fold_left_app.
     Qed.
 
-    Lemma nary_nelist_concat_nelist {T: Type}:
-      forall (op: T -> T -> T) (xs ys: nelist T),
-        nary op (nelist_concat_nelist xs ys)
-        = nary op (nelist_cons (nary op xs) (nelist_to_list ys)).
+    Lemma nary_snoc:
+      forall (x: T) (xs: list T) (y: T),
+        nary ((x :: xs) ++ [y]) = op (nary (x :: xs)) y.
     Proof.
-      intros op xs ys.
-      unfold nelist_concat_nelist.
-      now apply nary_nelist_concat_list.
+      intros x xs y.
+      now apply (nary_append x xs [y]).
     Qed.
+    
+End BinaryToNary.
 
-    Lemma nary_nelist_snoc {T: Type}:
-      forall (op: T -> T -> T) (xs: nelist T) (y: T),
-        nary op (nelist_concat_nelist xs (nelist_cons y []))
-        = op (nary op xs) y.
-    Proof.
-      intros op xs y.
-      now apply (nary_nelist_concat_nelist op xs (nelist_cons y [])).
-    Qed.
+Arguments nary [_] _ _ _.
+Arguments nary_append [_] _ _ _ _ _.
+Arguments nary_snoc [_] _ _ _ _ _.
 
-End NonEmptyList.
+Section Replicate.
 
+  Fixpoint replicate {T: Type} (n: nat) (x: T): list T :=
+    match n with
+      | 0 => []
+      | S n' => x :: replicate n' x
+    end.
+
+  Lemma replicate_length:
+    forall {T: Type} (n:nat) (x: T),
+      length (replicate n x) = n.
+  Proof.
+    induction n; intro x; [now compute|].
+    assert (replicate (S n) x = x :: replicate n x) as H
+        by now compute.
+    rewrite H.
+    assert (length (x :: replicate n x) = S (length (replicate n x))) as H'
+        by now compute.
+    rewrite H'.
+    rewrite (IHn x).
+    reflexivity.
+  Qed.
+
+End Replicate.
 
 (* Now we define a typeclass for compilers. It will be used *)
 (* for specifying compilers in full abstraction settings as well as *)
@@ -176,7 +107,9 @@ Section FullAbstraction.
         beh_eq_prog_refl: forall (P: program),
                             beh_eq_prog P P;
         beh_eq_prog_trans: forall (P Q R: program),
-                             beh_eq_prog P Q -> beh_eq_prog Q R -> beh_eq_prog P R;
+                             beh_eq_prog P Q ->
+                             beh_eq_prog Q R ->
+                             beh_eq_prog P R;
         beh_eq_prog_sym: forall (P Q: program),
                            beh_eq_prog P Q -> beh_eq_prog Q P
       }.
@@ -208,13 +141,16 @@ Section MutualDistrust.
         beh_eq_comp: component -> component -> Prop;
         empty_neutral_left: forall (P: component),
                               beh_eq_comp P (link empty P);
-        link_permutation: forall (Ps Qs: nelist component),
-                            nelist_permutation Ps Qs ->
-                            beh_eq_comp (nary link Ps) (nary link Qs);
+        link_permutation: forall (Ps: list component) (Qs: list component),
+                            Permutation Ps Qs ->
+                            beh_eq_comp (nary link empty Ps)
+                                        (nary link empty Qs);
         beh_eq_comp_refl: forall (P: component),
                             beh_eq_comp P P;
         beh_eq_comp_trans: forall (P Q R: component),
-                             beh_eq_comp P Q -> beh_eq_comp Q R -> beh_eq_comp P R;
+                             beh_eq_comp P Q ->
+                             beh_eq_comp Q R ->
+                             beh_eq_comp P R;
         beh_eq_comp_sym: forall (P Q: component),
                            beh_eq_comp P Q -> beh_eq_comp Q P
       }.
@@ -222,17 +158,25 @@ Section MutualDistrust.
   Definition md_compiler :=
     compiler md_language (@component).
 
-  Let md_ctx_eq {L: md_language} (n_ctx: nat) (Ps Qs: nelist component): Prop :=
-    forall As: list component, length As = n_ctx ->
-    beh_eq_comp (nary link (nelist_concat_list Ps As)) (nary link (nelist_concat_list Qs As)).
+  Let md_ctx_eq {L: md_language} (n_ctx: nat)
+      (P: component) (Ps: list component)
+      (Q: component) (Qs: list component): Prop :=
+    forall As: list component,
+      length As = n_ctx ->
+      beh_eq_comp (nary link empty ((P :: Ps) ++ As))
+                  (nary link empty ((Q :: Qs) ++ As)).
 
   Definition mutual_distrust (compiler: md_compiler): Prop :=
-    forall (n n_att n_prog: nat), n = n_att + n_prog ->
-    forall (Ps Qs: nelist (@component (@source _ _ compiler))),
-      nelist_length Ps = n_prog -> nelist_length Qs = n_prog ->
-      (md_ctx_eq n_att Ps Qs
-       <->
-       md_ctx_eq n_att (nelist_map compile Ps) (nelist_map compile Qs)).
+    let source_component := @component (@source _ _ compiler) in
+    forall (n_att n_prog: nat),
+      forall (P: source_component) (Ps: list source_component)
+             (Q: source_component) (Qs: list source_component),
+        length (P :: Ps) = n_prog ->
+        length (Q :: Qs) = n_prog ->
+        (md_ctx_eq n_att P Ps Q Qs
+         <->
+         md_ctx_eq n_att (compile P) (map compile Ps)
+                   (compile Q) (map compile Qs)).
 
 End MutualDistrust.
 
@@ -254,9 +198,13 @@ Section FullAbstractionImpliesMutualDistrust.
     forall (A: component),
       beh_eq_comp (link A P) (link A Q).
 
-  Let md_ctx_eq {L: md_language} (n_ctx: nat) (Ps Qs: nelist component): Prop :=
-    forall As: list component, length As = n_ctx ->
-    beh_eq_comp (nary link (nelist_concat_list Ps As)) (nary link (nelist_concat_list Qs As)).
+  Let md_ctx_eq {L: md_language} (n_ctx: nat)
+      (P: component) (Ps: list component)
+      (Q: component) (Qs: list component): Prop :=
+    forall As: list component,
+      length As = n_ctx ->
+      beh_eq_comp (nary link empty ((P :: Ps) ++ As))
+                  (nary link empty ((Q :: Qs) ++ As)).
 
   (* (only) required for the case where nothing is compromised *)
   Hypothesis (correct_compilation:
@@ -264,35 +212,11 @@ Section FullAbstractionImpliesMutualDistrust.
                   beh_eq_comp P Q <-> beh_eq_comp (compile P) (compile Q)).
 
   Hypothesis (separate_compilation:
-                forall (Ps: nelist (@component src)),
-                  fa_ctx_eq (compile (nary link Ps))
-                            (nary link (nelist_map compile Ps))).
+                forall (Ps: list (@component src)),
+                  fa_ctx_eq (compile (nary link empty Ps))
+                            (nary link empty (map compile Ps))).
 
-
-  (* Auxiliary definitions *)
-
-    Fixpoint replicate {T: Type} (n: nat) (x: T): list T :=
-    match n with
-      | 0 => []
-      | S n' => x :: replicate n' x
-    end.
-
-  Lemma replicate_length:
-    forall {T: Type} (n:nat) (x: T),
-      length (replicate n x) = n.
-  Proof.
-    induction n; intro x; [now compute|].
-    assert (replicate (S n) x = x :: replicate n x) as H
-        by now compute.
-    rewrite H.
-    assert (length (x :: replicate n x) = S (length (replicate n x))) as H'
-        by now compute.
-    rewrite H'.
-    rewrite (IHn x).
-    reflexivity.
-  Qed.
-
-
+  
   (* Lemmas about usual contextual equivalence. *)
 
   Lemma fa_ctx_eq_implies_beh_eq {L: md_language}:
@@ -303,11 +227,8 @@ Section FullAbstractionImpliesMutualDistrust.
     pose (empty_neutral_left P) as HemptyP.
     pose (empty_neutral_left Q) as HemptyQ.
     apply (beh_eq_comp_trans _ (link empty Q) _).
-      apply (beh_eq_comp_trans _ (link empty P) _).
-        assumption.
-      assumption.
-    apply beh_eq_comp_sym.
-    apply HemptyQ.
+    + now apply (beh_eq_comp_trans _ (link empty P) _).
+    + now apply beh_eq_comp_sym.
   Qed.
 
   Lemma fa_ctx_eq_refl {L: md_language}:
@@ -318,8 +239,8 @@ Section FullAbstractionImpliesMutualDistrust.
   Qed.
 
   Lemma fa_ctx_eq_trans {L: md_language}:
-    forall (P Q R: component), fa_ctx_eq P Q -> fa_ctx_eq Q R ->
-                               fa_ctx_eq P R.
+    forall (P Q R: component),
+      fa_ctx_eq P Q -> fa_ctx_eq Q R -> fa_ctx_eq P R.
   Proof.
     intros P Q R HPQ HQR A.
     apply (beh_eq_comp_trans _ (link A Q) _); [
@@ -341,12 +262,12 @@ Section FullAbstractionImpliesMutualDistrust.
     forall (P Q: component), beh_eq_comp (link P Q) (link Q P).
   Proof.
     intros P Q.
-    pose (nelist_cons _ P []) as Ps.
-    pose (nelist_cons _ Q []) as Qs.
-    pose (nelist_concat_nelist Ps Qs) as PQ.
-    pose (nelist_concat_nelist Qs Ps) as QP.
-    assert (nelist_permutation PQ QP) as HPQQP
-      by apply nelist_concat_nelist_permutation.
+    pose [P] as Ps.
+    pose [Q] as Qs.
+    pose (Ps ++ Qs) as PQ.
+    pose (Qs ++ Ps) as QP.
+    assert (Permutation PQ QP) as HPQQP.
+    { now apply Permutation_app_comm. }
     pose (link_permutation PQ QP HPQQP) as H.
     now compute in H.
   Qed.
@@ -355,45 +276,42 @@ Section FullAbstractionImpliesMutualDistrust.
     forall (P: component), beh_eq_comp P (link P empty).
   Proof.
     intro P.
-    apply (beh_eq_comp_trans _ (link empty P) _); [
-        now apply empty_neutral_left
-      | now apply link_comm
-      ].
+    apply (beh_eq_comp_trans _ (link empty P) _).
+    + now apply empty_neutral_left.
+    + now apply link_comm.
   Qed.
 
-  Lemma link_nelist_concat_nelist {L: md_language}:
-    forall (Ps Qs: nelist component),
+  Lemma link_app {L: md_language}:
+    forall (P: component) (Ps: list component) (Q: component) (Qs: list component),
       beh_eq_comp
-        (link (nary link Ps) (nary link Qs))
-        (nary link (nelist_concat_nelist Ps Qs)).
+        (link (nary link empty (P :: Ps)) (nary link empty (Q :: Qs)))
+        (nary link empty ((P :: Ps) ++ (Q :: Qs))).
   Proof.
-    intros Ps Qs.
-    rewrite <- (nary_nelist_snoc link Ps (nary link Qs)).
+    intros P Ps Q Qs.
+    rewrite <- (nary_snoc link empty P Ps (nary link empty (Q :: Qs))).
     apply (beh_eq_comp_trans
-             _ (nary link (nelist_concat_nelist (nelist_cons component (nary link Qs) []) Ps)) _); [
-        apply link_permutation; now apply nelist_concat_nelist_permutation
-       |].
-    assert (nelist_concat_nelist (nelist_cons component (nary link Qs) []) Ps
-            = nelist_cons component (nary link Qs) (nelist_to_list Ps)) as H
-        by (unfold nelist_concat_nelist; unfold nelist_concat_list; now rewrite app_nil_l).
+             _ (nary link empty ([nary link empty (Q :: Qs)] ++ (P :: Ps))) _).
+    { apply link_permutation.
+      now apply Permutation_app_comm. }
+    assert ([nary link empty (Q :: Qs)] ++ (P :: Ps) =
+            nary link empty (Q :: Qs) :: P :: Ps) as H
+        by now compute.
     rewrite H.
-    rewrite <- (nary_nelist_concat_nelist link Qs Ps).
+    rewrite <- (nary_append link empty Q Qs (P :: Ps)).
     apply link_permutation.
-    now apply nelist_concat_nelist_permutation.
+    now apply Permutation_app_comm.
   Qed.
 
   Lemma nary_link_empty {L: md_language}:
-    forall (n: nat) (Ps: nelist component),
-      beh_eq_comp (nary link (nelist_concat_list Ps (replicate n empty)))
-                  (nary link Ps).
+    forall (n: nat) (Ps: list component),
+      beh_eq_comp (nary link empty (Ps ++ (replicate n empty)))
+                  (nary link empty Ps).
   Proof.
     intro n.
     induction n.
     + intro Ps.
-      destruct Ps as [P Ps'].
       unfold replicate.
-      unfold nelist_concat_list.
-      rewrite (app_nil_r Ps').
+      rewrite (app_nil_r Ps).
       now apply beh_eq_comp_refl.
     + intro Ps.
       assert (replicate (S n) empty = empty :: replicate n empty) as H
@@ -403,185 +321,174 @@ Section FullAbstractionImpliesMutualDistrust.
         as H'
           by now compute.
       rewrite H'.
-      assert (nelist_concat_list Ps ([empty] ++ replicate n empty)
-              = nelist_concat_list (nelist_concat_list Ps [empty]) (replicate n empty))
+      assert (Ps ++ ([empty] ++ replicate n empty)
+              = (Ps ++ [empty]) ++ (replicate n empty))
         as H''
-          by (destruct Ps as [P Ps'];
-              unfold nelist_concat_list;
-              now rewrite app_assoc).
+          by now apply app_assoc.
       rewrite H''.
-      apply (beh_eq_comp_trans _ (nary link (nelist_concat_list Ps [empty])) _).
-      * now apply (IHn (nelist_concat_list Ps [empty])).
-      * assert (nary link (nelist_concat_list Ps [empty]) = link (nary link Ps) empty) as H'''
-          by now apply nary_nelist_snoc.
+      apply (beh_eq_comp_trans _ (nary link empty (Ps ++ [empty])) _).
+      * now apply (IHn (Ps ++ [empty])).
+      * destruct Ps as [|P Ps']; [now apply beh_eq_comp_refl|].
+        assert (nary link empty ((P :: Ps') ++ [empty]) = link (nary link empty (P :: Ps')) empty) as H'''
+          by now apply nary_snoc.
         rewrite H'''.
         apply beh_eq_comp_sym.
         now apply empty_neutral_right.
   Qed.
 
-
   (* Key lemmas. *)
 
   Lemma fa_ctx_eq_implies_nz_md_ctx_eq {L: md_language}:
-    forall (n: nat) (Ps Qs: nelist component),
-      fa_ctx_eq (nary link Ps) (nary link Qs) ->
-      md_ctx_eq (S n) Ps Qs.
+    forall (n: nat)
+           (P: component) (Ps: list component)
+           (Q: component) (Qs: list component),
+      fa_ctx_eq (nary link empty (P :: Ps)) (nary link empty (Q :: Qs)) ->
+      md_ctx_eq (S n) P Ps Q Qs.
   Proof.
-    pose (nary_nelist_concat_list link) as Hlink.
-    intros n Ps Qs H.
+    pose (nary_append link empty) as Hlink.
+    intros n P Ps Q Qs H.
     intros As HAs.
     destruct As as [|A0 As']; [now exfalso|].
-    rewrite (Hlink Ps (A0 :: As')).
-    rewrite (Hlink Qs (A0 :: As')).
-    pose (nelist_cons _ A0 As') as As.
-    pose (H (nary link As)) as HA0.
-    assert (beh_eq_comp (nary link (nelist_concat_nelist As Ps))
-                        (nary link (nelist_concat_nelist As Qs))) as HA1
-        by (apply (beh_eq_comp_trans _ (link (nary link As) (nary link Ps)) _); [
-              apply beh_eq_comp_sym; now apply link_nelist_concat_nelist
-            | apply (beh_eq_comp_trans _ (link (nary link As) (nary link Qs)) _); [
-                assumption | now apply link_nelist_concat_nelist
-              ]
-            ]).
-    assert (beh_eq_comp (nary link (nelist_concat_nelist Ps As))
-                        (nary link (nelist_concat_nelist Qs As))) as HA2
-        by (apply (beh_eq_comp_trans _ (nary link (nelist_concat_nelist As Ps)) _); [
-              apply beh_eq_comp_sym; apply link_permutation; now apply nelist_concat_nelist_permutation
-            | apply (beh_eq_comp_trans _ (nary link (nelist_concat_nelist As Qs)) _); [
-                assumption | apply link_permutation; now apply nelist_concat_nelist_permutation
-              ]
-            ]).
-    unfold As in HA2.
-    rewrite (nelist_concat_nelist_nelist_concat_list Ps A0 As') in HA2.
-    rewrite (nelist_concat_nelist_nelist_concat_list Qs A0 As') in HA2.
-    rewrite (Hlink Ps (A0 :: As')) in HA2.
-    now rewrite (Hlink Qs (A0 :: As')) in HA2.
+    rewrite (Hlink P Ps (A0 :: As')).
+    rewrite (Hlink Q Qs (A0 :: As')).
+    pose (A0 :: As') as As.
+    pose (H (nary link empty As)) as HA0.
+    assert (beh_eq_comp (nary link empty (As ++ (P :: Ps)))
+                        (nary link empty (As ++ (Q :: Qs)))) as HA1.
+    { apply (beh_eq_comp_trans
+               _ (link (nary link empty As)
+                       (nary link empty (P :: Ps))) _).
+      + apply beh_eq_comp_sym; now apply link_app.
+      + apply (beh_eq_comp_trans
+                 _ (link (nary link empty As)
+                         (nary link empty (Q :: Qs))) _).
+        * assumption.
+        * now apply link_app. }
+    assert (beh_eq_comp (nary link empty ((P :: Ps) ++ As))
+                        (nary link empty ((Q :: Qs) ++ As))) as HA2.
+    { apply (beh_eq_comp_trans _ (nary link empty (As ++ (P :: Ps))) _).
+      + apply beh_eq_comp_sym.
+        apply link_permutation.
+        now apply Permutation_app_comm.
+      + apply (beh_eq_comp_trans _ (nary link empty (As ++ (Q :: Qs))) _).
+        * assumption.
+        * apply link_permutation.
+          now apply Permutation_app_comm. }
+    rewrite (Hlink P Ps As) in HA2.
+    now rewrite (Hlink Q Qs As) in HA2.
   Qed.
 
   Lemma nz_md_ctx_eq_implies_fa_ctx_eq {L: md_language}:
-    forall (n: nat) (Ps Qs: nelist component),
-      md_ctx_eq (S n) Ps Qs ->
-      fa_ctx_eq (nary link Ps) (nary link Qs).
+    forall (n: nat)
+           (P: component) (Ps: list component)
+           (Q: component) (Qs: list component),
+      md_ctx_eq (S n) P Ps Q Qs ->
+      fa_ctx_eq (nary link empty (P :: Ps)) (nary link empty (Q :: Qs)).
   Proof.
-    intros n Ps Qs H A.
-    pose (nelist_cons _ A (replicate n empty)) as As.
-    assert (length (nelist_to_list As) = S (length (replicate n empty)))
+    intros n P Ps Q Qs H A.
+    pose (A :: (replicate n empty)) as As.
+    assert (length As = S (length (replicate n empty)))
       as HAs by (unfold As; now unfold length).
     rewrite (replicate_length n empty) in HAs.
-    pose (H (nelist_to_list As) HAs) as H0.
-    assert (nelist_concat_list Ps (nelist_to_list As) =
-            nelist_concat_list Ps ([A] ++ replicate n empty)) as H'Ps
-        by (unfold As; now unfold nelist_to_list).
+    pose (H As HAs) as H0.
+    assert ((P :: Ps) ++ As = (P :: Ps) ++ ([A] ++ replicate n empty)) as H'Ps
+        by (unfold As; now unfold app).
     rewrite H'Ps in H0.
-    assert (nelist_concat_list Ps ([A] ++ replicate n empty) =
-            nelist_concat_list (nelist_concat_list Ps [A])
-                               (replicate n empty)) as H''Ps
-        by (destruct Ps as [P Ps'];
-            unfold nelist_concat_list;
-            now rewrite (app_assoc)).
+    assert ((P :: Ps) ++ ([A] ++ replicate n empty) =
+            ((P :: Ps) ++ [A]) ++ (replicate n empty)) as H''Ps
+        by now apply app_assoc.
     rewrite H''Ps in H0.
-    assert (nelist_concat_list Qs (nelist_to_list As) =
-            nelist_concat_list Qs ([A] ++ replicate n empty)) as H'Qs
-        by (unfold As; now unfold nelist_to_list).
+    assert ((Q :: Qs) ++ As = (Q :: Qs) ++ ([A] ++ replicate n empty)) as H'Qs
+        by now unfold As.
     rewrite H'Qs in H0.
-    assert (nelist_concat_list Qs ([A] ++ replicate n empty) =
-            nelist_concat_list (nelist_concat_list Qs [A])
-                               (replicate n empty)) as H''Qs
-        by (destruct Qs as [Q Qs'];
-            unfold nelist_concat_list;
-            now rewrite (app_assoc)).
+    assert ((Q :: Qs) ++ ([A] ++ replicate n empty) =
+            ((Q :: Qs) ++ [A]) ++ (replicate n empty)) as H''Qs
+        by now apply app_assoc.
     rewrite H''Qs in H0.
     assert (beh_eq_comp
-              (nary link (nelist_concat_list Ps [A]))
-              (nary link (nelist_concat_list Qs [A]))
-           ) as H1
-        by (apply (beh_eq_comp_trans
-                     _ (nary link (nelist_concat_list
-                                     (nelist_concat_list Ps [A])
-                                     (replicate n empty))) _); [
-              apply beh_eq_comp_sym; now apply nary_link_empty
-            | apply (beh_eq_comp_trans
-                       _ (nary link (nelist_concat_list
-                                       (nelist_concat_list Qs [A])
-                                       (replicate n empty))) _); [
-                assumption | now apply nary_link_empty
-              ]
-            ]).
-    assert (nelist_concat_list Ps [A] = nelist_concat_nelist Ps (nelist_cons _ A []))
-      as HPs''
-        by now unfold nelist_concat_nelist.
-    assert (nelist_concat_list Qs [A] = nelist_concat_nelist Qs (nelist_cons _ A []))
-      as HQs''
-        by now unfold nelist_concat_nelist.
-    rewrite HPs'' in H1.
-    rewrite HQs'' in H1.
-    rewrite (nary_nelist_snoc link Ps A) in H1.
-    rewrite (nary_nelist_snoc link Qs A) in H1.
-    apply (beh_eq_comp_trans _ (link (nary link Ps) A) _); [
-        apply beh_eq_comp_sym; now apply link_comm
-      | apply (beh_eq_comp_trans _ (link (nary link Qs) A) _); [
-          assumption | now apply link_comm
-        ]
-      ].
+              (nary link empty ((P :: Ps) ++ [A]))
+              (nary link empty ((Q :: Qs) ++ [A]))
+           ) as H1.
+    { apply (beh_eq_comp_trans
+               _ (nary link empty (((P :: Ps) ++ [A]) ++ (replicate n empty))) _).
+      + apply beh_eq_comp_sym.
+        now apply nary_link_empty.
+      + apply (beh_eq_comp_trans
+                 _ (nary link empty (((Q :: Qs) ++ [A]) ++ (replicate n empty))) _).
+        * assumption.
+        * now apply nary_link_empty. }
+    rewrite (nary_snoc link empty P Ps A) in H1.
+    rewrite (nary_snoc link empty Q Qs A) in H1.
+    apply (beh_eq_comp_trans _ (link (nary link empty (P :: Ps)) A) _).
+    + apply beh_eq_comp_sym.
+      now apply link_comm.
+    + apply (beh_eq_comp_trans _ (link (nary link empty (Q :: Qs)) A) _).
+      * assumption.
+      * now apply link_comm.
   Qed.
 
   Lemma z_md_ctx_eq_beh_eq_comp {L: md_language}:
-    forall (Ps Qs: nelist component),
-      md_ctx_eq 0 Ps Qs
+    forall (P: component) (Ps: list component)
+           (Q: component) (Qs: list component),
+      md_ctx_eq 0 P Ps Q Qs
       <->
-      beh_eq_comp (nary link Ps) (nary link Qs).
+      beh_eq_comp (nary link empty (P :: Ps)) (nary link empty (Q :: Qs)).
   Proof.
-    intros Ps Qs.
-    assert (nelist_concat_list Ps [] = Ps) as HPs by apply nelist_concat_nil.
-    assert (nelist_concat_list Qs [] = Qs) as HQs by apply nelist_concat_nil.
+    intros P Ps Q Qs.
     split; intro H.
     + pose (H [] (eq_refl (length []))) as H'.
-      rewrite HPs in H'.
-      now rewrite HQs in H'.
+      rewrite (app_nil_r (P :: Ps)) in H'.
+      now rewrite (app_nil_r (Q :: Qs)) in H'.
     + intros As HAs.
       assert (As = []) as HnilAs
           by (destruct As; [reflexivity | compute in HAs; now exfalso]).
       rewrite HnilAs.
-      rewrite HPs.
-      now rewrite HQs.
+      rewrite (app_nil_r (P :: Ps)).
+      now rewrite (app_nil_r (Q :: Qs)).
   Qed.
 
   Lemma z_md:
-    forall (Ps Qs: nelist (@component src)),
-      md_ctx_eq 0 Ps Qs
+    forall (P: @component src) (Ps: list (@component src))
+           (Q: @component src) (Qs: list (@component src)),
+      md_ctx_eq 0 P Ps Q Qs
       <->
-      md_ctx_eq 0 (nelist_map compile Ps) (nelist_map compile Qs).
+      md_ctx_eq 0 (compile P) (map compile Ps) (compile Q) (map compile Qs).
   Proof.
-    intros Ps Qs.
+    intros P Ps Q Qs.
     split.
     + intro H0.
-      assert (beh_eq_comp (nary link Ps) (nary link Qs)) as H1
+      assert (beh_eq_comp (nary link empty (P :: Ps))
+                          (nary link empty (Q :: Qs))) as H1
           by now apply z_md_ctx_eq_beh_eq_comp.
-      assert (beh_eq_comp (compile (nary link Ps))
-                          (compile (nary link Qs))) as H2
+      assert (beh_eq_comp (compile (nary link empty (P :: Ps)))
+                          (compile (nary link empty (Q :: Qs)))) as H2
           by now apply correct_compilation.
-      assert (beh_eq_comp (nary link (nelist_map compile Ps))
-                          (nary link (nelist_map compile Qs))) as H3
-          by (apply (beh_eq_comp_trans _ (compile (nary link Ps)) _); [
-                apply beh_eq_comp_sym; apply fa_ctx_eq_implies_beh_eq; now apply separate_compilation
-              | apply (beh_eq_comp_trans _ (compile (nary link Qs)) _); [
-                  assumption | apply fa_ctx_eq_implies_beh_eq; now apply separate_compilation
-                ]
-              ]).
+      assert (beh_eq_comp (nary link empty (map compile (P :: Ps)))
+                          (nary link empty (map compile (Q :: Qs)))) as H3.
+      { apply (beh_eq_comp_trans _ (compile (nary link empty (P :: Ps))) _).
+        + apply beh_eq_comp_sym.
+          apply fa_ctx_eq_implies_beh_eq.
+          now apply separate_compilation.
+        + apply (beh_eq_comp_trans _ (compile (nary link empty (Q :: Qs))) _).
+          * assumption.
+          * apply fa_ctx_eq_implies_beh_eq.
+            now apply separate_compilation. }
       now apply z_md_ctx_eq_beh_eq_comp.
     + intro H4.
-      assert (beh_eq_comp (nary link (nelist_map compile Ps))
-                          (nary link (nelist_map compile Qs))) as H3
+      assert (beh_eq_comp (nary link empty (map compile (P :: Ps)))
+                          (nary link empty (map compile (Q :: Qs)))) as H3
           by now apply z_md_ctx_eq_beh_eq_comp.
-      assert (beh_eq_comp (compile (nary link Ps))
-                          (compile (nary link Qs))) as H2
-          by (apply (beh_eq_comp_trans _ (nary link (nelist_map compile Ps)) _); [
-                apply fa_ctx_eq_implies_beh_eq; now apply separate_compilation
-              | apply (beh_eq_comp_trans _ (nary link (nelist_map compile Qs)) _); [
-                  assumption | apply beh_eq_comp_sym; apply fa_ctx_eq_implies_beh_eq; now apply separate_compilation
-                ]
-              ]).
-      assert (beh_eq_comp (nary link Ps) (nary link Qs)) as H1
+      assert (beh_eq_comp (compile (nary link empty (P :: Ps)))
+                          (compile (nary link empty (Q :: Qs)))) as H2.
+      { apply (beh_eq_comp_trans _ (nary link empty (map compile (P :: Ps))) _).
+        + apply fa_ctx_eq_implies_beh_eq.
+          now apply separate_compilation.
+        + apply (beh_eq_comp_trans _ (nary link empty (map compile (Q :: Qs))) _).
+          * assumption.
+          * apply beh_eq_comp_sym.
+            apply fa_ctx_eq_implies_beh_eq.
+            now apply separate_compilation. }
+      assert (beh_eq_comp (nary link empty (P :: Ps)) (nary link empty (Q :: Qs))) as H1
           by now apply correct_compilation.
       now apply z_md_ctx_eq_beh_eq_comp.
   Qed.
@@ -620,56 +527,54 @@ Section FullAbstractionImpliesMutualDistrust.
   Proof.
     intro FA.
     unfold mutual_distrust.
-    intros n n_att n_prog Hn Ps Qs HnPs HnQs.
-    destruct (FA (nary link Ps) (nary link Qs)) as [FA' FA''].
+    intros n_att n_prog P Ps Q Qs HnPs HnQs.
+    destruct (FA (nary link empty (P :: Ps)) (nary link empty (Q :: Qs))) as [FA' FA''].
     destruct n_att as [|n_att'].
-    + exact (z_md Ps Qs).
+    + exact (z_md P Ps Q Qs).
     + pose (S n_att') as n_att.
       split.
       * intro H.
-        assert (md_ctx_eq n_att Ps Qs) as Hmd_ctx_eq_src
+        assert (md_ctx_eq n_att P Ps Q Qs) as Hmd_ctx_eq_src
             by exact H.
-        assert (fa_ctx_eq (nary link Ps) (nary link Qs)) as Hfa_ctx_eq_src
+        assert (fa_ctx_eq (nary link empty (P :: Ps)) (nary link empty (Q :: Qs))) as Hfa_ctx_eq_src
             by now apply (nz_md_ctx_eq_implies_fa_ctx_eq n_att').
-        assert (fa_ctx_eq (compile (nary link Ps)) (compile (nary link Qs)))
+        assert (fa_ctx_eq (compile (nary link empty (P :: Ps))) (compile (nary link empty (Q :: Qs))))
           as Hfa_ctx_eq_tgt
             by (unfold fa_ctx_eq; now apply FA').
-        assert (fa_ctx_eq (nary link (nelist_map compile Ps))
-                          (nary link (nelist_map compile Qs)))
-          as Hfa_ctx_eq_tgt'
-            by (apply (fa_ctx_eq_trans _ (compile (nary link Ps)) _); [
-                  apply fa_ctx_eq_sym; now apply separate_compilation
-                | apply (fa_ctx_eq_trans _ (compile (nary link Qs)) _); [
-                    assumption
-                  | now apply separate_compilation
-                  ]
-                ]).
-        assert (md_ctx_eq n_att (nelist_map compile Ps)
-                                (nelist_map compile Qs))
+        assert (fa_ctx_eq (nary link empty (map compile (P :: Ps)))
+                          (nary link empty (map compile (Q :: Qs))))
+          as Hfa_ctx_eq_tgt'.
+        { apply (fa_ctx_eq_trans _ (compile (nary link empty (P :: Ps))) _).
+          + apply fa_ctx_eq_sym.
+            now apply separate_compilation.
+          + apply (fa_ctx_eq_trans _ (compile (nary link empty (Q :: Qs))) _).
+            * assumption.
+            * now apply separate_compilation. }
+        assert (md_ctx_eq n_att (compile P) (map compile Ps)
+                                (compile Q) (map compile Qs))
           as Hmd_ctx_eq_tgt
             by now apply (fa_ctx_eq_implies_nz_md_ctx_eq n_att').
         exact Hmd_ctx_eq_tgt.
       * intro H.
-        assert (md_ctx_eq n_att (nelist_map compile Ps)
-                                (nelist_map compile Qs))
+        assert (md_ctx_eq n_att (compile P) (map compile Ps)
+                                (compile Q) (map compile Qs))
           as Hmd_ctx_eq_tgt
             by exact H.
-        assert (fa_ctx_eq (nary link (nelist_map compile Ps))
-                          (nary link (nelist_map compile Qs)))
+        assert (fa_ctx_eq (nary link empty (map compile (P :: Ps)))
+                          (nary link empty (map compile (Q :: Qs))))
           as Hfa_ctx_eq_tgt
             by now apply (nz_md_ctx_eq_implies_fa_ctx_eq n_att').
-        assert (fa_ctx_eq (compile (nary link Ps)) (compile (nary link Qs)))
-          as Hfa_ctx_eq_tgt'
-            by (apply (fa_ctx_eq_trans _ (nary link (nelist_map compile Ps)) _); [
-                  now apply separate_compilation
-                | apply (fa_ctx_eq_trans _ (nary link (nelist_map compile Qs)) _); [
-                    assumption
-                  | apply fa_ctx_eq_sym; now apply separate_compilation
-                  ]
-                ]).
-        assert (fa_ctx_eq (nary link Ps) (nary link Qs)) as Hfa_ctx_eq_src
+        assert (fa_ctx_eq (compile (nary link empty (P :: Ps))) (compile (nary link empty (Q :: Qs))))
+          as Hfa_ctx_eq_tgt'.
+        { apply (fa_ctx_eq_trans _ (nary link empty (map compile (P :: Ps))) _).
+          + now apply separate_compilation.
+          + apply (fa_ctx_eq_trans _ (nary link empty (map compile (Q :: Qs))) _).
+            * assumption.
+            * apply fa_ctx_eq_sym.
+              now apply separate_compilation. }
+        assert (fa_ctx_eq (nary link empty (P :: Ps)) (nary link empty (Q :: Qs))) as Hfa_ctx_eq_src
             by (unfold fa_ctx_eq; now apply FA'').
-        assert (md_ctx_eq n_att Ps Qs) as Hmd_ctx_eq_src
+        assert (md_ctx_eq n_att P Ps Q Qs) as Hmd_ctx_eq_src
             by now apply (fa_ctx_eq_implies_nz_md_ctx_eq n_att').
         exact Hmd_ctx_eq_src.
   Qed.
