@@ -29,12 +29,8 @@ Class structured_context_language
 : Type :=
   {
     scl_program_has_shape: scl_shape -> scl_program -> Prop;
-    scl_context_has_shape: scl_shape -> scl_context -> Prop;
+    scl_context_has_shape: scl_shape -> scl_context -> Prop
     (* Put relevant hypotheses here *)
-    scl_stat_eq_shape:
-      forall (PP QQ: scl_program),
-        cl_stat_eq PP QQ ->
-        (forall s, scl_program_has_shape s PP -> scl_program_has_shape s QQ)
   }.
 
 (* A structured context language can be a structured variant of
@@ -78,6 +74,9 @@ Class structural_link
 : Type :=
   {
     (* Put relevant hypotheses here *)
+    (*forall PP, sv_destruct_program (scl_compile PP)
+               =
+               cl_compile (sv_destruct_program PP) *)
   }.
 
 Definition full_abstraction
@@ -88,12 +87,12 @@ Definition full_abstraction
            (target_cl: context_language target_program target_context)
            (cl_compile: source_program -> target_program): Prop :=
   forall P Q,
-      cl_stat_eq P Q ->
-      ((forall A, cl_compatible A P /\ cl_complete (cl_insert A P) ->
-                  cl_beh_eq (cl_insert A P) (cl_insert A Q))
-       <->
-       (forall a, cl_compatible a (cl_compile P) /\ cl_complete (cl_insert a (cl_compile P)) ->
-                  cl_beh_eq (cl_insert a (cl_compile P)) (cl_insert a (cl_compile Q)))).
+    cl_stat_eq P Q ->
+    ((forall A, cl_compatible A P /\ cl_complete (cl_insert A P) ->
+                cl_beh_eq (cl_insert A P) (cl_insert A Q))
+     <->
+     (forall a, cl_compatible a (cl_compile P) /\ cl_complete (cl_insert a (cl_compile P)) ->
+                cl_beh_eq (cl_insert a (cl_compile P)) (cl_insert a (cl_compile Q)))).
 
 Definition structured_full_abstraction
            {source_scl_program source_scl_context: Type}
@@ -106,7 +105,7 @@ Definition structured_full_abstraction
            (target_scl: structured_context_language target_scl_cl scl_shape)
            (scl_compile: source_scl_program -> target_scl_program): Prop :=
   forall (s: scl_shape) (PP QQ: source_scl_program),
-    cl_stat_eq PP QQ /\ scl_program_has_shape s PP ->
+    cl_stat_eq PP QQ /\ scl_program_has_shape s PP /\ scl_program_has_shape s QQ ->
     ((forall AA,
         scl_context_has_shape s AA /\ cl_compatible AA PP /\ cl_complete (cl_insert AA PP) ->
         cl_beh_eq (cl_insert AA PP) (cl_insert AA QQ))
