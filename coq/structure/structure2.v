@@ -63,6 +63,10 @@ Definition full_abstraction : Prop :=
     ↔
     (∀ ctx : tgt_ctx, ctx p↓ ≡_t ctx q↓).
 
+(* CH: takes_type only at the high-level; why asymmetric? Would this
+   work at all in our setting? Arthur agrees now that's not good.*)
+(* CH: static equivalence replaced by "having same type" *)
+
 (** To state structured full abstraction, we assume a type of shapes
 that we can use to classify source and target contexts. Each context
 has a corresponding shape, which can be computed with the [*_shape]
@@ -95,6 +99,16 @@ Definition structured_full_abstraction : Prop :=
     (∀ ctx : tgt_ctx,
        tgt_shape ctx = s →
        ctx p↓ ≡_t ctx q↓).
+
+(* CH: shape not related to program, so p and q could have different
+       shapes, which is very bad? unless the type / static
+       equivalent takes care of that part? TODO: think about this *)
+
+(* CH: using the same programs, typing, equivalence but restricting
+       only shapes could be a reasonable simplification? It basically
+       makes the implication below almost trivial; the only thing
+       that's left is the original intuition that we can turn contexts
+       into shapes. TODO: think about this *)
 
 (** As expected, the structured variant is stronger that the
 unstructured one.
