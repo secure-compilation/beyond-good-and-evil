@@ -1,5 +1,3 @@
-(* Disclaimer: Everything is currently very verbose. *)
-
 (* A context language provides operations on programs taken from type
    [cl_program] and contexts taken from type [cl_context]. *)
 Class context_language (cl_program: Type) (cl_context: Type): Type :=
