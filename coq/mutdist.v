@@ -12,8 +12,14 @@ Variable All2 : forall {a:Type} {b:Type} (P:a->b->Prop), list a -> list b -> Pro
 
 Class interface_language (interface: Type): Type :=
   {
-    comp: list interface -> Prop (* compatible and complete *)
+    compatible: list interface -> Prop;
+    complete: list interface -> Prop
   }.
+
+Let comp
+    {interface: Type}
+    `{interface_language interface}
+    Is := compatible Is /\ complete Is.
 
 Class component_language
       {interface: Type} (il: interface_language interface)
@@ -56,9 +62,9 @@ Variable All : forall {a:Type} (P:a->Prop), list a -> Prop.
 Variable isInl : forall {a:Type} {b:Type}, (a+b) -> bool.
 Variable isSome : forall {a:Type}, option a -> bool.
 Coercion is_true : bool >-> Sortclass. (* Prop *)
-Variable inls : forall {a:Type} {b:Type}, list (a+b) -> list a.
-Variable inrs : forall {a:Type} {b:Type}, list (a+b) -> list b.
+Variable somes : forall {a:Type}, list (option a) -> list a.
 Variable fsts : forall {a:Type} {b:Type}, list (a*b) -> list a.
+Variable snds : forall {a:Type} {b:Type}, list (a*b) -> list b.
 
 Section SFAfromMD.
 
@@ -66,7 +72,7 @@ Context {interface: Type} {I: interface_language interface} {component program: 
 
 (* We take both SFA programs and contexts to be "partial programs"
    of the following type *)
-Definition pprog := list ((component*interface) + interface).
+Definition pprog := list (option (component*interface)).
 
 (* Need interface equality to decide compatibility? At least in current formulation ... *)
 Variable beq_interface : interface -> interface -> bool.
@@ -74,18 +80,16 @@ Variable beq_interface : interface -> interface -> bool.
 Fixpoint merge_compatible (p:pprog) (q:pprog) : option pprog :=
   match p, q with
   | [], [] => Some []
-  | inl (c,i1) :: p', inr i2 :: q'
-  | inr i2 :: p', inl (c,i1) :: q' =>
-      if beq_interface i1 i2 then
-        match merge_compatible p' q' with
-        | Some pq' => Some (inl (c,i1) :: pq')
-        | None     => None
-        end
-      else None
+  | Some (c,i1) :: p', None :: q'
+  | None :: p', Some (c,i1) :: q' =>
+    match merge_compatible p' q' with
+      | Some pq' => Some (Some (c,i1) :: pq')
+      | None     => None
+    end
   | _, _ => None
   end.
 
-Instance context_lang_from_component_lang 
+Instance context_lang_from_component_lang
   (compl : component_language I component program) :
      context_language pprog pprog :=
 {
@@ -93,10 +97,23 @@ Instance context_lang_from_component_lang
                    | Some cp => cp
                    | None    => [] (* shouldn't happen *)
                    end;
-  cl_compatible c p := isSome (merge_compatible c p);
-  cl_complete p := All isInl p;
-  cl_stat_eq p q := comp (inrs p ++ inrs q);
-  cl_beh_eq p q := beh_eq (link (fsts (inls p))) (link (fsts (inls q)));
+  cl_compatible c p := match merge_compatible c p with
+                         | Some l =>
+                           All (fun PIP => match PIP with (P, IP) => has_interface P IP end)
+                               (somes l) /\
+                           compatible (snds (somes l))
+                         | None => False
+                       end;
+  cl_complete p := All isSome p /\ complete (snds (somes p));
+  cl_stat_eq p q :=
+    All2 (fun optPIP optQIQ =>
+            match optPIP, optQIQ with
+              | None, None => True
+              | Some (P, IP), Some (Q, IQ) =>
+                has_interface P IP /\ has_interface Q IQ /\ IP = IQ
+              | _, _ => False
+            end) p q;
+  cl_beh_eq p q := beh_eq (link (fsts (somes p))) (link (fsts (somes q)));
   cl_stat_eq_compatible_complete :=
     admit (* <-- can't prove this without extra assumptions on comp *)
 }.
@@ -104,13 +121,16 @@ Instance context_lang_from_component_lang
 Fixpoint context_has_shape (s : list (bool*interface)) (c : pprog) : bool :=
   match s, c with
   | [], [] => true
-  | (true,i1)::s', (inl (_,i2))::c'
-  | (false,i1)::s', (inr i2)::c'
-     => andb (beq_interface i1 i2) (context_has_shape s' c')
+  | (true,i1)::s', (Some (_,i2))::c' =>
+    (* YJ: here, no has_interface check,
+           looks OK because it is already in the compatibility check *)
+    andb (beq_interface i1 i2) (context_has_shape s' c')
+  | (false,_)::s', None::c' =>
+    context_has_shape s' c'
   | _, _ => false
   end.
 
-Instance structured_context_lang_from_component_lang 
+Instance structured_context_lang_from_component_lang
   (compl : component_language I component program) :
      structured_context_language
        (context_lang_from_component_lang compl)
