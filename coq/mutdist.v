@@ -140,3 +140,5 @@ Instance structured_context_lang_from_component_lang
   scl_context_has_shape := context_has_shape;
   scl_program_has_shape s p := admit (* the same, just flip all bools *)
 }.
+
+End SFAfromMD.

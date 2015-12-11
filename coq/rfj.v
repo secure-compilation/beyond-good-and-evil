@@ -8,6 +8,7 @@ Require Import MutualDistrust.mutdist.
 
 Parameter rfj_class_declaration_table: Set.
 Parameter rfj_object_declaration_table: Set.
+Parameter rfj_cdt_domain: rfj_class_declaration_table -> list nat.
 
 Definition rfj_declaration_table: Set :=
   (rfj_class_declaration_table * rfj_object_declaration_table)%type.
@@ -31,7 +32,8 @@ Parameter rfj_complete: list rfj_interface -> Prop.
 
 Instance rfji: interface_language rfj_interface :=
   {
-    comp := fun Is => rfj_compatible Is /\ rfj_complete Is
+    compatible := rfj_compatible;
+    complete := rfj_complete
   }.
 
 (* Define RFJ *)
@@ -43,7 +45,7 @@ Definition rfj_definition_table: Set :=
   (rfj_class_definition_table * rfj_object_definition_table)%type.
 
 Parameter rfj_has_interface:
-  rfj_interface -> rfj_definition_table -> Prop.
+  rfj_definition_table -> rfj_interface -> Prop.
 
 Record rfj_component: Type :=
   {
@@ -51,7 +53,7 @@ Record rfj_component: Type :=
     rfj_component_definitions: rfj_definition_table;
     (* restrict to well-formed/well-typed components *)
     rfj_component_wf:
-      rfj_has_interface rfj_component_interface rfj_component_definitions
+      rfj_has_interface rfj_component_definitions rfj_component_interface
   }.
 
 Definition rfj_program := list rfj_component.
