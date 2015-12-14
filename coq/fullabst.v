@@ -16,6 +16,21 @@ Class context_language (cl_program: Type) (cl_context: Type): Type :=
            cl_compatible A Q /\ cl_complete (cl_insert A Q))
   }.
 
+Definition full_abstraction
+           {source_program source_context: Type}
+           {target_program target_context: Type}
+
+           (source_cl: context_language source_program source_context)
+           (target_cl: context_language target_program target_context)
+           (cl_compile: source_program -> target_program): Prop :=
+  forall P Q,
+    cl_stat_eq P Q ->
+    ((forall A, cl_compatible A P /\ cl_complete (cl_insert A P) ->
+                cl_beh_eq (cl_insert A P) (cl_insert A Q))
+     <->
+     (forall a, cl_compatible a (cl_compile P) /\ cl_complete (cl_insert a (cl_compile P)) ->
+                cl_beh_eq (cl_insert a (cl_compile P)) (cl_insert a (cl_compile Q)))).
+
 (* A context language can be structured. It is the case when programs
    and contexts can have a shape. The shape characterizes the
    structure of the program or context. *)
@@ -30,6 +45,27 @@ Class structured_context_language
     scl_context_has_shape: scl_shape -> scl_context -> Prop
     (* Put relevant hypotheses here *)
   }.
+
+Definition structured_full_abstraction
+           {source_scl_program source_scl_context: Type}
+           {target_scl_program target_scl_context: Type}
+           {source_scl_cl: context_language source_scl_program source_scl_context}
+           {target_scl_cl: context_language target_scl_program target_scl_context}
+           {scl_shape: Type}
+
+           (source_scl: structured_context_language source_scl_cl scl_shape)
+           (target_scl: structured_context_language target_scl_cl scl_shape)
+           (scl_compile: source_scl_program -> target_scl_program): Prop :=
+  forall (s: scl_shape) (PP QQ: source_scl_program),
+    cl_stat_eq PP QQ /\ scl_program_has_shape s PP /\ scl_program_has_shape s QQ ->
+    ((forall AA,
+        scl_context_has_shape s AA /\ cl_compatible AA PP /\ cl_complete (cl_insert AA PP) ->
+        cl_beh_eq (cl_insert AA PP) (cl_insert AA QQ))
+     <->
+     (forall aa,
+        scl_context_has_shape s aa /\
+        cl_compatible aa (scl_compile PP) /\ cl_complete (cl_insert aa (scl_compile PP)) ->
+        cl_beh_eq (cl_insert aa (scl_compile PP)) (cl_insert aa (scl_compile QQ)))).
 
 (* A structured context language can be a structured variant of
    another (unstructured) context language. In this case one can
@@ -76,42 +112,6 @@ Class structural_link
                =
                cl_compile (sv_destruct_program PP) *)
   }.
-
-Definition full_abstraction
-           {source_program source_context: Type}
-           {target_program target_context: Type}
-
-           (source_cl: context_language source_program source_context)
-           (target_cl: context_language target_program target_context)
-           (cl_compile: source_program -> target_program): Prop :=
-  forall P Q,
-    cl_stat_eq P Q ->
-    ((forall A, cl_compatible A P /\ cl_complete (cl_insert A P) ->
-                cl_beh_eq (cl_insert A P) (cl_insert A Q))
-     <->
-     (forall a, cl_compatible a (cl_compile P) /\ cl_complete (cl_insert a (cl_compile P)) ->
-                cl_beh_eq (cl_insert a (cl_compile P)) (cl_insert a (cl_compile Q)))).
-
-Definition structured_full_abstraction
-           {source_scl_program source_scl_context: Type}
-           {target_scl_program target_scl_context: Type}
-           {source_scl_cl: context_language source_scl_program source_scl_context}
-           {target_scl_cl: context_language target_scl_program target_scl_context}
-           {scl_shape: Type}
-
-           (source_scl: structured_context_language source_scl_cl scl_shape)
-           (target_scl: structured_context_language target_scl_cl scl_shape)
-           (scl_compile: source_scl_program -> target_scl_program): Prop :=
-  forall (s: scl_shape) (PP QQ: source_scl_program),
-    cl_stat_eq PP QQ /\ scl_program_has_shape s PP /\ scl_program_has_shape s QQ ->
-    ((forall AA,
-        scl_context_has_shape s AA /\ cl_compatible AA PP /\ cl_complete (cl_insert AA PP) ->
-        cl_beh_eq (cl_insert AA PP) (cl_insert AA QQ))
-     <->
-     (forall aa,
-        scl_context_has_shape s aa /\
-        cl_compatible aa (scl_compile PP) /\ cl_complete (cl_insert aa (scl_compile PP)) ->
-        cl_beh_eq (cl_insert aa (scl_compile PP)) (cl_insert aa (scl_compile QQ)))).
 
 (* When there is a structural link between compilers, full abstraction
    for the unstructured one follows from structured full abstraction
