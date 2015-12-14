@@ -7,12 +7,11 @@ Variable perm : nat -> Type.
 Variable permute : forall {a:Type} {n:nat}, perm n -> list a -> list a.
 (* Coercion permute : perm >-> Funclass. *)
 
-Variable All2 : forall {a:Type} {b:Type} (P:a->b->Prop), list a -> list b -> Prop.
-(* Print Forall. -- Adam defines this as fixpoint *)
-
 Class interface_language (interface: Type): Type :=
   {
     compatible: list interface -> Prop;
+    compatible_cons:
+      forall I Is, compatible (I :: Is) -> compatible Is;
     complete: list interface -> Prop
   }.
 
@@ -32,6 +31,19 @@ Class component_language
   }.
 
 Notation "P ~~ Q" := (beh_eq P Q) (at level 60, no associativity).
+
+Fixpoint All {A} (P : A -> Prop) (l : list A) : Prop :=
+  match l with
+  | [] => True
+  | a :: l' => P a /\ All P l'
+  end.
+
+Fixpoint All2 {A B} (P : A -> B -> Prop) l1 l2 : Prop :=
+  match l1, l2 with
+  | [], [] => True
+  | a :: l1', b :: l2' => P a b /\ All2 P l1' l2'
+  | _, _ => False
+  end.
 
 Definition mutual_distrust
   {interface: Type} {I : interface_language interface}
@@ -59,18 +71,33 @@ Definition mutual_distrust
    distrust for our compiler) *)
 
 Definition admit {t:Type} : t. Admitted.
-Variable All : forall {a:Type} (P:a->Prop), list a -> Prop.
 Variable isInl : forall {a:Type} {b:Type}, (a+b) -> bool.
-Variable isSome : forall {a:Type}, option a -> bool.
 Coercion is_true : bool >-> Sortclass. (* Prop *)
-Variable somes : forall {a:Type}, list (option a) -> list a.
-Variable fsts : forall {a:Type} {b:Type}, list (a*b) -> list a.
-Variable snds : forall {a:Type} {b:Type}, list (a*b) -> list b.
 Variable fst_map : forall{a b c:Type}, (a->c) -> (a*b) -> (c*b).
+
+Fixpoint somes {A} (l : list (option A)) : list A :=
+  match l with
+  | [] => []
+  | Some a :: l' => a :: somes l'
+  | None :: l' => somes l'
+  end.
+
+Definition isSome {A} (oa : option A) :=
+  match oa with
+  | Some _ => true
+  | _ => false
+  end.
+
+Definition fsts {A B} (l : list (A * B)) : list A :=
+  map (@fst _ _) l.
+
+Definition snds {A B} (l : list (A * B)) : list B :=
+  map (@snd _ _) l.
 
 Section SFAfromMD.
 
 Context {interface: Type} {I: interface_language interface} {component program: Type}.
+Context (compl : component_language I component program).
 
 (* We take both SFA programs and contexts to be "partial programs"
    of the following type *)
@@ -86,51 +113,41 @@ Fixpoint merge (p:pprog) (q:pprog) : option pprog :=
     | None     => None
     end
   | None :: p', None :: q' =>
-    match merge p' q' with 
+    match merge p' q' with
     | Some pq' => Some (None :: pq')
     | None     => None
     end
   | _, _ => None
   end.
 
-Definition interfaces_ok 
-  {compl : component_language I component program} (p:pprog) :=
+Definition interfaces_ok (p:pprog) :=
   All (fun PIP => match PIP with (P, IP) => has_interface P IP end) (somes p).
 
-Instance context_lang_from_component_lang
-  (compl : component_language I component program) :
-     context_language pprog pprog :=
-{
-  cl_insert c p := match merge c p with
-                   | Some cp => cp
-                   | None    => [] (* shouldn't happen *)
-                   end;
-  cl_compatible c p :=
-    match merge c p with
-    | Some cp => interfaces_ok cp /\ compatible (snds (somes cp))
-    | None => False
-    end;
-  cl_complete p := All isSome p /\ interfaces_ok p /\ complete (snds (somes p));
-  cl_stat_eq p q :=
+Definition stat_eq (p q : pprog) :=
     All2 (fun optPIP optQIQ =>
             match optPIP, optQIQ with
-              | None, None => True
-              | Some (P, IP), Some (Q, IQ) =>
-                has_interface P IP /\ has_interface Q IQ /\ IP = IQ
-              | _, _ => False
-            end) p q;
-  cl_beh_eq p q := beh_eq (link (fsts (somes p))) (link (fsts (somes q)));
-  cl_stat_eq_compatible_complete :=
-    admit (* TODO *)
-}.
+            | None, None => True
+            | Some (P, IP), Some (Q, IQ) =>
+              has_interface P IP /\ has_interface Q IQ /\ IP = IQ
+            | _, _ => False
+            end) p q.
+
+Lemma merge_stat_eq As Ps Qs CP :
+  merge As Ps = Some CP ->
+  stat_eq Ps Qs ->
+  match merge As Qs with
+  | Some CQ => snds (somes CP) = snds (somes CQ)
+  | None => False
+  end.
+Proof.
+Admitted.
 
 Definition shape := list (bool*interface). (* replace (bool*interface) with option interface
                                               if dropping scl_program_has_shape *)
 Definition flip_shape (s : shape): shape :=
   List.map (fun bi => match bi with (b, i) => (negb b, i) end) s.
 
-Fixpoint context_has_shape
-    {compl : component_language I component program} (s : shape) (c : pprog) : Prop :=
+Fixpoint context_has_shape (s : shape) (c : pprog) : Prop :=
   match s, c with
   | [], [] => true
   | (true,i1)::s', (Some (p,i2))::c' =>
@@ -140,14 +157,131 @@ Fixpoint context_has_shape
   | _, _ => false
   end.
 
-Definition program_has_shape
-    {compl : component_language I component program}  (s : shape) (p : pprog) : Prop :=
+Definition program_has_shape (s : shape) (p : pprog) : Prop :=
   context_has_shape (flip_shape s) p.
 
-Instance structured_context_lang_from_component_lang
-  (compl : component_language I component program) :
+Lemma stat_eq_shape Ps Qs s :
+  stat_eq Ps Qs ->
+  program_has_shape s Ps ->
+  program_has_shape s Qs.
+Proof.
+revert Qs s. unfold stat_eq.
+induction Ps as [|[[P IP]|] Ps IH];
+intros [|[[Q IQ]|] Qs] [|[b Is] s]; simpl; try solve [intuition].
+- intros [[HPI [HQI HI]]]. subst IQ. rename IP into IPQ.
+  unfold program_has_shape; simpl.
+  destruct b; simpl; trivial.
+  intros H [_ [HIs HPs]]. subst Is.
+  repeat split; trivial.
+  exact (IH _ _ H HPs).
+- unfold program_has_shape; simpl.
+  destruct b; simpl; trivial.
+  intros [_ H] HPs.
+  exact (IH _ _ H HPs).
+Qed.
+
+Definition insert c p :=
+  match merge c p with
+  | Some cp => cp
+  | None => [] (* shouldn't happen *)
+  end.
+
+Definition comp_compatible c p :=
+  match merge c p with
+  | Some cp => interfaces_ok cp /\ compatible (snds (somes cp))
+  | None => False
+  end.
+
+Definition comp_complete (p : pprog) :=
+  (* AAA: interfaces_ok isn't needed here, since it already appears
+     in the definition of compatibility *)
+  All isSome p /\ complete (snds (somes p)).
+
+Lemma merge_shape As Ps :
+  (match merge As Ps with
+   | Some CP => interfaces_ok CP /\ All isSome CP
+   | None => False
+   end)
+  <-> exists s : shape,
+        context_has_shape s As /\
+        program_has_shape s Ps.
+Proof.
+revert Ps. unfold interfaces_ok, program_has_shape.
+induction As as [|[[A IA]|] As IH].
+- intros [|[[P IP]|] Ps]; simpl; split; try solve [intuition].
+  + intros _. exists []. simpl.
+    now repeat split; trivial.
+  + intros [s [HAs HPs]].
+    destruct s as [|[[] ?] s]; simpl in *;
+    solve [inversion HPs|inversion HAs].
+  + intros [s [HAs HPs]].
+    destruct s as [|[[] ?] s]; simpl in *;
+    solve [inversion HPs|inversion HAs].
+- intros [|[[P IP]|] Ps]; simpl; split; try solve [intuition].
+  + intros [s [HAs HPs]].
+    destruct s as [|[[] ?] s]; simpl in *;
+    solve [inversion HPs|inversion HAs].
+  + intros [s [HAs HPs]].
+    destruct s as [|[[] ?] s]; simpl in *;
+    solve [inversion HPs|inversion HAs].
+  + specialize (IH Ps).
+    destruct (merge As Ps) as [CP|] eqn:mergeAsPs; try solve [intuition].
+    simpl.
+    rewrite and_assoc, (and_comm true), <- (and_assoc _ _ true), IH.
+    intros [HIA [[s [HAs HPs]] _]]. exists ((true, IA) :: s). simpl.
+    repeat split; trivial.
+  + specialize (IH Ps).
+    intros [s [HAs HPs]].
+    destruct s as [|[[] i] s]; simpl in *;
+    try solve [inversion HPs|inversion HAs].
+    destruct HAs as [HIA [? HAs]]. subst i.
+    assert (H : exists s', context_has_shape s' As /\ context_has_shape (flip_shape s') Ps) by eauto.
+    rewrite <- IH in H.
+    destruct (merge As Ps) as [CP|] eqn:mergeAsPs; try solve [intuition].
+    simpl. intuition (split; eauto).
+- intros [|[[P IP]|] Ps]; simpl; split; try solve [intuition].
+  + intros [s [HAs HPs]].
+    destruct s as [|[[] ?] s]; simpl in *;
+    solve [inversion HPs|inversion HAs].
+  + specialize (IH Ps).
+    destruct (merge As Ps) as [CP|] eqn:mergeAsPs; try solve [intuition].
+    simpl.
+    rewrite and_assoc, (and_comm true), <- (and_assoc _ _ true), IH.
+    intros [HIA [[s [HAs HPs]] _]]. exists ((false, IP) :: s). simpl.
+    repeat split; trivial.
+  + specialize (IH Ps).
+    intros [s [HAs HPs]].
+    destruct s as [|[[] i] s]; simpl in *;
+    try solve [inversion HPs|inversion HAs].
+    destruct HPs as [HIP [? HPs]]. subst i.
+    assert (H : exists s', context_has_shape s' As /\ context_has_shape (flip_shape s') Ps) by eauto.
+    rewrite <- IH in H.
+    destruct (merge As Ps) as [CP|] eqn:mergeAsPs; try solve [intuition].
+    simpl. intuition (split; eauto).
+  + specialize (IH Ps).
+    destruct (merge As Ps) as [CP|] eqn:mergeAsPs; try solve [intuition].
+    simpl. intros [_ [contra _]]. inversion contra.
+  + intros [s [HAs HPs]].
+    destruct s as [|[[] ?] s]; simpl in *;
+    solve [inversion HPs|inversion HAs].
+Qed.
+
+Instance context_lang_from_component_lang :
+     context_language pprog pprog :=
+{
+  cl_insert := insert;
+  cl_compatible := comp_compatible;
+  cl_complete := comp_complete;
+  cl_stat_eq := stat_eq;
+  cl_beh_eq p q := beh_eq (link (fsts (somes p))) (link (fsts (somes q)));
+
+  cl_stat_eq_compatible_complete := admit
+
+}.
+
+Instance structured_context_lang_from_component_lang :
      structured_context_language
-       (context_lang_from_component_lang compl)
+       context_lang_from_component_lang
        shape :=
 {
   scl_context_has_shape := context_has_shape;
@@ -168,7 +302,7 @@ Definition map_compile (p:@pprog interface hcomponent) :
                           @pprog interface lcomponent :=
   List.map (option_map (fst_map compile)) p.
 
-Conjecture sfa_implies_md : 
+Conjecture sfa_implies_md :
   structured_full_abstraction
     (structured_context_lang_from_component_lang H)
     (structured_context_lang_from_component_lang L)
@@ -198,7 +332,7 @@ Instance unstructured_context_lang_from_component_lang
      context_language uprog ucontext :=
 {
   cl_insert := umerge;
-  cl_compatible c p := 
+  cl_compatible c p :=
     let '(existT n (existT lc pi)) := c in
     n = length p /\
     All (fun PIP => match PIP with (P, IP) => has_interface P IP end) (lc++p) /\
@@ -219,6 +353,6 @@ End FAfromMD.
 
 (* TODO: using structured_context_lang_from_component_lang
          and unstructured_context_lang_from_component_lang
-         we want to instantiate 
+         we want to instantiate
          structured_full_abstraction_implies_full_abstraction
 *)
