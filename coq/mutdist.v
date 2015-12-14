@@ -118,7 +118,12 @@ Instance context_lang_from_component_lang
     admit (* <-- can't prove this without extra assumptions on comp *)
 }.
 
-Fixpoint context_has_shape (s : list (bool*interface)) (c : pprog) : bool :=
+Definition shape := list (bool*interface). (* replace (bool*interface) with option interface
+                                              if dropping scl_program_has_shape *)
+Definition flip_shape (s : shape): shape :=
+  List.map (fun bi => match bi with (b, i) => (negb b, i) end) s.
+
+Fixpoint context_has_shape (s : shape) (c : pprog) : bool :=
   match s, c with
   | [], [] => true
   | (true,i1)::s', (Some (_,i2))::c' =>
@@ -130,15 +135,47 @@ Fixpoint context_has_shape (s : list (bool*interface)) (c : pprog) : bool :=
   | _, _ => false
   end.
 
+Definition program_has_shape (s : shape) (p : pprog) : bool :=
+  context_has_shape (flip_shape s) p.
+
 Instance structured_context_lang_from_component_lang
   (compl : component_language I component program) :
      structured_context_language
        (context_lang_from_component_lang compl)
-       (list (bool*interface)) := (* replace (bool*interface) with option interface
-                                  if dropping scl_program_has_shape *)
+       shape :=
 {
   scl_context_has_shape := context_has_shape;
-  scl_program_has_shape s p := admit (* the same, just flip all bools *)
+  scl_program_has_shape := program_has_shape
 }.
 
 End SFAfromMD.
+
+Section FAfromMD.
+
+Context {interface: Type} {I: interface_language interface} {component program: Type}.
+
+(* We take both FA programs and contexts to be "partial programs"
+   of the following type *)
+Definition unstructured_pprog := list (component*interface).
+
+Instance unstructured_context_lang_from_component_lang
+  (compl : component_language I component program) :
+     context_language unstructured_pprog unstructured_pprog :=
+{
+  cl_insert c p := c ++ p;
+  cl_compatible c p := All (fun PIP => match PIP with (P, IP) => has_interface P IP end)
+                           (c ++ p) /\
+                       compatible (snds (c ++ p));
+  cl_complete p := complete (snds p);
+  cl_stat_eq p q :=
+    All2 (fun PIP QIQ =>
+            match PIP, QIQ with
+              | (P, IP), (Q, IQ) =>
+                has_interface P IP /\ has_interface Q IQ /\ IP = IQ
+            end) p q;
+  cl_beh_eq p q := beh_eq (link (fsts p)) (link (fsts q));
+  cl_stat_eq_compatible_complete :=
+    admit (* <-- can't prove this without extra assumptions on comp *)
+}.
+
+End FAfromMD.
