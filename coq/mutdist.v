@@ -140,7 +140,35 @@ Lemma merge_stat_eq As Ps Qs CP :
   | None => False
   end.
 Proof.
-Admitted.
+revert Ps Qs CP. induction As as [|[[A IA]|] As IH].
+- unfold stat_eq.
+  intros [] []; simpl; try congruence.
+  intros CP H. now inversion H.
+- unfold stat_eq in *.
+  intros [|[[P IP]|] Ps] [|[[Q IQ]|] Qs]; simpl; try solve [congruence|intuition].
+  intros CP.
+  destruct (merge As Ps) as [CP'|] eqn:mergeAsPs; try discriminate.
+  intros H. inversion H; subst CP; clear H.
+  intros [_ HPsQs].
+  specialize (IH _ _ _ mergeAsPs HPsQs).
+  destruct (merge As Qs) as [CQ'|] eqn:mergeAsQs; try solve [intuition].
+  now simpl; rewrite IH.
+- unfold stat_eq in *.
+  intros [|[[P IP]|] Ps] [|[[Q IQ]|] Qs]; simpl; try solve [congruence|intuition].
+  + intros CP.
+    destruct (merge As Ps) as [CP'|] eqn:mergeAsPs; try discriminate.
+    intros H. inversion H; subst CP; clear H.
+    intros [[PI [QI H]] HPsQs]. subst IQ. rename IP into IPQ.
+    specialize (IH _ _ _ mergeAsPs HPsQs).
+    destruct (merge As Qs) as [CQ'|] eqn:mergeAsQs; try solve [intuition].
+    now simpl; rewrite IH.
+  + intros CP.
+    destruct (merge As Ps) as [CP'|] eqn:mergeAsPs; try discriminate.
+    intros H. inversion H; subst CP; clear H.
+    intros [_ HPsQs].
+    specialize (IH _ _ _ mergeAsPs HPsQs).
+    destruct (merge As Qs) as [CQ'|] eqn:mergeAsQs; solve [intuition].
+Qed.
 
 Definition shape := list (bool*interface). (* replace (bool*interface) with option interface
                                               if dropping scl_program_has_shape *)
@@ -185,6 +213,11 @@ Definition insert c p :=
   | Some cp => cp
   | None => [] (* shouldn't happen *)
   end.
+
+(* AAA: It is a bit strange that [cl_compatible] is a property of [c]
+   and [p] separately when in this instance we factor it through
+   [merge c p]. This makes it very similar to how we use [cl_complete]
+   in e.g. [cl_stat_eq_compatible_complete].  *)
 
 Definition comp_compatible c p :=
   match merge c p with
