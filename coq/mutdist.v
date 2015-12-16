@@ -308,9 +308,27 @@ Instance context_lang_from_component_lang :
   cl_stat_eq := stat_eq;
   cl_beh_eq p q := beh_eq (link (fsts (somes p))) (link (fsts (somes q)));
 
-  cl_stat_eq_compatible_complete := admit
+  cl_stat_eq_compatible_complete := _
 
 }.
+
+Proof.
+  intros Ps Qs HPsQs As.
+  unfold comp_compatible, comp_complete, insert.
+  destruct (merge As Ps) as [CP|] eqn:mergeAsPs; try solve [intuition].
+  intros [[int_CP comp_CP] [somes_AsPs compl_CP]].
+  assert (H := merge_shape As Ps).
+  rewrite mergeAsPs in H.
+  assert (H' := conj int_CP somes_AsPs).
+  rewrite H in H'. destruct H' as [s [HAs HPs]].
+  assert (H' := stat_eq_shape Ps Qs s HPsQs HPs).
+  assert (H'' : exists s, context_has_shape s As /\ program_has_shape s Qs) by eauto.
+  rewrite <- merge_shape in H''.
+  destruct (merge As Qs) as [CQ|] eqn:mergeAsQs; try solve [intuition].
+  assert (H''' := merge_stat_eq _ _ _ _ mergeAsPs HPsQs).
+  rewrite mergeAsQs in H'''.
+  intuition congruence.
+Qed.
 
 Instance structured_context_lang_from_component_lang :
      structured_context_language
