@@ -22,13 +22,20 @@ Let comp
 
 Class component_language
       {interface: Type} (il: interface_language interface)
-      (component: Type) (program: Type): Type :=
+      (component program: Type): Type :=
   {
-    has_interface : component -> interface -> Prop;
-    (* + has_interface is a partial function from components to interfaces *)
+    get_interface : component -> option interface;
     link: list component -> program;
     beh_eq: program -> program -> Prop
   }.
+
+Definition has_interface
+           {interface: Type} {il: interface_language interface}
+           {component program: Type}
+           {L: component_language il component program}
+
+           (C: component) (I: interface): Prop :=
+  get_interface C = Some I.
 
 Notation "P ~~ Q" := (beh_eq P Q) (at level 60, no associativity).
 

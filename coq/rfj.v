@@ -1,5 +1,5 @@
-Require Import Coq.Lists.List.
-Import ListNotations.
+Require Import Ssreflect.ssreflect Ssreflect.ssrfun Ssreflect.ssrbool.
+Require Import Ssreflect.eqtype Ssreflect.seq.
 
 Require Import Coq.Relations.Relation_Operators.
 
@@ -8,43 +8,68 @@ Require Import MutualDistrust.mutdist.
 
 (* Define RFJ interfaces *)
 
-Parameter rfj_interface: Set.
-Parameter rfj_compatible2: rfj_interface -> rfj_interface -> Prop.
-(* Compatibility is pair-wise compatibility. *)
-Inductive rfj_compatible: list rfj_interface -> Prop :=
-| rfj_compatible_nil: rfj_compatible []
-| rfj_compatible_cons: forall C Cs,
-                         rfj_compatible Cs ->
-                         Forall (rfj_compatible2 C) Cs ->
-                         rfj_compatible (C :: Cs).
-Parameter rfj_complete: list rfj_interface -> Prop.
+Parameter component_name: eqType.
+Parameter component_signature: eqType.
 
-Lemma rfj_compatible_cons_inv:
-  forall I Is, rfj_compatible (I :: Is) -> rfj_compatible Is.
-Proof.
-  intros I Is H.
-  now inversion H.
-Qed.
+Record interface: Type :=
+  {
+    imports: seq (component_name * component_signature);
+    export: component_name * component_signature
+  }.
 
-Instance rfji: interface_language rfj_interface :=
+Definition names (PI: interface): seq component_name :=
+  [seq name_sig.1 | name_sig <- export PI :: imports PI].
+
+Definition well_formed (PI: interface): bool :=
+  uniq (names PI).
+
+Definition rfj_compatible2_split (PI PI': interface): bool :=
+  (export PI \in imports PI') || ((export PI).1 \notin (names PI')).
+
+Definition rfj_compatible2 (PI PI': interface): bool :=
+  (rfj_compatible2_split PI PI') && (rfj_compatible2_split PI' PI).
+
+Fixpoint rfj_compatible (PIs: list interface): bool :=
+  (match PIs with
+     | [::] => true
+     | PI :: PIs' =>
+       (all well_formed PIs &&
+        all (rfj_compatible2 PI) PIs') &&
+       rfj_compatible PIs'
+     end).
+
+Definition rfj_complete (PIs: seq interface): bool :=
+  let names := [seq (export PI).1 | PI <- PIs] in
+  andb (all well_formed PIs)
+       (all (fun PI => all (fun name_sig => name_sig.1 \in names) (imports PI)) PIs).
+
+Instance rfji: interface_language interface :=
   {
     compatible := rfj_compatible;
-    compatible_cons := rfj_compatible_cons_inv;
-    complete := rfj_complete
+    complete := rfj_complete;
+    compatible_cons := _
   }.
+Proof.
+  move=> I Is.
+  by move/andP => [_ H].
+Qed.
 
 (* Define RFJ as a component language *)
 
-Parameter rfj_defs: Set.
-Definition rfj_component: Set := (rfj_interface * rfj_defs)%type.
-Definition rfj_program := list rfj_component.
+Parameter rfj_component_body: eqType.
+Parameter rfj_check_interface: rfj_component_body -> interface -> bool.
+Definition rfj_component :=
+  ((component_name * component_signature) * rfj_component_body)%type.
+Definition rfj_program := seq rfj_component.
 Parameter rfj_beh_eq: rfj_program -> rfj_program -> Prop.
 
-Parameter rfj_has_interface: rfj_defs -> rfj_interface -> Prop.
-
-Instance rfj: component_language rfji rfj_component rfj_program :=
+Instance rfj: component_language rfji (interface * rfj_component_body) rfj_program :=
   {
-    has_interface := fun C I => fst C = I /\ rfj_has_interface (snd C) I;
-    link := id;
+    get_interface := fun C =>
+                       if rfj_check_interface C.2 C.1 then
+                         Some C.1
+                       else
+                         None;
+    link := fun Cs => [seq (export C.1, C.2) | C <- Cs];
     beh_eq := rfj_beh_eq
   }.
