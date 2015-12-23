@@ -17,31 +17,50 @@ Record interface: Type :=
     export: component_name * component_signature
   }.
 
+(* List the names of the components used in an interface,
+   either imported or exported. *)
 Definition names (PI: interface): seq component_name :=
   [seq name_sig.1 | name_sig <- export PI :: imports PI].
 
-Definition well_formed (PI: interface): bool :=
-  uniq (names PI).
+(* An interface is self-contained if it only mentions objects and
+   classes that are either exported or imported. This is a
+   prerequisite for being well-formed. *)
+Parameter self_contained: interface -> bool.
 
-Definition rfj_compatible2_split (PI PI': interface): bool :=
-  (export PI \in imports PI') || ((export PI).1 \notin (names PI')).
+Definition well_formed (PI: interface) :=
+  uniq (names PI) && self_contained PI.
 
-Definition rfj_compatible2 (PI PI': interface): bool :=
-  (rfj_compatible2_split PI PI') && (rfj_compatible2_split PI' PI).
+(* Compatibility of a sequence is defined as pairwise-compatibility,
+   where compatibility between two interfaces means the exported name
+   is different and there is no conflict on common signatures. *)
+Definition rfj_compatible (PIs: seq interface): bool :=
+  (* Note that this definition of [no_conflict] is symmetric, so we
+     don't need [no_conflict PI' PI] in [compat2]. *)
+  let no_conflict PI PI' :=
+      all (fun name_sig =>
+             (name_sig \in export PI' :: imports PI') || (name_sig.1 \notin (names PI'))
+          ) (export PI :: imports PI)
+  in
+  let compat2 PI PI' :=
+      ((export PI).1 != (export PI').1) && no_conflict PI PI'
+  in
+  all well_formed PIs &&
+      (fix f PIs := match PIs with
+                      | [::] => true
+                      | PI :: PIs' =>
+                        all (compat2 PI) PIs' && f PIs'
+                    end) PIs.
 
-Fixpoint rfj_compatible (PIs: list interface): bool :=
-  (match PIs with
-     | [::] => true
-     | PI :: PIs' =>
-       (all well_formed PIs &&
-        all (rfj_compatible2 PI) PIs') &&
-       rfj_compatible PIs'
-     end).
-
+(* A sequence is complete when each imported component name is
+   exported by some component. *)
 Definition rfj_complete (PIs: seq interface): bool :=
   let names := [seq (export PI).1 | PI <- PIs] in
-  andb (all well_formed PIs)
-       (all (fun PI => all (fun name_sig => name_sig.1 \in names) (imports PI)) PIs).
+  all well_formed PIs &&
+      (all (fun PI =>
+              all (fun name_sig =>
+                     name_sig.1 \in names
+                  ) (imports PI)
+           ) PIs).
 
 Instance rfji: interface_language interface :=
   {
@@ -51,7 +70,16 @@ Instance rfji: interface_language interface :=
   }.
 Proof.
   move=> I Is.
-  by move/andP => [_ H].
+  move/andP => [H1 H2].
+  move/andP :H1 => [_ H12].
+  move/andP :H2 => [_ H22].
+  (* YJ: "bool_congr." seems buggy on my SSReflect. Any other, better
+         way than what's below? *)
+  unfold rfj_compatible.
+  unfold all.
+  rewrite H22.
+  rewrite H12.
+  reflexivity.
 Qed.
 
 (* Define RFJ as a component language *)
