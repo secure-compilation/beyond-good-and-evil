@@ -10,17 +10,18 @@ Require Import MutualDistrust.mutdist.
 
 Parameter component_name: eqType.
 Parameter component_signature: eqType.
+Parameter signame: component_signature -> component_name.
 
 Record interface: Type :=
   {
-    imports: seq (component_name * component_signature);
-    export: component_name * component_signature
+    imports: seq component_signature;
+    export: component_signature
   }.
 
 (* List the names of the components used in an interface,
    either imported or exported. *)
 Definition names (PI: interface): seq component_name :=
-  [seq name_sig.1 | name_sig <- export PI :: imports PI].
+  [seq signame sig | sig <- export PI :: imports PI].
 
 (* An interface is self-contained if it only mentions objects and
    classes that are either exported or imported. This is a
@@ -37,12 +38,12 @@ Definition rfj_compatible (PIs: seq interface): bool :=
   (* Note that this definition of [no_conflict] is symmetric, so we
      don't need [no_conflict PI' PI] in [compat2]. *)
   let no_conflict PI PI' :=
-      all (fun name_sig =>
-             (name_sig \in export PI' :: imports PI') || (name_sig.1 \notin (names PI'))
+      all (fun sig =>
+             (sig \in export PI' :: imports PI') || (signame sig \notin (names PI'))
           ) (export PI :: imports PI)
   in
   let compat2 PI PI' :=
-      ((export PI).1 != (export PI').1) && no_conflict PI PI'
+      (signame (export PI) != signame (export PI')) && no_conflict PI PI'
   in
   all well_formed PIs &&
       (fix f PIs := match PIs with
@@ -51,16 +52,29 @@ Definition rfj_compatible (PIs: seq interface): bool :=
                         all (compat2 PI) PIs' && f PIs'
                     end) PIs.
 
+
+(* mainsig is:
+     component main {
+       class {
+         main.0(main.0);
+       }
+       object main.0;
+     }
+*)
+Parameter mainsig: component_signature.
+Parameter siginc: component_signature -> component_signature -> bool.
+
 (* A sequence is complete when each imported component name is
-   exported by some component. *)
+   exported by some component, and it has a main component. *)
 Definition rfj_complete (PIs: seq interface): bool :=
-  let names := [seq (export PI).1 | PI <- PIs] in
+  let names := [seq signame (export PI) | PI <- PIs] in
   all well_formed PIs &&
       (all (fun PI =>
-              all (fun name_sig =>
-                     name_sig.1 \in names
+              all (fun sig =>
+                     signame sig \in names
                   ) (imports PI)
-           ) PIs).
+           ) PIs) &&
+      (has (fun PI => siginc mainsig (export PI)) PIs).
 
 Instance rfji: interface_language interface :=
   {
@@ -85,19 +99,19 @@ Qed.
 (* Define RFJ as a component language *)
 
 Parameter rfj_component_body: eqType.
+(* rfj_check_interface includes wellformedness checks *)
 Parameter rfj_check_interface: rfj_component_body -> interface -> bool.
-Definition rfj_component :=
-  ((component_name * component_signature) * rfj_component_body)%type.
+Definition rfj_component := (interface * rfj_component_body)%type.
 Definition rfj_program := seq rfj_component.
 Parameter rfj_beh_eq: rfj_program -> rfj_program -> Prop.
 
-Instance rfj: component_language rfji (interface * rfj_component_body) rfj_program :=
+Instance rfj: component_language rfji rfj_component rfj_program :=
   {
     get_interface := fun C =>
                        if rfj_check_interface C.2 C.1 then
                          Some C.1
                        else
                          None;
-    link := fun Cs => [seq (export C.1, C.2) | C <- Cs];
+    link := id;
     beh_eq := rfj_beh_eq
   }.
