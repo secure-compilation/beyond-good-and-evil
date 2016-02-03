@@ -13,7 +13,7 @@ Parameter symb_mem_word: Set.
 Parameter symb_mem_loc: Set.
 Definition symb_mem_region := list symb_mem_word.
 Definition symb_prog := list (symb_mem_loc * symb_mem_region).
-Definition symb_component := (rfj_interface * symb_prog)%type.
+Definition symb_component := (interface * symb_prog)%type.
 
 (* The linker sets tags *)
 Parameter symb_mem_tag: Set.
@@ -38,7 +38,7 @@ Definition symb_stuck (s: symb_machine_state): Prop :=
 Definition symb_terminates (s: symb_machine_state) :=
   exists s', s -->* s' /\ symb_stuck s'.
 
-Parameter symb_prog_has_interface : symb_prog -> rfj_interface -> Prop.
+Parameter symb_prog_has_interface : symb_prog -> interface -> Prop.
 (* The program should define memory regions only for the components *)
 (* mentioned in the interface. When a location is missing, the *)
 (* corresponding memory regions will be filled with zeros and *)
