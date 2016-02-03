@@ -2,6 +2,7 @@ Require Import Coq.Lists.List.
 Import ListNotations.
 
 Require Import MutualDistrust.fullabst.
+Require Import MutualDistrust.lib.
 
 Variable perm : nat -> Type.
 Variable permute : forall {a:Type} {n:nat}, perm n -> list a -> list a.
@@ -305,22 +306,14 @@ induction As as [|[[A IA]|] As IH].
     solve [inversion HPs|inversion HAs].
 Qed.
 
-Instance context_lang_from_component_lang :
-     context_language pprog pprog :=
-{
-  cl_insert := insert;
-  cl_compatible := comp_compatible;
-  cl_complete := comp_complete;
-  cl_stat_eq := stat_eq;
-  cl_beh_eq p q := beh_eq (link (fsts (somes p))) (link (fsts (somes q)));
-
-  cl_stat_eq_compatible_complete := _
-
-}.
-
+Lemma stat_eq_compatible_complete Ps Qs :
+  stat_eq Ps Qs ->
+  forall A,
+    comp_compatible A Ps /\ comp_complete (insert A Ps) ->
+    comp_compatible A Qs /\ comp_complete (insert A Qs).
 Proof.
-  intros Ps Qs HPsQs As.
-  unfold comp_compatible, comp_complete, insert.
+  intros HPsQs As.
+  unfold comp_compatible, comp_complete, insert in *.
   destruct (merge As Ps) as [CP|] eqn:mergeAsPs; try solve [intuition].
   intros [[int_CP comp_CP] [somes_AsPs compl_CP]].
   assert (H := merge_shape As Ps).
@@ -335,6 +328,18 @@ Proof.
   rewrite mergeAsQs in H'''.
   intuition congruence.
 Qed.
+
+Instance context_lang_from_component_lang :
+     context_language pprog pprog :=
+{
+  cl_insert := insert;
+  cl_compatible := comp_compatible;
+  cl_complete := comp_complete;
+  cl_stat_eq := stat_eq;
+  cl_beh_eq p q := beh_eq (link (fsts (somes p))) (link (fsts (somes q)));
+  cl_stat_eq_compatible_complete := @stat_eq_compatible_complete
+
+}.
 
 Instance structured_context_lang_from_component_lang :
      structured_context_language
@@ -359,6 +364,8 @@ Definition map_compile (p:@pprog interface hcomponent) :
                           @pprog interface lcomponent :=
   List.map (option_map (fst_map compile)) p.
 
+Arguments Some {A} _.
+
 Theorem sfa_implies_md :
   structured_full_abstraction
     (structured_context_lang_from_component_lang H)
@@ -366,7 +373,47 @@ Theorem sfa_implies_md :
     map_compile ->
   mutual_distrust H L compile.
 Proof.
-intros Hsfa PIs AIs pi Hcomp Ps HPs Qs HQs.
+intros Hsfa PIs AIs pi Hcomp Ps HPs Qs HQs. split.
+- (* -> *)
+  intros Heq az Haz.
+  assert (HPQ : @stat_eq _ _ _ _
+                         H
+                         (map Some (combine Ps PIs) ++ repeat None (length AIs))
+                         (map Some (combine Qs PIs) ++ repeat None (length AIs))).
+  { clear Heq az Haz pi Hcomp Hsfa. revert Ps HPs Qs HQs. unfold stat_eq.
+    induction PIs as [|PI PIs IH]; intros [|P Ps] HPs [|Q Qs] HQs; simpl in *; try solve [intuition].
+    generalize (length AIs). clear AIs HPs HQs.
+    now induction 0 as [|n IH]; split. }
+  assert (HPs' : @program_has_shape _ _ _ _
+                                    H
+                                    (map (pair false) PIs ++ map (pair true) AIs)
+                                    (map Some (combine Ps PIs) ++ repeat None (length AIs))).
+  { clear Qs HQs HPQ Heq az Haz pi Hcomp.
+    revert PIs HPs. unfold program_has_shape.
+    induction Ps as [|P Ps IH]; simpl; intros PIs HPs.
+    - destruct PIs as [|]; simpl in *; try solve [intuition].
+      clear HPs.
+      induction AIs as [|AI AIs IH]; simpl; trivial.
+      reflexivity.
+    - destruct PIs as [|PI PIs]; simpl in *; try solve [intuition]. }
+  assert (HQs' : @program_has_shape _ _ _ _
+                                    H
+                                    (map (pair false) PIs ++ map (pair true) AIs)
+                                    (map Some (combine Qs PIs) ++ repeat None (length AIs))).
+  { clear Ps HPs HPs' HPQ Heq az Haz pi Hcomp.
+    revert PIs HQs. unfold program_has_shape.
+    induction Qs as [|Q Qs IH]; simpl; intros PIs HQs.
+    - destruct PIs as [|]; simpl in *; try solve [intuition].
+      clear HQs.
+      induction AIs as [|AI AIs IH]; simpl; trivial.
+      reflexivity.
+    - destruct PIs as [|PI PIs]; simpl in *; try solve [intuition]. }
+  specialize (Hsfa (map (pair false) PIs ++ map (pair true) AIs)
+                   (map Some (combine Ps PIs) ++ repeat None (length AIs))
+                   (map Some (combine Qs PIs) ++ repeat None (length AIs))).
+  specialize (Hsfa (conj HPQ (conj HPs' HQs'))).
+  admit.
+- (* <- *) admit.
 Admitted.
 
 End SFAimpliesMD.
