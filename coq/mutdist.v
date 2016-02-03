@@ -65,13 +65,12 @@ Definition mutual_distrust
   comp (permute pi (PIs++AIs)) ->
   forall Ps : list hcomponent, All2 has_interface Ps PIs ->
   forall Qs : list hcomponent, All2 has_interface Qs PIs ->
-  (forall As : list hcomponent, All2 has_interface As AIs ->
-                           link (permute pi (Ps++As))
-                        ~~ link (permute pi (Qs++As)))
-  <->
-  (forall az : list lcomponent, All2 has_interface az AIs ->
-                           link (permute pi ((map compile Ps)++az))
-                        ~~ link (permute pi ((map compile Qs)++az))).
+  ((forall As : list hcomponent, All2 has_interface As AIs ->
+     link (permute pi (Ps++As)) ~~ link (permute pi (Qs++As)))
+   <->
+   (forall az : list lcomponent, All2 has_interface az AIs ->
+         link (permute pi ((map compile Ps)++az))
+      ~~ link (permute pi ((map compile Qs)++az)))).
 
 (* Instantiating structured full abstraction to obtain something
    stronger than mutual distrust (we will use this to prove mutual
@@ -360,13 +359,15 @@ Definition map_compile (p:@pprog interface hcomponent) :
                           @pprog interface lcomponent :=
   List.map (option_map (fst_map compile)) p.
 
-Conjecture sfa_implies_md :
+Theorem sfa_implies_md :
   structured_full_abstraction
     (structured_context_lang_from_component_lang H)
     (structured_context_lang_from_component_lang L)
     map_compile ->
   mutual_distrust H L compile.
-(* TODO: prove this *)
+Proof.
+intros Hsfa PIs AIs pi Hcomp Ps HPs Qs HQs.
+Admitted.
 
 End SFAimpliesMD.
 
