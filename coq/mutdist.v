@@ -4,9 +4,17 @@ Import ListNotations.
 Require Import MutualDistrust.fullabst.
 Require Import MutualDistrust.lib.
 
-Variable perm : nat -> Type.
-Variable permute : forall {a:Type} {n:nat}, perm n -> list a -> list a.
-(* Coercion permute : perm >-> Funclass. *)
+Arguments Some {A} _.
+Arguments fst {_ _} _.
+Arguments snd {_ _} _.
+
+(* AAA: I am going to ignore permutations for now, since they are a
+   minor detail compared to the rest of the property. If there's time,
+   we can come back to this. *)
+
+Definition perm : nat -> Type := fun _ => unit.
+Definition permute : forall {A:Type} {n:nat}, perm n -> list A -> list A :=
+  fun A n pi l => l.
 
 Class interface_language (interface: Type): Type :=
   {
@@ -53,6 +61,13 @@ Fixpoint All2 {A B} (P : A -> B -> Prop) l1 l2 : Prop :=
   | _, _ => False
   end.
 
+Lemma All2_length {A B} (P : A -> B -> Prop) l1 l2 :
+  All2 P l1 l2 ->
+  length l1 = length l2.
+Proof.
+  revert l2; induction l1 as [|x1 l1 IH]; intros [|x2 l2]; simpl; intuition.
+Qed.
+
 Definition mutual_distrust
   {interface: Type} {I : interface_language interface}
   {hcomponent hprogram: Type} {lcomponent lprogram: Type}
@@ -80,7 +95,9 @@ Definition mutual_distrust
 Definition admit {t:Type} : t. Admitted.
 Variable isInl : forall {a:Type} {b:Type}, (a+b) -> bool.
 Coercion is_true : bool >-> Sortclass. (* Prop *)
-Variable fst_map : forall{a b c:Type}, (a->c) -> (a*b) -> (c*b).
+
+Definition fst_map {A B C} (f : A -> C) (p : A * B) :=
+  (f (fst p), snd p).
 
 Fixpoint somes {A} (l : list (option A)) : list A :=
   match l with
@@ -89,6 +106,19 @@ Fixpoint somes {A} (l : list (option A)) : list A :=
   | None :: l' => somes l'
   end.
 
+Lemma somes_app {A} (l1 l2 : list (option A)) :
+  somes (l1 ++ l2) = somes l1 ++ somes l2.
+Proof.
+  induction l1 as [|[x|] l1 IH]; simpl; trivial.
+  now rewrite IH.
+Qed.
+
+Lemma somes_map {A} (l : list A) :
+  somes (map Some l) = l.
+Proof.
+  now induction l as [|x l IH]; simpl; trivial; rewrite IH.
+Qed.
+
 Definition isSome {A} (oa : option A) :=
   match oa with
   | Some _ => true
@@ -96,10 +126,20 @@ Definition isSome {A} (oa : option A) :=
   end.
 
 Definition fsts {A B} (l : list (A * B)) : list A :=
-  map (@fst _ _) l.
+  map fst l.
 
 Definition snds {A B} (l : list (A * B)) : list B :=
-  map (@snd _ _) l.
+  map snd l.
+
+Lemma fsts_combine {A B} (l1 : list A) (l2 : list B) :
+  length l1 = length l2 ->
+  map fst (combine l1 l2) = l1.
+Proof.
+  revert l2.
+  induction l1 as [|x l1 IH]; simpl; intros [|y l2];
+  simpl; trivial; try discriminate.
+  intros H. rewrite IH; congruence.
+Qed.
 
 Section SFAfromMD.
 
@@ -126,6 +166,48 @@ Fixpoint merge (p:pprog) (q:pprog) : option pprog :=
     end
   | _, _ => None
   end.
+
+Lemma merge_app p1 p2 q1 q2 :
+  length p1 = length q1 ->
+  merge (p1 ++ p2) (q1 ++ q2) =
+  match merge p1 q1, merge p2 q2 with
+  | Some m1, Some m2 => Some (m1 ++ m2)
+  | _, _ => None
+  end.
+Proof.
+  revert q1.
+  induction p1 as [|[[cp ip]|] p1 IH]; intros [|[[cq iq]|] q1];
+  simpl; trivial; try discriminate.
+  - now destruct (merge p2 q2).
+  - intros H. inversion H as [H'].
+    rewrite (IH _ H').
+    destruct (merge p1 q1) as [m1|]; trivial.
+    destruct (merge p2 q2) as [m2|]; trivial.
+  - intros H. inversion H as [H'].
+    rewrite (IH _ H').
+    destruct (merge p1 q1) as [m1|]; trivial.
+    destruct (merge p2 q2) as [m2|]; trivial.
+  - intros H. inversion H as [H'].
+    rewrite (IH _ H').
+    destruct (merge p1 q1) as [m1|]; trivial.
+    destruct (merge p2 q2) as [m2|]; trivial.
+Qed.
+
+Lemma merge_None_Some Ps :
+  merge (repeat None (length Ps)) (map Some Ps) =
+  Some (map Some Ps).
+Proof.
+  induction Ps as [|[CP IP] Ps IH]; simpl; trivial.
+  now rewrite IH.
+Qed.
+
+Lemma merge_Some_None Ps :
+  merge (map Some Ps) (repeat None (length Ps)) =
+  Some (map Some Ps).
+Proof.
+  induction Ps as [|[CP IP] Ps IH]; simpl; trivial.
+  now rewrite IH.
+Qed.
 
 Definition interfaces_ok (p:pprog) :=
   All (fun PIP => match PIP with (P, IP) => has_interface P IP end) (somes p).
@@ -191,6 +273,65 @@ Fixpoint context_has_shape (s : shape) (c : pprog) : Prop :=
     context_has_shape s' c'
   | _, _ => false
   end.
+
+Lemma context_has_shape_app_l s1 s2 p :
+  context_has_shape (s1 ++ s2) p ->
+  exists p1 p2,
+    p = p1 ++ p2
+    /\ context_has_shape s1 p1
+    /\ context_has_shape s2 p2.
+Proof.
+  revert p.
+  induction s1 as [|[b i] s1 IH]; intros p.
+  - exists [], p; simpl.
+    repeat split; trivial.
+  - destruct b, p as [|[[cp ip]|] p]; simpl; try discriminate.
+    + intros [H1 [H2 H3]].
+      specialize (IH _ H3).
+      destruct IH as [p1 [p2 [Hp1 [Hp2 Hp3]]]].
+      rewrite Hp1.
+      exists (Some (cp, ip) :: p1), p2; repeat split; trivial.
+    + intros H. specialize (IH _ H).
+      destruct IH as [p1 [p2 [Hp1 [Hp2 Hp3]]]]. rewrite Hp1.
+      exists (None :: p1), p2; repeat split; trivial.
+Qed.
+
+Lemma context_has_shape_length s p :
+  context_has_shape s p ->
+  length s = length p.
+Proof.
+  revert p. induction s as [|[b i] s IH]; intros p; simpl.
+  - destruct p; simpl; trivial; discriminate.
+  - destruct b, p as [|[[cp ip]|] p]; simpl; try discriminate.
+    + intros [_ [_ H]]. rewrite (IH _ H). reflexivity.
+    + intros H. rewrite (IH _ H). reflexivity.
+Qed.
+
+Lemma context_has_shape_false PIs AA :
+  context_has_shape (map (pair false) PIs) AA ->
+  AA = repeat None (length PIs).
+Proof.
+  revert AA; induction PIs as [|Is PIs IH]; intros [|A AA]; simpl; trivial; try discriminate.
+  destruct A; trivial; try discriminate.
+  intros H. rewrite (IH _ H). reflexivity.
+Qed.
+
+Lemma context_has_shape_true PIs AA :
+  context_has_shape (map (pair true) PIs) AA ->
+  exists AA',
+    AA = map Some (combine AA' PIs)
+    /\ All2 has_interface AA' PIs.
+Proof.
+  revert AA.
+  induction PIs as [|PI PIs IH]; intros AA; simpl.
+  - destruct AA; try discriminate.
+    intros _. exists [].
+    now split; simpl; trivial.
+  - destruct AA as [|[[CA IA]|] AA]; try discriminate.
+    intros [H1 [H2 H3]]. simpl.
+    destruct (IH _ H3) as [AA' [? H4]].
+    subst AA. exists (CA :: AA'). simpl. repeat split; congruence.
+Qed.
 
 Definition program_has_shape (s : shape) (p : pprog) : Prop :=
   context_has_shape (flip_shape s) p.
@@ -364,8 +505,6 @@ Definition map_compile (p:@pprog interface hcomponent) :
                           @pprog interface lcomponent :=
   List.map (option_map (fst_map compile)) p.
 
-Arguments Some {A} _.
-
 Theorem sfa_implies_md :
   structured_full_abstraction
     (structured_context_lang_from_component_lang H)
@@ -373,45 +512,105 @@ Theorem sfa_implies_md :
     map_compile ->
   mutual_distrust H L compile.
 Proof.
-intros Hsfa PIs AIs pi Hcomp Ps HPs Qs HQs. split.
+intros Hsfa PIs AIs pi Hcomp Ps HPs Qs HQs.
+assert (HPQ : @stat_eq _ _ _ _
+                       H
+                       (map Some (combine Ps PIs) ++ repeat None (length AIs))
+                       (map Some (combine Qs PIs) ++ repeat None (length AIs))).
+{ clear pi Hcomp Hsfa. revert Ps HPs Qs HQs. unfold stat_eq.
+  induction PIs as [|PI PIs IH]; intros [|P Ps] HPs [|Q Qs] HQs; simpl in *; try solve [intuition].
+  generalize (length AIs). clear AIs HPs HQs.
+  now induction 0 as [|n IH]; split. }
+assert (HPs' : @program_has_shape _ _ _ _
+                                  H
+                                  (map (pair false) PIs ++ map (pair true) AIs)
+                                  (map Some (combine Ps PIs) ++ repeat None (length AIs))).
+{ clear Qs HQs HPQ pi Hcomp.
+  revert PIs HPs. unfold program_has_shape.
+  induction Ps as [|P Ps IH]; simpl; intros PIs HPs.
+  - destruct PIs as [|]; simpl in *; try solve [intuition].
+    clear HPs.
+    induction AIs as [|AI AIs IH]; simpl; trivial.
+    reflexivity.
+  - destruct PIs as [|PI PIs]; simpl in *; try solve [intuition]. }
+assert (HQs' : @program_has_shape _ _ _ _
+                                  H
+                                  (map (pair false) PIs ++ map (pair true) AIs)
+                                  (map Some (combine Qs PIs) ++ repeat None (length AIs))).
+{ clear Ps HPs HPs' HPQ pi Hcomp.
+  revert PIs HQs. unfold program_has_shape.
+  induction Qs as [|Q Qs IH]; simpl; intros PIs HQs.
+  - destruct PIs as [|]; simpl in *; try solve [intuition].
+    clear HQs.
+    induction AIs as [|AI AIs IH]; simpl; trivial.
+    reflexivity.
+  - destruct PIs as [|PI PIs]; simpl in *; try solve [intuition]. }
+specialize (Hsfa (map (pair false) PIs ++ map (pair true) AIs)
+                 (map Some (combine Ps PIs) ++ repeat None (length AIs))
+                 (map Some (combine Qs PIs) ++ repeat None (length AIs))).
+specialize (Hsfa (conj HPQ (conj HPs' HQs'))). simpl in Hsfa.
+unfold permute in *. simpl in *.
+split.
 - (* -> *)
-  intros Heq az Haz.
-  assert (HPQ : @stat_eq _ _ _ _
-                         H
-                         (map Some (combine Ps PIs) ++ repeat None (length AIs))
-                         (map Some (combine Qs PIs) ++ repeat None (length AIs))).
-  { clear Heq az Haz pi Hcomp Hsfa. revert Ps HPs Qs HQs. unfold stat_eq.
-    induction PIs as [|PI PIs IH]; intros [|P Ps] HPs [|Q Qs] HQs; simpl in *; try solve [intuition].
-    generalize (length AIs). clear AIs HPs HQs.
-    now induction 0 as [|n IH]; split. }
-  assert (HPs' : @program_has_shape _ _ _ _
-                                    H
-                                    (map (pair false) PIs ++ map (pair true) AIs)
-                                    (map Some (combine Ps PIs) ++ repeat None (length AIs))).
-  { clear Qs HQs HPQ Heq az Haz pi Hcomp.
-    revert PIs HPs. unfold program_has_shape.
-    induction Ps as [|P Ps IH]; simpl; intros PIs HPs.
-    - destruct PIs as [|]; simpl in *; try solve [intuition].
-      clear HPs.
-      induction AIs as [|AI AIs IH]; simpl; trivial.
-      reflexivity.
-    - destruct PIs as [|PI PIs]; simpl in *; try solve [intuition]. }
-  assert (HQs' : @program_has_shape _ _ _ _
-                                    H
-                                    (map (pair false) PIs ++ map (pair true) AIs)
-                                    (map Some (combine Qs PIs) ++ repeat None (length AIs))).
-  { clear Ps HPs HPs' HPQ Heq az Haz pi Hcomp.
-    revert PIs HQs. unfold program_has_shape.
-    induction Qs as [|Q Qs IH]; simpl; intros PIs HQs.
-    - destruct PIs as [|]; simpl in *; try solve [intuition].
-      clear HQs.
-      induction AIs as [|AI AIs IH]; simpl; trivial.
-      reflexivity.
-    - destruct PIs as [|PI PIs]; simpl in *; try solve [intuition]. }
-  specialize (Hsfa (map (pair false) PIs ++ map (pair true) AIs)
-                   (map Some (combine Ps PIs) ++ repeat None (length AIs))
-                   (map Some (combine Qs PIs) ++ repeat None (length AIs))).
-  specialize (Hsfa (conj HPQ (conj HPs' HQs'))).
+  intros Heq az Haz. destruct Hsfa as [Hsfa _].
+  assert (H' : (forall AA : pprog,
+                 context_has_shape H (map (pair false) PIs ++ map (pair true) AIs)
+                                   AA /\
+                 comp_compatible H AA
+                                 (map Some (combine Ps PIs) ++ repeat None (length AIs)) /\
+                 comp_complete
+                   (insert AA
+                           (map Some (combine Ps PIs) ++ repeat None (length AIs))) ->
+                 link
+                   (fsts
+                      (somes
+                         (insert AA
+                                 (map Some (combine Ps PIs) ++ repeat None (length AIs))))) ~~
+                   link
+                   (fsts
+                      (somes
+                         (insert AA
+                                 (map Some (combine Qs PIs) ++ repeat None (length AIs))))))).
+  { intros AA [Hshape [HcompAA Hcompl]].
+    apply context_has_shape_app_l in Hshape.
+    destruct Hshape as [AA1 [AA2 [E1 [E2 E3]]]].
+    subst AA. unfold insert in *.
+    assert (Hp : length AA1 = length (map Some (combine Ps PIs))).
+    { rewrite map_length, combine_length, min_l.
+      - rewrite <- (context_has_shape_length _ _ _ E2).
+        rewrite map_length.
+        now rewrite (All2_length _ _ _ HPs).
+      - now rewrite (All2_length _ _ _ HPs). }
+    rewrite (merge_app AA1 AA2 _ _ Hp) in *.
+    assert (Hq : length AA1 = length (map Some (combine Qs PIs))).
+    { rewrite map_length, combine_length, min_l.
+      - rewrite <- (context_has_shape_length _ _ _ E2).
+        rewrite map_length.
+        now rewrite (All2_length _ _ _ HQs).
+      - now rewrite (All2_length _ _ _ HQs). }
+    rewrite (merge_app AA1 AA2 _ _ Hq) in *.
+    pose proof (context_has_shape_false _ _ _ E2). subst AA1.
+    rewrite repeat_length, map_length in Hp.
+    rewrite Hp at 1. rewrite merge_None_Some.
+    rewrite repeat_length, map_length in Hq.
+    rewrite Hq. rewrite merge_None_Some.
+    apply context_has_shape_true in E3.
+    destruct E3 as [AA2' [? HAA2']]. subst AA2.
+    assert (HlenAA2' := All2_length _ _ _ HAA2').
+    rewrite <- HlenAA2'.
+    assert (Hlen : length AA2' = length (combine AA2' AIs)).
+    { rewrite combine_length, min_l; trivial.
+      rewrite HlenAA2'; trivial. }
+    rewrite Hlen. rewrite merge_Some_None.
+    rewrite !somes_app, !somes_map.
+    unfold fsts. rewrite !map_app.
+    rewrite !fsts_combine; trivial; eauto.
+    - apply (All2_length _ _ _ HQs).
+    - apply (All2_length _ _ _ HPs). }
+  specialize (Hsfa H'). clear H'.
+  specialize (Hsfa (repeat None (length PIs) ++ map Some (combine az AIs))).
+  unfold map_compile, insert, program_has_shape, flip_shape in *.
+  rewrite !map_app, !map_map in *. simpl in *.
   admit.
 - (* <- *) admit.
 Admitted.
