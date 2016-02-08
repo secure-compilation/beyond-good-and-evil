@@ -1,0 +1,7 @@
+ocamlbuild traces.cmo semantics.cmo macros.cmo mapping.cmo
+cd _build
+ocamlmktop -o toplevel traces.cmo semantics.cmo macros.cmo mapping.cmo
+cd ..
+echo "cd _build; ./toplevel">toplevel
+chmod +x toplevel
+ocamlbuild -I _build/ -use-ocamlfind -pkgs oUnit,qcheck tests.native
