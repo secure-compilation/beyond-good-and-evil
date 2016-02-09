@@ -54,12 +54,28 @@ Fixpoint All {A} (P : A -> Prop) (l : list A) : Prop :=
   | a :: l' => P a /\ All P l'
   end.
 
+Lemma All_app {A} (P : A -> Prop) (l1 l2 : list A) :
+  All P l1 ->
+  All P l2 ->
+  All P (l1 ++ l2).
+Proof.
+  induction l1 as [|x l1 IH]; simpl; try solve [intuition].
+Qed.
+
 Fixpoint All2 {A B} (P : A -> B -> Prop) l1 l2 : Prop :=
   match l1, l2 with
   | [], [] => True
   | a :: l1', b :: l2' => P a b /\ All2 P l1' l2'
   | _, _ => False
   end.
+
+Lemma All2_All {A B} (P : A -> B -> Prop) l1 l2 :
+  All2 P l1 l2 ->
+  All (fun p => P (fst p) (snd p)) (combine l1 l2).
+Proof.
+  revert l2.
+  induction l1 as [|x l1 IH]; intros [|y l2]; simpl; try solve [intuition].
+Qed.
 
 Lemma All2_length {A B} (P : A -> B -> Prop) l1 l2 :
   All2 P l1 l2 ->
@@ -141,6 +157,16 @@ Proof.
   intros H. rewrite IH; congruence.
 Qed.
 
+Lemma snds_combine {A B} (l1 : list A) (l2 : list B) :
+  length l1 = length l2 ->
+  map snd (combine l1 l2) = l2.
+Proof.
+  revert l2.
+  induction l1 as [|x l1 IH]; simpl; intros [|y l2];
+  simpl; trivial; try discriminate.
+  intros H. rewrite IH; congruence.
+Qed.
+
 Section SFAfromMD.
 
 Context {interface: Type} {I: interface_language interface} {component program: Type}.
@@ -193,24 +219,26 @@ Proof.
     destruct (merge p2 q2) as [m2|]; trivial.
 Qed.
 
-Lemma merge_None_Some Ps :
-  merge (repeat None (length Ps)) (map Some Ps) =
-  Some (map Some Ps).
+Lemma merge_None_Some n Ps :
+  n = length Ps ->
+  merge (repeat None n) (map Some Ps) = Some (map Some Ps).
 Proof.
+  intros ->.
   induction Ps as [|[CP IP] Ps IH]; simpl; trivial.
   now rewrite IH.
 Qed.
 
-Lemma merge_Some_None Ps :
-  merge (map Some Ps) (repeat None (length Ps)) =
-  Some (map Some Ps).
+Lemma merge_Some_None n Ps :
+  n = length Ps ->
+  merge (map Some Ps) (repeat None n) = Some (map Some Ps).
 Proof.
+  intros ->.
   induction Ps as [|[CP IP] Ps IH]; simpl; trivial.
   now rewrite IH.
 Qed.
 
 Definition interfaces_ok (p:pprog) :=
-  All (fun PIP => match PIP with (P, IP) => has_interface P IP end) (somes p).
+  All (fun PIP => has_interface (fst PIP) (snd PIP)) (somes p).
 
 Definition stat_eq (p q : pprog) :=
     All2 (fun optPIP optQIQ =>
@@ -296,6 +324,20 @@ Proof.
       exists (None :: p1), p2; repeat split; trivial.
 Qed.
 
+Lemma context_has_shape_app s1 s2 p1 p2 :
+  context_has_shape s1 p1 ->
+  context_has_shape s2 p2 ->
+  context_has_shape (s1 ++ s2) (p1 ++ p2).
+Proof.
+  intros H1 H2. revert p1 H1.
+  induction s1 as [|[[] i] s1 IH]; intros [|[[cp ip]|] ps]; simpl;
+  try discriminate; trivial.
+  - intros [H11 [H12 H13]].
+    subst ip. repeat split; trivial.
+    now eauto.
+  - now eauto.
+Qed.
+
 Lemma context_has_shape_length s p :
   context_has_shape s p ->
   length s = length p.
@@ -316,6 +358,14 @@ Proof.
   intros H. rewrite (IH _ H). reflexivity.
 Qed.
 
+Lemma context_has_shape_false_conv PIs n :
+  n = length PIs ->
+  context_has_shape (map (pair false) PIs) (repeat None n).
+Proof.
+  intros ->.
+  induction PIs as [|PI PIs IH]; simpl; trivial; reflexivity.
+Qed.
+
 Lemma context_has_shape_true PIs AA :
   context_has_shape (map (pair true) PIs) AA ->
   exists AA',
@@ -331,6 +381,16 @@ Proof.
     intros [H1 [H2 H3]]. simpl.
     destruct (IH _ H3) as [AA' [? H4]].
     subst AA. exists (CA :: AA'). simpl. repeat split; congruence.
+Qed.
+
+Lemma context_has_shape_true_conv PIs AA :
+  All2 has_interface AA PIs ->
+  context_has_shape (map (pair true) PIs) (map Some (combine AA PIs)).
+Proof.
+  revert AA.
+  induction PIs as [|PI PIs IH]; intros [|A AA]; simpl;
+  try solve [intuition discriminate|reflexivity].
+  intros [H1 H2]. repeat split; auto.
 Qed.
 
 Definition program_has_shape (s : shape) (p : pprog) : Prop :=
@@ -501,6 +561,10 @@ Context {interface: Type} {I : interface_language interface}
         (L: component_language I lcomponent lprogram)
         (compile : hcomponent -> lcomponent).
 
+Hypothesis has_interface_compile :
+  forall P PI, has_interface P PI ->
+               has_interface (compile P) PI.
+
 Definition map_compile (p:@pprog interface hcomponent) :
                           @pprog interface lcomponent :=
   List.map (option_map (fst_map compile)) p.
@@ -590,28 +654,91 @@ split.
       - now rewrite (All2_length _ _ _ HQs). }
     rewrite (merge_app AA1 AA2 _ _ Hq) in *.
     pose proof (context_has_shape_false _ _ _ E2). subst AA1.
-    rewrite repeat_length, map_length in Hp.
-    rewrite Hp at 1. rewrite merge_None_Some.
-    rewrite repeat_length, map_length in Hq.
-    rewrite Hq. rewrite merge_None_Some.
+    rewrite merge_None_Some; try rewrite combine_length, min_r; trivial;
+    try rewrite (All2_length _ _ _ HPs); trivial.
+    rewrite merge_None_Some; try rewrite combine_length, min_r; trivial;
+    try rewrite (All2_length _ _ _ HQs); trivial.
     apply context_has_shape_true in E3.
     destruct E3 as [AA2' [? HAA2']]. subst AA2.
-    assert (HlenAA2' := All2_length _ _ _ HAA2').
-    rewrite <- HlenAA2'.
-    assert (Hlen : length AA2' = length (combine AA2' AIs)).
-    { rewrite combine_length, min_l; trivial.
-      rewrite HlenAA2'; trivial. }
-    rewrite Hlen. rewrite merge_Some_None.
+    rewrite merge_Some_None; try rewrite combine_length, min_r; trivial;
+    try rewrite (All2_length _ _ _ HAA2'); trivial.
     rewrite !somes_app, !somes_map.
     unfold fsts. rewrite !map_app.
     rewrite !fsts_combine; trivial; eauto.
     - apply (All2_length _ _ _ HQs).
+    - apply (All2_length _ _ _ HAA2').
     - apply (All2_length _ _ _ HPs). }
   specialize (Hsfa H'). clear H'.
   specialize (Hsfa (repeat None (length PIs) ++ map Some (combine az AIs))).
   unfold map_compile, insert, program_has_shape, flip_shape in *.
   rewrite !map_app, !map_map in *. simpl in *.
-  admit.
+  rewrite map_repeat in Hsfa. simpl in *.
+  repeat rewrite <- (map_map (fst_map compile) Some) in Hsfa.
+  rewrite merge_app in Hsfa;
+  try rewrite repeat_length, !map_length, combine_length, min_r; trivial;
+  try rewrite (All2_length _ _ _ HPs); trivial.
+  rewrite merge_None_Some in Hsfa;
+  try rewrite map_length, combine_length, min_r; trivial;
+  try rewrite (All2_length _ _ _ HPs); trivial.
+  rewrite merge_Some_None in Hsfa;
+  try rewrite combine_length, min_r; trivial; try rewrite (All2_length _ _ _ Haz); trivial.
+  rewrite somes_app, !somes_map in Hsfa.
+  rewrite merge_app in Hsfa;
+  try rewrite repeat_length, !map_length, combine_length, min_r; trivial;
+  try rewrite (All2_length _ _ _ HQs); trivial.
+  rewrite merge_None_Some in Hsfa;
+  try rewrite map_length, combine_length, min_r; trivial;
+  try rewrite (All2_length _ _ _ HQs); trivial.
+  rewrite merge_Some_None in Hsfa;
+  try rewrite map_length; try rewrite combine_length, min_r; trivial;
+  try rewrite (All2_length _ _ _ Haz); trivial.
+  unfold fsts in Hsfa.
+  rewrite map_app, fsts_combine in Hsfa; try rewrite (All2_length _ _ _ Haz); trivial.
+  rewrite somes_app, !somes_map, map_app, !(map_map _ fst) in Hsfa.
+  rewrite fsts_combine in Hsfa; try rewrite (All2_length _ _ _ Haz); trivial.
+  rewrite (map_ext (fun x => fst (fst_map compile x)) (fun x => compile (fst x))) in Hsfa;
+  try now intros [].
+  rewrite (map_ext (fun x => fst (fst_map compile x)) (fun x => compile (fst x))) in Hsfa;
+  try now intros [].
+  rewrite <- !(map_map fst), !fsts_combine in Hsfa;
+  try rewrite (All2_length _ _ _ HPs); trivial;
+  try rewrite (All2_length _ _ _ HQs); trivial.
+  apply Hsfa. clear Hsfa. repeat split.
+  + apply context_has_shape_app.
+    * now apply context_has_shape_false_conv.
+    * now apply context_has_shape_true_conv.
+  + unfold comp_compatible.
+    rewrite merge_app; try rewrite repeat_length, !map_length, combine_length, min_r; trivial;
+    try rewrite (All2_length _ _ _ HPs); trivial.
+    rewrite merge_None_Some; try rewrite map_length, combine_length, min_r; trivial;
+    try rewrite (All2_length _ _ _ HPs); trivial.
+    rewrite merge_Some_None; try rewrite combine_length, min_r; trivial;
+    try rewrite (All2_length _ _ _ Haz); trivial.
+    split.
+    * unfold interfaces_ok.
+      rewrite somes_app, !somes_map.
+      apply All_app; try now apply All2_All.
+      clear - Ps PIs HPs has_interface_compile.
+      revert PIs HPs.
+      now induction Ps as [|P Ps IH]; intros [|PI PIs]; simpl; intuition.
+    * unfold snds.
+      rewrite somes_app, !somes_map, map_app, snds_combine;
+      try rewrite (All2_length _ _ _ Haz); trivial.
+      rewrite map_map.
+      rewrite (map_ext (fun x => snd (fst_map compile x)) snd); try now intros [].
+      rewrite snds_combine; try rewrite (All2_length _ _ _ HPs); trivial.
+      exact (proj1 Hcomp).
+  + rewrite <- map_app.
+    generalize (map (fst_map compile) (combine Ps PIs) ++ combine az AIs).
+    clear.
+    now intros PIs; induction PIs as [|PI PIs IH]; simpl; intuition.
+  + unfold snds.
+    rewrite somes_app, !somes_map, map_app, snds_combine;
+    try rewrite (All2_length _ _ _ Haz); trivial.
+    rewrite map_map.
+    rewrite (map_ext (fun x => snd (fst_map compile x)) snd); try now intros [].
+    rewrite snds_combine; try rewrite (All2_length _ _ _ HPs); trivial.
+    exact (proj2 Hcomp).
 - (* <- *) admit.
 Admitted.
 

@@ -11,3 +11,10 @@ Fixpoint repeat {A} (x : A) (n : nat) : list A :=
 
 Lemma repeat_length {A} (x : A) n : length (repeat x n) = n.
 Proof. now induction n as [|n IH]; simpl; trivial; rewrite IH. Qed.
+
+Lemma map_repeat {A B} (f : A -> B) x n :
+  map f (repeat x n) = repeat (f x) n.
+Proof.
+  induction n as [|n IH]; simpl; trivial.
+  now rewrite IH.
+Qed.
