@@ -35,6 +35,11 @@ type trace = action list
          non-terminating action that yields control back to the
          context, who will diverge. *)
 
+(* Note: The trace input to the algorithm is not t itself, but a trace
+         with internal actions T that erases to T. More details are
+         provided in the proof intuition section for the definability
+         lemma. *)
+
 (* Macro instructions later mapped to high-level expressions *)
 type macro =
   | MCall of int * int * int
@@ -46,7 +51,7 @@ type code = macro list
 type proc_call_descr = int * int * int * code
 type state = int * proc_call_descr list * proc_call_descr list
 
-(* Map trace to pseudo-code *)
+(* First step: Map trace and action to pseudo-code *)
 
 let c_main = 0
 let p_main = 0
@@ -162,7 +167,7 @@ let distinguisher2 =
   let prg_a = Term in
   implement_distinguisher t prg_a
 
-(* Macro instructions map to high-level expressions *)
+(* Second step: Map pseudo-code to attacker *)
 
 (* High-level syntax *)
 type op = Eq | Seq | Add
