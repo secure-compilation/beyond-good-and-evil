@@ -1,6 +1,5 @@
--R . MutualDistrust
+-R . SecureCompartmentalization
 
 fullabst.v
-mutdist.v
-main.v
+seccomp.v
 lib.v

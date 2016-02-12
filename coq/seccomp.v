@@ -1,8 +1,8 @@
 Require Import Coq.Lists.List.
 Import ListNotations.
 
-Require Import MutualDistrust.fullabst.
-Require Import MutualDistrust.lib.
+Require Import SecureCompartmentalization.fullabst.
+Require Import SecureCompartmentalization.lib.
 
 Arguments Some {A} _.
 Arguments fst {_ _} _.
@@ -99,7 +99,7 @@ Proof.
   revert l2; induction l1 as [|x1 l1 IH]; intros [|x2 l2]; simpl; intuition.
 Qed.
 
-Definition mutual_distrust
+Definition secure_compartmentalization
   {interface: Type} {I : interface_language interface}
   {hcomponent hprogram: Type} {lcomponent lprogram: Type}
 
@@ -119,8 +119,8 @@ Definition mutual_distrust
       ~~ link (map compile Qs ++ az))).
 
 (* Instantiating structured full abstraction to obtain something
-   stronger than mutual distrust (we will use this to prove mutual
-   distrust for our compiler) *)
+   stronger than secure compartmentalization (we will use this to
+   prove sec. comp. for our compiler) *)
 
 Coercion is_true : bool >-> Sortclass. (* Prop *)
 
@@ -183,7 +183,7 @@ Proof.
   intros H. rewrite IH; congruence.
 Qed.
 
-Section SFAfromMD.
+Section SFAfromSC.
 
 Context {interface: Type} {I: interface_language interface} {component program: Type}.
 Context (compl : component_language I component program).
@@ -574,9 +574,9 @@ Instance structured_context_lang_from_component_lang :
   scl_program_fully_defined := program_fully_defined
 }.
 
-End SFAfromMD.
+End SFAfromSC.
 
-Section SFAimpliesMD.
+Section SFAimpliesSC.
 
 Context {interface: Type} {I : interface_language interface}
         {hcomponent hprogram: Type} {lcomponent lprogram: Type}
@@ -592,12 +592,12 @@ Definition map_compile (p:@pprog interface hcomponent) :
                           @pprog interface lcomponent :=
   List.map (option_map (fst_map compile)) p.
 
-Theorem sfa_implies_md :
+Theorem sfa_implies_sc :
   structured_full_abstraction
     (structured_context_lang_from_component_lang H)
     (structured_context_lang_from_component_lang L)
     map_compile ->
-  mutual_distrust H L compile.
+  secure_compartmentalization H L compile.
 Proof.
 intros Hsfa PIs AIs Hcomp Ps HPs HPs_def Qs HQs HQs_def.
 assert (HPQ : @stat_eq _ _ _ _
@@ -906,4 +906,4 @@ simpl in *. split.
     exact (proj2 Hcomp).
 Qed.
 
-End SFAimpliesMD.
+End SFAimpliesSC.
