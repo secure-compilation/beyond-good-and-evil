@@ -18,3 +18,7 @@ Proof.
   induction n as [|n IH]; simpl; trivial.
   now rewrite IH.
 Qed.
+
+Lemma map_const {A B} (k : B) (l : list A) :
+  map (fun _ => k) l = repeat k (length l).
+Proof. now induction l as [|x l IH]; simpl; trivial; rewrite IH. Qed.
