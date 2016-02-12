@@ -116,7 +116,7 @@ Class structural_link
 (* When there is a structural link between compilers, full abstraction
    for the unstructured one follows from structured full abstraction
    for the structured compiler. *)
-Theorem structured_full_abstraction_implies_full_abstraction
+Conjecture structured_full_abstraction_implies_full_abstraction : forall
         {source_cl_program source_cl_context: Type}
         {source_scl_program source_scl_context: Type}
         {source_scl_cl: context_language source_scl_program source_scl_context}
@@ -130,9 +130,8 @@ Theorem structured_full_abstraction_implies_full_abstraction
         {target_scl: structured_context_language target_scl_cl scl_shape}
 
         (source_sv: structured_variant source_cl source_scl)
-        (target_sv: structured_variant target_cl target_scl):
+        (target_sv: structured_variant target_cl target_scl),
   forall cl_compile scl_compile,
       structural_link source_sv target_sv cl_compile scl_compile ->
       structured_full_abstraction source_scl target_scl scl_compile ->
       full_abstraction source_cl target_cl cl_compile.
-Admitted.

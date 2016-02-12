@@ -3,6 +3,5 @@
 fullabst.v
 mutdist.v
 rfj.v
-symbmach.v
 main.v
 lib.v
