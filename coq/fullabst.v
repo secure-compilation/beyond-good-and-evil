@@ -42,8 +42,9 @@ Class structured_context_language
 : Type :=
   {
     scl_program_has_shape: scl_shape -> scl_program -> Prop;
-    scl_context_has_shape: scl_shape -> scl_context -> Prop
-    (* Put relevant hypotheses here *)
+    scl_program_fully_defined: scl_program -> scl_shape -> Prop;
+    scl_context_has_shape: scl_shape -> scl_context -> Prop;
+    scl_context_fully_defined: scl_context -> scl_shape -> Prop
   }.
 
 Definition structured_full_abstraction

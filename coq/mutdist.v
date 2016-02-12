@@ -24,8 +24,9 @@ Class component_language
       (component program: Type): Type :=
   {
     get_interface : component -> option interface;
-    link: list component -> program;
-    beh_eq: program -> program -> Prop
+    link : list component -> program;
+    fully_defined : list component -> list interface -> Prop;
+    beh_eq : program -> program -> Prop
   }.
 
 Definition has_interface
@@ -404,8 +405,15 @@ Proof.
   intros [H1 H2]. repeat split; auto.
 Qed.
 
+Definition context_fully_defined (p : pprog) (s : shape) : Prop :=
+  fully_defined (fsts (somes p))
+                (somes (map (fun i : bool * _ => if fst i then None else Some (snd i)) s)).
+
 Definition program_has_shape (s : shape) (p : pprog) : Prop :=
   context_has_shape (flip_shape s) p.
+
+Definition program_fully_defined (p : pprog) (s : shape) : Prop :=
+  context_fully_defined p (flip_shape s).
 
 Lemma stat_eq_shape Ps Qs s :
   stat_eq Ps Qs ->
@@ -433,7 +441,7 @@ Definition insert c p :=
   | None => [] (* shouldn't happen *)
   end.
 
-(* AAA: It is a bit strange that [cl_compatible] is a property of [c]
+(* FIXME: It is a bit strange that [cl_compatible] is a property of [c]
    and [p] separately when in this instance we factor it through
    [merge c p]. This makes it very similar to how we use [cl_complete]
    in e.g. [cl_stat_eq_compatible_complete].  *)
@@ -557,7 +565,9 @@ Instance structured_context_lang_from_component_lang :
        shape :=
 {
   scl_context_has_shape := context_has_shape;
-  scl_program_has_shape := program_has_shape
+  scl_context_fully_defined := context_fully_defined;
+  scl_program_has_shape := program_has_shape;
+  scl_program_fully_defined := program_fully_defined
 }.
 
 End SFAfromMD.
