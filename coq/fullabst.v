@@ -62,12 +62,15 @@ Definition structured_full_abstraction
     scl_program_has_shape s PP ->
     scl_program_has_shape s QQ ->
     ((forall AA,
-        scl_context_has_shape s AA /\ cl_compatible AA PP /\ cl_complete (cl_insert AA PP) ->
+        scl_context_has_shape s AA ->
+        cl_compatible AA PP ->
+        cl_complete (cl_insert AA PP) ->
         cl_beh_eq (cl_insert AA PP) (cl_insert AA QQ))
      <->
      (forall aa,
-        scl_context_has_shape s aa /\
-        cl_compatible aa (scl_compile PP) /\ cl_complete (cl_insert aa (scl_compile PP)) ->
+        scl_context_has_shape s aa ->
+        cl_compatible aa (scl_compile PP) ->
+        cl_complete (cl_insert aa (scl_compile PP)) ->
         cl_beh_eq (cl_insert aa (scl_compile PP)) (cl_insert aa (scl_compile QQ)))).
 
 (* A structured context language can be a structured variant of

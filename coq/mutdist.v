@@ -637,9 +637,9 @@ simpl in *. split.
   intros Heq az Haz. destruct Hsfa as [Hsfa _].
   assert (H' : (forall AA : pprog,
                  context_has_shape H (map (pair false) PIs ++ map (pair true) AIs)
-                                   AA /\
+                                   AA ->
                  comp_compatible H AA
-                                 (map Some (combine Ps PIs) ++ repeat None (length AIs)) /\
+                                 (map Some (combine Ps PIs) ++ repeat None (length AIs)) ->
                  comp_complete
                    (insert AA
                            (map Some (combine Ps PIs) ++ repeat None (length AIs))) ->
@@ -653,7 +653,7 @@ simpl in *. split.
                       (somes
                          (insert AA
                                  (map Some (combine Qs PIs) ++ repeat None (length AIs))))))).
-  { intros AA [Hshape [HcompAA Hcompl]].
+  { intros AA Hshape HcompAA Hcompl.
     apply context_has_shape_app_l in Hshape.
     destruct Hshape as [AA1 [AA2 [E1 [E2 E3]]]].
     subst AA. unfold insert in *.
@@ -721,7 +721,7 @@ simpl in *. split.
   rewrite <- !(map_map fst), !fsts_combine in Hsfa;
   try rewrite (All2_length _ _ _ HPs); trivial;
   try rewrite (All2_length _ _ _ HQs); trivial.
-  apply Hsfa. clear Hsfa. repeat split.
+  apply Hsfa; clear Hsfa; simpl; repeat split.
   + apply context_has_shape_app.
     * now apply context_has_shape_false_conv.
     * now apply context_has_shape_true_conv.
@@ -761,10 +761,10 @@ simpl in *. split.
   intros Heq As HAs. destruct Hsfa as [_ Hsfa].
   assert (H' : forall aa : pprog,
                  context_has_shape L (map (pair false) PIs ++ map (pair true) AIs)
-                                   aa /\
+                                   aa ->
                  comp_compatible L aa
                                  (map_compile
-                                    (map Some (combine Ps PIs) ++ repeat None (length AIs))) /\
+                                    (map Some (combine Ps PIs) ++ repeat None (length AIs))) ->
                  comp_complete
                    (insert aa
                            (map_compile
@@ -787,7 +787,7 @@ simpl in *. split.
     unfold fsts, insert, map_compile in *.
     rewrite !map_app, !map_repeat; simpl.
     rewrite !map_map; simpl.
-    intros [H1'].
+    intros H1'.
     destruct (context_has_shape_app_l _ _ _ _ H1') as [az'' [az [H1 [H2 H3]]]].
     subst az'. clear H1'.
     apply context_has_shape_false in H2. subst az''.
@@ -814,7 +814,7 @@ simpl in *. split.
     rewrite <- (map_map fst compile), fsts_combine; try now rewrite (All2_length _ _ _ HPs).
     rewrite (map_ext (fun x => fst (fst_map compile x)) (fun x => compile (fst x))); try now intros [].
     rewrite <- (map_map fst compile), fsts_combine; try now rewrite (All2_length _ _ _ HQs).
-    intros [[HAll _] [_ _]]. apply Heq. clear Heq.
+    intros [HAll _] _. apply Heq. clear Heq.
     apply All_All2; try now rewrite (All2_length _ _ _ Haa).
     now apply All_app_r in HAll. }
   specialize (Hsfa H'). clear H'.
@@ -841,7 +841,7 @@ simpl in *. split.
   rewrite fsts_combine in Hsfa; try rewrite (All2_length _ _ _ HPs); trivial.
   rewrite fsts_combine in Hsfa; try rewrite (All2_length _ _ _ HAs); trivial.
   rewrite fsts_combine in Hsfa; try rewrite (All2_length _ _ _ HQs); trivial.
-  apply Hsfa. clear Hsfa. repeat split.
+  apply Hsfa; clear Hsfa; simpl; repeat split.
   + apply context_has_shape_app.
     * now apply context_has_shape_false_conv.
     * now apply context_has_shape_true_conv.
