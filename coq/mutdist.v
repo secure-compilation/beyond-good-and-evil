@@ -631,7 +631,7 @@ assert (HQs' : @program_has_shape _ _ _ _
 specialize (Hsfa (map (pair false) PIs ++ map (pair true) AIs)
                  (map Some (combine Ps PIs) ++ repeat None (length AIs))
                  (map Some (combine Qs PIs) ++ repeat None (length AIs))).
-specialize (Hsfa (conj HPQ (conj HPs' HQs'))). simpl in Hsfa.
+specialize (Hsfa HPQ HPs' HQs'). simpl in Hsfa.
 simpl in *. split.
 - (* -> *)
   intros Heq az Haz. destruct Hsfa as [Hsfa _].

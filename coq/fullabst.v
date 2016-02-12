@@ -58,7 +58,9 @@ Definition structured_full_abstraction
            (target_scl: structured_context_language target_scl_cl scl_shape)
            (scl_compile: source_scl_program -> target_scl_program): Prop :=
   forall (s: scl_shape) (PP QQ: source_scl_program),
-    cl_stat_eq PP QQ /\ scl_program_has_shape s PP /\ scl_program_has_shape s QQ ->
+    cl_stat_eq PP QQ ->
+    scl_program_has_shape s PP ->
+    scl_program_has_shape s QQ ->
     ((forall AA,
         scl_context_has_shape s AA /\ cl_compatible AA PP /\ cl_complete (cl_insert AA PP) ->
         cl_beh_eq (cl_insert AA PP) (cl_insert AA QQ))
