@@ -8,19 +8,9 @@ Arguments Some {A} _.
 Arguments fst {_ _} _.
 Arguments snd {_ _} _.
 
-(* AAA: I am going to ignore permutations for now, since they are a
-   minor detail compared to the rest of the property. If there's time,
-   we can come back to this. *)
-
-Definition perm : nat -> Type := fun _ => unit.
-Definition permute : forall {A:Type} {n:nat}, perm n -> list A -> list A :=
-  fun A n pi l => l.
-
 Class interface_language (interface: Type): Type :=
   {
     compatible: list interface -> Prop;
-    compatible_cons:
-      forall I Is, compatible (I :: Is) -> compatible Is;
     complete: list interface -> Prop
   }.
 
@@ -117,23 +107,20 @@ Definition mutual_distrust
   (compile : hcomponent -> lcomponent) :=
 
   forall PIs AIs : list interface,
-  forall pi : perm (length (PIs++AIs)),
-  comp (permute pi (PIs++AIs)) ->
+  comp (PIs ++ AIs) ->
   forall Ps : list hcomponent, All2 has_interface Ps PIs ->
   forall Qs : list hcomponent, All2 has_interface Qs PIs ->
   ((forall As : list hcomponent, All2 has_interface As AIs ->
-     link (permute pi (Ps++As)) ~~ link (permute pi (Qs++As)))
+     link (Ps ++ As) ~~ link (Qs ++ As))
    <->
    (forall az : list lcomponent, All2 has_interface az AIs ->
-         link (permute pi ((map compile Ps)++az))
-      ~~ link (permute pi ((map compile Qs)++az)))).
+         link (map compile Ps ++ az)
+      ~~ link (map compile Qs ++ az))).
 
 (* Instantiating structured full abstraction to obtain something
    stronger than mutual distrust (we will use this to prove mutual
    distrust for our compiler) *)
 
-Definition admit {t:Type} : t. Admitted.
-Variable isInl : forall {a:Type} {b:Type}, (a+b) -> bool.
 Coercion is_true : bool >-> Sortclass. (* Prop *)
 
 Definition fst_map {A B C} (f : A -> C) (p : A * B) :=
@@ -458,8 +445,6 @@ Definition comp_compatible c p :=
   end.
 
 Definition comp_complete (p : pprog) :=
-  (* AAA: interfaces_ok isn't needed here, since it already appears
-     in the definition of compatibility *)
   All isSome p /\ complete (snds (somes p)).
 
 Lemma merge_shape As Ps :
@@ -600,12 +585,12 @@ Theorem sfa_implies_md :
     map_compile ->
   mutual_distrust H L compile.
 Proof.
-intros Hsfa PIs AIs pi Hcomp Ps HPs Qs HQs.
+intros Hsfa PIs AIs Hcomp Ps HPs Qs HQs.
 assert (HPQ : @stat_eq _ _ _ _
                        H
                        (map Some (combine Ps PIs) ++ repeat None (length AIs))
                        (map Some (combine Qs PIs) ++ repeat None (length AIs))).
-{ clear pi Hcomp Hsfa. revert Ps HPs Qs HQs. unfold stat_eq.
+{ clear Hcomp Hsfa. revert Ps HPs Qs HQs. unfold stat_eq.
   induction PIs as [|PI PIs IH]; intros [|P Ps] HPs [|Q Qs] HQs; simpl in *; try solve [intuition].
   generalize (length AIs). clear AIs HPs HQs.
   now induction 0 as [|n IH]; split. }
@@ -613,7 +598,7 @@ assert (HPs' : @program_has_shape _ _ _ _
                                   H
                                   (map (pair false) PIs ++ map (pair true) AIs)
                                   (map Some (combine Ps PIs) ++ repeat None (length AIs))).
-{ clear Qs HQs HPQ pi Hcomp.
+{ clear Qs HQs HPQ Hcomp.
   revert PIs HPs. unfold program_has_shape.
   induction Ps as [|P Ps IH]; simpl; intros PIs HPs.
   - destruct PIs as [|]; simpl in *; try solve [intuition].
@@ -625,7 +610,7 @@ assert (HQs' : @program_has_shape _ _ _ _
                                   H
                                   (map (pair false) PIs ++ map (pair true) AIs)
                                   (map Some (combine Qs PIs) ++ repeat None (length AIs))).
-{ clear Ps HPs HPs' HPQ pi Hcomp.
+{ clear Ps HPs HPs' HPQ Hcomp.
   revert PIs HQs. unfold program_has_shape.
   induction Qs as [|Q Qs IH]; simpl; intros PIs HQs.
   - destruct PIs as [|]; simpl in *; try solve [intuition].
@@ -637,8 +622,7 @@ specialize (Hsfa (map (pair false) PIs ++ map (pair true) AIs)
                  (map Some (combine Ps PIs) ++ repeat None (length AIs))
                  (map Some (combine Qs PIs) ++ repeat None (length AIs))).
 specialize (Hsfa (conj HPQ (conj HPs' HQs'))). simpl in Hsfa.
-unfold permute in *. simpl in *.
-split.
+simpl in *. split.
 - (* -> *)
   intros Heq az Haz. destruct Hsfa as [Hsfa _].
   assert (H' : (forall AA : pprog,
@@ -876,48 +860,3 @@ split.
 Qed.
 
 End SFAimpliesMD.
-
-Section FAfromMD.
-
-Context {interface: Type} {I: interface_language interface} {component program: Type}.
-
-(* We take both FA programs and contexts to be "partial programs"
-   of the following type *)
-Definition uprog := list (component*interface).
-
-Definition ucontext :=
-  {n:nat & {lc:list (component*interface) & perm (length lc+n)}}%type.
-
-Fixpoint umerge (c:ucontext) (p:uprog) : uprog :=
-  let '(existT n (existT lc pi)) := c in
-  permute pi (lc ++ p).
-
-Instance unstructured_context_lang_from_component_lang
-  (compl : component_language I component program) :
-     context_language uprog ucontext :=
-{
-  cl_insert := umerge;
-  cl_compatible c p :=
-    let '(existT n (existT lc pi)) := c in
-    n = length p /\
-    All (fun PIP => match PIP with (P, IP) => has_interface P IP end) (lc++p) /\
-    compatible (snds (permute pi (lc ++ p)));
-  cl_complete p := complete (snds p);
-  cl_stat_eq p q :=
-    All2 (fun PIP QIQ =>
-            match PIP, QIQ with
-              | (P, IP), (Q, IQ) =>
-                has_interface P IP /\ has_interface Q IQ /\ IP = IQ
-            end) p q;
-  cl_beh_eq p q := beh_eq (link (fsts p)) (link (fsts q));
-  cl_stat_eq_compatible_complete :=
-    admit (* TODO *)
-}.
-
-End FAfromMD.
-
-(* TODO: using structured_context_lang_from_component_lang
-         and unstructured_context_lang_from_component_lang
-         we want to instantiate
-         structured_full_abstraction_implies_full_abstraction
-*)
