@@ -1,0 +1,1943 @@
+* Source: WHILE + procedures + components + buffers
+
+** Design goals
+- a language for more naturally illustrating mutual distrust
+  + mutually distrustful components interacting via procedure calls
+- keep this as simple as possible, but without trivializing
+- have some interesting undefined behaviors in source language
+  that can be exploited in interesting ways at low level
+  + so we added (statically allocated, 2nd-class, component-local)
+    buffers and buffer overflows
+
+** Expression syntax
+
+e ::= i | e₁ ⊗ e₂ | if e then e₁ else e₂ | b[e] | b[e₁] := e₂ | C.P(e) | exit
+
+n ::= O | S n                          – natural number identifiers
+C ::= n      – component identifier (globally unique "name")
+P ::= n      – procedure identifier (index relative to a given component)
+b ::= n      – buffer identifier    (index relative to current component)
+
+operators (⊗) ∈ {(;), (+), ...}  – arbitrary binary functions on integers
+
+procedure identifiers P of each component C mapped to procedures bodies,
+which are expressions e
+  + procedures' single argument is passed in location 0 of buffer 0 of
+    the callee component
+  + location 0 of variable 0 of the callee component is automatically
+    restored on returns (reader monad)
+
+procedures can of course be mutually recursive (global call stack)
+
+buffers are 2nd class
+
+** Encoding variables with buffers
+- vars = 0                 – the first buffer used to store variables
+- x  =def  vars[x]         – variable lookup becomes buffer lookup
+- x:=e  =def  vars[x] := e – variable assignment becomes buffer update
+
+Note that accessing the vars buffer out of bounds is not caught
+statically and will be an undefined behavior dynamically (so in a way
+we did lose something when we encoded variables with buffers).
+
+** Components
+
+A component contains:
+- a component name C
+- a map from buffer identifiers to fixed-size lists of integers
+  (private to the component)
+- list of public and private procedures
+  + as in OO language procedure identifiers are just local indices
+
+global call stack
+
+only ints can be passed between components
+- this restriction simplifies many things throughout
+  (and especially in the target machine, where we need no "type tagging")
+
+A component interface contains:
+- a component name C
+- the names of its public procedures
+- for this simple language
+  + we can derive a component's interface uniquely from its code
+    (but this means that the code already has information like
+     which procedures are private)
+  + we can derive the interface at which other components are used
+
+κ – component body
+κ.name ↦ C
+κ.bnum ↦ b                   – [0,b) are all buffers
+κ.bufs[b] ↦ [i₀, ..., iₙ]    – list of integer values for buffer b ∈ [0,κ.bnum)
+κ.pnum ↦ P                   – [0,P) are all procedures
+κ.export ↦ Q                 – [0,Q) are public procedures,
+                               [Q,P) are private procedures
+κ.procs[P] ↦ e               – body for procedure P ∈ [0,κ.pnum)
+
+ι — component interface
+ι.name
+ι.export ↦ Q
+ι.import ↦ {C₀.P₀, ..., Cₘ.Pₘ}
+  – don't have to import all components or all procedures exported by
+    an imported component; and this feature is used for least privilege
+
+interfaceof(κ) — compute the interface of a component
+interfaceof(κ) ::= ι where
+  ι.name = κ.name
+  ι.export = κ.export
+  ι.import = ⋃ { extprocsin(κ.name, e) | ∃P ∈ [0,κ.pnum). κ.procs[P] = e }
+
+extprocsin(C, e) – syntactically extract all called procedures in e
+                   that are external with respect to C
+extprocsin(C, e) ::=
+  { C'.P | C'.P ∈ procsin(e), C' ≠ C }
+
+intprocsin(C, e) – syntactically extract all called procedures in e
+                   that are internal with respect to C
+intprocsin(C, e) ::= procsin(e) ∖ extprocsin(e)
+
+procsin(e) – syntactically extract all called procedures in e
+ procsin(e) ::=
+  match e with
+    i | exit => ∅
+    C.P(e) => { C.P } ∪ procsin(e)
+    b[e] => procsin(e)
+    e₁ ⊗ e₂ | b[e₁] := e₂ => procsin(e₁) ∪ procsin(e₂)
+    if e then e₁ else e₂ =>
+      procsin(e) ∪ procsin(e₁) ∪ procsin(e₂)
+
+bufsin(e) – syntactically extract all used buffers in e
+bufsin(e) ::=
+  match e with
+    i | exit => ∅
+    C.P(e) => bufsin(e)
+    b[e] => {b} ∪ bufsin(e)
+    b[e₁] := e₂ => {b} ∪ bufsin(e₁) ∪ bufsin(e₂)
+    e₁ ⊗ e₂ => bufsin(e₁) ∪ bufsin(e₂)
+    if e then e₁ else e₂ =>
+      bufsin(e) ∪ bufsin(e₁) ∪ bufsin(e₂)
+
+bufsin(κ) ::= map bufsin κ.procs
+
+** Programs
+
+φ – program
+φ ::= {κ₀, ..., κₙ}
+
+φ[C] – component access
+φ[C] ::= κᵢ₀ when {κᵢ | κᵢ.name = C} = {κᵢ₀}
+
+ψ – program interface
+ψ ::= {ι₀, ..., ιₙ}
+
+ψ[C] – component interface access
+ψ[C] ::= ιᵢ₀ when {ιᵢ | ιᵢ.name = C} = {ιᵢ₀}
+
+interfaceof(φ) — compute the interface of a program
+interfaceof({κ₀,...,κₙ}) ::= {interfaceof(κ₀),...,interfaceof(κₙ)} where
+
+main is an arbitrarily chosen, fixed component name (C), e.g. 0.
+It is the name of the component that starts computation.
+
+** Well-formedness
+
+For a partial program:
+  ψ ⊢ φ well formed
+
+For a whole program:
+  φ whole well formed
+
+
+comps({C₀.P₀, ..., Cₘ.Pₘ}) = {C₀,...,Cₘ}       – all components in an import
+comps({κ₀, ..., κₙ}) = {κ₀.name, ..., κₙ.name} – all components of a program
+comps({ι₀, ..., ιₙ}) = {ι₀.name, ..., ιₙ.name} – all components of a program interface
+
+comps(ι.import) ⊆ comps(ψ)\{ι.name}     — all imported components are defined
+∀(C.P ∈ ι.import). P ∈ [0, ψ[C].export) – all imported external procedures are public
+0 ≤ ψ.export                            — sanity check
+————————————–———–—————————————————–————
+ψ ⊢ ι well formed
+
+∀ ι ∈ ψ. ψ ⊢ ι well formed
+∀ ι₁ ι₂ ∈ ψ. ι₁.name ≠ ι₂.name          — names are unique
+∃ι ∈ φ.  κ.name = main ∧ 0 ∈ κ.export   — required to start the program
+————————————–———–————————–———–——————–
+⊢ ψ well formed
+
+ι₁.name = ι₂.name
+ι₁.import ⊆ ι₂.import
+ι₁.export = ι₂.export
+————————————————–———–
+ι₁ ⊆ ι₂
+
+interfaceof(κ) ⊆ ψ[κ.name]
+∀(_.P ∈ intprocsin(κ)). P ∈ [0, κ.pnum) – all used internal procedures are defined
+bufsin(κ) ⊆ [0,κ.bnum)                  – all used buffers are defined
+κ.export ≤ κ.pnum                       – sanity check
+κ.bnum ≥ 1 ∧ length(κ.bufs[0]) ≥ 1      – sanity check, to transfer call argument
+——————————————————————————–———————————–
+ψ ⊢ κ well formed
+
+∀ κ ∈ ψ. ψ ⊢ κ well formed
+———————–—————————————————–
+ψ ⊢ φ well formed
+
+ψ = interfaceof(φ) ⇒
+  ⊢ ψ well formed
+  ψ ⊢ φ well formed
+———————————————–——––
+φ whole well formed
+
+** Big-step semantics
+
+Δ, C ⊢ s, e ⇓ s', i
+
+Δ[C,P] = e – if e is the body of procedure P in component C
+C          – the currently executing component
+s[C,b]     – mapping buffer b of C component to fixed-size list of integers
+
+procbodies(φ) ::= Δ   where Δ[C,P] = φ[C].procs[P]
+
+s[C,b,i] ::: i'
+  access local buffer cell after checking bounds
+s[C,b,i ↦ i'] ::: s'
+  update local buffer cell after checking bounds
+
+—————–————–——————– :: E_Int
+Δ, C ⊢ s, i ⇓ s, i
+
+Δ, C ⊢ s, e₁ ⇓ s', i₁
+Δ, C ⊢ s', e₂ ⇓ s'', i₂
+——————————–————–—–—————————————— :: E_BinOp
+Δ, C ⊢ s, e₁ ⊗ e₂ ⇓ s'', i₁ ⊗ i₂
+
+Δ, C ⊢ s, e ⇓ s', i   where i ≠ 0
+Δ, C ⊢ s', e₁ ⇓ s'', i₁
+———————–——————–——–————————————————–————— :: E_IfNZ
+Δ, C ⊢ s, if e then e₁ else e₂ ⇓ s'', i₁
+
+Δ, C ⊢ s, e ⇓ s', 0
+Δ, C ⊢ s', e₂ ⇓ s'', i₂
+———————–——————–——–————————————————–————— :: E_IfZ
+Δ, C ⊢ s, if e then e₁ else e₂ ⇓ s'', i₂
+
+Δ, C ⊢ s, e ⇓ s', i
+–—–————————–—————–——–———–————– :: E_Read
+Δ, C ⊢ s, b[e] ⇓ s', s'[C,b,i]
+
+Δ, C ⊢ s, e₁ ⇓ s', i
+Δ, C ⊢ s', e₂ ⇓ s'', i'
+–—–—————————–——————–——–———–—————–—————————— :: E_Write
+Δ, C ⊢ s, b[e₁] := e₂ ⇓ s''[C,b,i ↦ i'], i'
+
+Δ[C',P] = eₚ
+Δ, C ⊢ s, e ⇓ s', iₐ
+Δ, C' ⊢ s'[C',0,0 ↦ iₐ], eₚ ⇓ s'', iᵣ
+—————–———––——————————–——–———–————————————–———— :: E_Call
+Δ, C ⊢ s, C'.P(e) ⇓ s''[C,0,0 ↦ s'[C,0,0]], iᵣ
+
+–—————————————–——–———–———– :: E_Exit
+Δ, C ⊢ s, exit ⇓ s, EXITED
++ error monad rules to propagate this everywhere
+
+** Small-step semantics
+
+*** Δ ⊢ cfg → cfg'
+- using a single stack for both local and cross-compartment calls
+
+cfg ::= (C, s, σ, K, e)
+
+E ::=                             – flat evaluation contexts
+      □⊗e₂ | i₁⊗□ |
+      if □ then e₁ else e₂ |
+      b[□]  |
+      b[□] := e₂ | b[i] := □
+      C.P(□) |
+
+K ::= E :: K | []                 – continuations
+
+σ ::= (C,i,K) :: σ | []           – call stack
+
+s[C,b] ↦ [i₀, ..., iₙ]            – integer list for buffer b
+
+s[C,b,i] = iᵢ when s[C,b] = [i₀, ..., iₙ]
+
+Initial configurations:
+I(φ) — initial configuration for a whole program φ
+I(φ) ::= (main, 0, s[main,0,0 ↦ 0], [], [], φ[main].procs[0])
+  where φ = {κ₀,...,κₙ}
+        s = { κ₀.name,b ↦ κ₀.bufs[b] | b ∈ dom(κ₀.bufs) } ⊎ ... ⊎
+              { κₙ.name,b ↦ κₙ.bufs[b] | b ∈ dom(κₙ.bufs) }
+
+Final configurations:
+  (C,s, σ, K, exit) final  (Final_Exit)
+  (C,s,[],[],    i) final  (Final_Value)
+
+
+Δ ⊢ (C, s, σ, K, e₁⊗e₂) → (C, s, σ, □⊗e₂ :: K, e₁)   (S_BinOp_Push)
+
+Δ ⊢ (C, s, σ, □⊗e₂ :: K, i₁) → (C, s, σ, i₁⊗□ :: K, e₂)   (S_BinOp_Switch)
+
+Δ ⊢ (C, s, σ, i₁⊗□ :: K, i₂) → (C, s, σ, K, i₁⊗i₂)   (S_BinOp_Pop)
+
+Δ ⊢ (C, s, σ,                         K, if e then e₁ else e₂) →
+    (C, s, σ, if □ then e₁ else e₂ :: K, e)                      (S_If_Push)
+
+i ≠ 0
+—————————————–—–——————————————————————————————–——————————————— (S_If_Pop_NZ)
+Δ ⊢ (C, s, σ, if □ then e₁ else e₂ :: K, i) → (C, s, σ, K, e₁)
+
+Δ ⊢ (C, s, σ, if □ then e₁ else e₂ :: K, 0) → (C, s, σ, K, e₂)   (S_If_Pop_Z)
+
+Δ ⊢ (C, s, σ, K, b[e]) → (C, s, σ, b[□] :: K, e)   (S_Read_Push)
+
+Δ ⊢ (C, s, σ, b[□] :: K, i) → (C, s, σ, K, s[C,b,i])   (S_Read_Pop)
+
+Δ ⊢ (C, s, σ, K, b[e₁] := e₂) → (C, s, σ, b[□] := e₂ :: K, e₁)   (S_Write_Push)
+
+Δ ⊢ (C, s, σ, b[□] := e₂ :: K, i) → (C, s, σ, b[i] := □ :: K, e₂)   (S_Write_Swap)
+
+Δ ⊢ (C, s,             σ, b[i] := □ :: K, i') →
+    (C, s[C,b,i ↦ i'], σ,              K, i')   (S_Write_Pop)
+
+Δ ⊢ (C, s, σ, K, C'.P'(e)) → (C, s, σ, C'.P'(□) :: K, e)   (S_Call_Push)
+
+Δ[C',P'] = eₚ
+————————————————————————–————————————————–––——————–————————–————–—— (S_Call_Pop)
+Δ ⊢ (C,  s,                                σ, C'.P'(□) :: K, iₐ) →
+    (C', s[C',0,0 ↦ iₐ], (C,s[C,0,0],K) :: σ,            [], eₚ)
+
+Δ ⊢ (C, s, σ, (C',iₐ,K) :: σ, [], i) → (C', s[C,0,0 ↦ iₐ], σ, K, i)   (S_Return)
+
+Note: At this level we don't need to enforce interfaces in the
+operational semantics. The interface is syntactically extracted from
+the code, so the code trivially respects the interface (this can be
+seen as an invariant of reduction: code never changes since it's on
+the left of ⊢).
+
+*** Δ ⊢ cfg →* cfg'
+
+Δ ⊢ cfg →* cfg
+
+Δ ⊢ cfg  →* cfg'
+Δ ⊢ cfg' →  cfg''
+————————————————–
+Δ ⊢ cfg  →* cfg''
+
+*** Δ ⊢ cfg ↛
+
+∀ cfg', ¬(Δ ⊢ cfg → cfg')
+————————————————————————–
+Δ ⊢ cfg ↛
+
+*** Lemma (Determinism)
+∀ cfg Δ.
+  Δ ⊢ cfg → cfg₁ ∧ Δ ⊢ cfg → cfg₂ ⇒ cfg₁ = cfg₂
+
+** Preservation and partial progress
+
+*** Well-formedness invariants
+
+η – component well-formedness invariants (preserved by reduction)
+η.name
+η.pnum
+η.bnum
+η.blens – list of lengths of the component's buffers
+
+Γ – partial program well-formedness invariant
+Γ ::= {η₀, ..., ηₙ}
+
+Γ[C] – component access
+Γ[C] ::= ηᵢ₀ when {ηᵢ | ηᵢ.name = C} = {ηᵢ₀}
+
+wfinv(κ) ::= η where
+  η.pnum = φ.pnum
+  η.bnum = η.bnum
+  η.blens = map length κ.bufs
+
+wfinv(φ) ::= Γ where
+  φ = {κ₀, ..., κₙ}
+  Γ = {wfinv(κ₀), ..., wfinv(κₙ)}
+
+*** Well-formedness of flat evaluation contexts: ι; η ⊢ E well formed
+
+extprocsin(ι.name, E) ⊆ ι.import                 – all used external procedures are imported
+∀(_.P ∈ intprocsin(ι.name, E)). P ∈ [0, η.pnum)  – all used internal procedures are defined
+bufsin(E) ⊆ [0,η.bnum)                           – all used buffers are defined
+———————————————————–——–———————————————————————–
+ι; η ⊢ E well formed
+
+*** Well-formedness of continuations: ι; η ⊢ K well formed
+
+ι; η ⊢ E well formed
+ι; η ⊢ K well formed
+———————————————–————————–
+ι; η ⊢ E :: K well formed
+
+———————————————–—————
+ι; η ⊢ [] well formed
+
+*** Well-formedness of call stacks: ψ; Γ ⊢ σ well formed
+
+————————–————————–——–
+ψ; Γ ⊢ [] well formed
+
+ψ[C]; Γ[C] ⊢ K well formed
+ψ; Γ ⊢ σ well formed
+——————————————–———————–—————–
+ψ; Γ ⊢ (C,i,K)::σ well formed
+
+*** Well-formedness of states: Γ ⊢ s well formed
+
+∀ η ∈ Γ,
+  s[η.name,b,i] is defined
+    ⇔
+  b ∈ [0,η.bnum) ∧ i ∈ [0,η.blens[b])
+————————————————————————————————————–
+Γ ⊢ s well formed
+
+*** Well-formedness of configurations: ψ; Γ ⊢ (C, s, σ, K, e) well formed
+
+Γ ⊢ s well formed
+ψ; Γ ⊢ σ well formed
+ψ[C]; Γ[C] ⊢ E well formed
+ψ[C]; Γ[C] ⊢ e well formed
+—————————————————–———————–—————————–—————————————
+ψ; Γ ⊢ (C, s, σ, K, e) well formed
+
+*** Lemma I(φ) produces well-formed configuration if φ is well-formed.
+
+∀φ.  φ well formed ⇒
+  let ψ = interfaceof(φ) in
+  let Γ = wfinv(φ) in
+  ψ; Γ ⊢ I(φ) well formed
+
+*** Assumption (partial progress)
+
+For any well-formed configuration cfg one of the following holds:
+1. cfg is a final configuration (value or exit)
+2. cfg takes a step
+3. cfg is stuck but of one of the following forms:
+   (a) (C, s, σ, b[□] :: K, i) where s[C,b,i] is undefined
+   (b) (C, s, σ, b[i] := □ :: K, i') where s[C,b,i] is undefined
+
+Formally:
+  ∀ φ. φ well formed ⇒
+       ψ = interfaceof(φ) ∧ Γ = wfinv(φ) ∧ Δ = procbodies(φ) ⇒
+  ∀ cfg. ψ; Γ ⊢ cfg well formed ⇒
+           cfg final ∨ cfg undef ∨ (∃ cfg'.  Δ ⊢ cfg → cfg')
+
+where
+
+s[C,b] = [i₀, ..., iₙ]
+i ∉ {0, ..., n}
+————————————————————————————– Undef_Load
+(C, s, σ, b[□] :: K, i) undef
+
+s[C,b] = [i₀, ..., iₙ]
+i ∉ {0, ..., n}
+————————————————————————————––————– Undef_Store
+(C, s, σ, b[i] := □ :: K, i') undef
+
+*** Assumption (preservation)
+
+Formally:
+  ∀ φ. φ well formed ⇒
+       Γ = wfinv(φ) ∧ Δ = procbodies(φ) ⇒
+  ∀ cfg cfg'. Γ ⊢ cfg well formed ⇒
+              Δ ⊢ cfg → cfg' ⇒
+                Γ ⊢ cfg' well formed
+
+** Undefined behavior
+*** Intuition
+
+A program has undefined behavior if some bad action (e.g. writing
+outside a buffer) can happen for some inputs. To a first
+approximation, the compiler is free to produce a target program
+behaving arbitrarily for those inputs.
+
+Note that this is different than saying that an undefined behavior
+causes the program to go to an arbitrary high-level state:
+1. We are talking about *low-level* attacks, and for such attacks
+   (without additional protection at least) an undefined compiled
+   program will transition to states in that have no high-level
+   equivalent whatsoever! So high-level configurations are not good
+   enough for expressing what happens after the bad action.
+2. Since compiler optimizations assume defined behavior, the compiler
+   can cause the bad action to happen earlier, later, or not at all.
+
+This is also different from saying that the compiler is free to
+produce an arbitrary output if the source program has (any) undefined
+behavior. For inputs for which the bad action cannot happen the
+compiler has to produce correctly behaving code, even if the program
+can cause a bad action for other inputs.
+
+Without good ways of (1) knowing/specifying on which inputs a
+program/component is defined and on which ones it is not and (2)
+restricting the inputs a program/component can take to those that make
+it be defined, we go with the following coarse notion of undefinedness.
+
+*** Undefined/defined programs
+
+Definition: A well-formed program φ is undefined if I(φ) gets stuck.
+
+Definition: A well-formed program φ is defined if it is not undefined.
+
+*** Fully defined partial programs
+
+Intuition:
+A partial program (set of components) is fully defined if there
+exists no well-formed and complete program featuring that component
+that gets stuck while executing one of the components in the set.
+
+Definition (fully defined partial program): A partial program φ* is
+fully defined if there exists no partial program φ so that φ ∪ φ* is a
+well-formed program and I(φ ∪ φ*) →* cfg, cfg is a stuck state
+(i.e. cfg not final and cfg does not step), and the current component
+in cfg is in comps(φ*).
+
+If we choose φ*={κ} (i.e. a partial program with a single component κ)
+we obtain a notion of fully defined component.
+
+
+* Target: an abstract machine with interacting components
+
+Starting point: RISC register machine from Oakland 2015
+- the instructions from the basic machine with two additions:
+  Call iC iP and Return
+
+*Separate memories*
+- Each isolated component has its own infinite memory and memory
+  addressing is relative to the current component
+
+*Global protected call stack*
++ only deals with *cross-component* calls and returns
++ on a micro-policy machine this would be implemented using return capabilities
++ for SFI/XFI machine this would be implemented via a shadow call stack
+
+The memory of each component contains:
+- code (stored instructions; can mount code injection and ROP attacks)
+- a local stack
+- arrays (statically allocated)
+
+We know the *external entry points* for each component, list of addresses
+
+no protection against overflows affecting the offending component's memory
+- in particular we can mount code injection and ROP attacks
+- but only to the current component
+  + the writes to other component's memory are prevented (by design)
+
+this abstract machine can later (i.e. future work) be implemented in
+various ways, including:
+- process-level sandboxing (different address spaces)
+- software-fault isolation (same address space)
+- micro-policies (same address space)
+- multi-PMA systems (same address space)
+
+** Syntax
+
+Instr ::= Nop |
+          Const i → r |
+          Mov r₁ → r₂ |
+          BinOp r₁ ⊗ r₂ → r₃ |
+          Load *r₁ → r₂ |
+          Store *r₁ ← r₂ |
+          Jal r |        – for internal calls
+          Jump r |       – for internal returns
+          Call C P |     – for external calls (to designated entry points)
+          Return |       – for external returns (to top of call stack)
+          Bnz r i |
+          Halt
+
+** Programs
+
+p ::= (ψ, mem, E)  – low-level program
+
+ψ — defined in the high-level
+
+E[C] – the list of *external* entry points of component C
+       (internal calls are done via Jal and not monitored)
+
+(ψ, mem, E) well formed
+dom(E) = comps(ψ)
+————————————————————————————–
+(ψ, mem, E) whole well formed
+
+** Semantics:
+
+ψ; E ⊢ ρ → ρ'
+
+ρ ::= (C,σ,mem,reg,pc)
+
+ψ — high-level program interface
+E – external entry points
+C – the current component
+σ – protected stack, each entry has the form (C,i)
+    + we return to component C at (local) address i
+mem[C,i] – the value of memory address i in component C
+reg and pc are as in the basic machine from the Oakland 2015 paper
+
+mem[C,pc] = i    decode i = Nop
+———————————————————————————————————————————— :: S_Nop
+ψ; E ⊢ (C,σ,mem,reg,pc) → (C,σ,mem,reg,pc+1)
+
+mem[C,pc] = i    decode i = Const i' → r
+reg' = reg[r ↦ i']
+————————————————————————————————————————————— :: S_Const
+ψ; E ⊢ (C,σ,mem,reg,pc) → (C,σ,mem,reg',pc+1)
+
+mem[C,pc] = i    decode i = Mov r₁ → r₂
+reg' = reg[r₂ ↦ reg[r₁]]
+————————————————————————————————————————————— :: S_Mov
+ψ; E ⊢ (C,σ,mem,reg,pc) → (C,σ,mem,reg',pc+1)
+
+mem[C,pc] = i    decode i = BinOp r₁ ⊗ r₂ → r₃
+reg' = reg[r₃ ↦ reg[r₁] ⊗ reg[r₂]]
+————————————————————————————————————————————— :: S_BinOp
+ψ; E ⊢ (C,σ,mem,reg,pc) → (C,σ,mem,reg',pc+1)
+
+mem[C,pc] = i     decode i = Load *r₁ → r₂
+reg[r₁] = i₁
+reg' = reg[r₂ ↦ mem[C,i₁]]
+————————————————————————————————————————————— :: S_Load
+ψ; E ⊢ (C,σ,mem,reg,pc) → (C,σ,mem,reg',pc+1)
+
+mem[C,pc] = i     decode i = Store *r₁ ← r₂
+reg[r₁] = i₁
+reg[r₂] = i₂
+mem' = mem[C,i₁ ↦ i₂]
+————————————————————————————————————————————— :: S_Store
+ψ; E ⊢ (C,σ,mem,reg,pc) → (C,σ,mem',reg,pc+1)
+
+mem[C,pc] = i     decode i = Jal r
+reg[r] = i'
+reg' = reg[rᵣₐ → pc + 1]
+——————————————————————————————————————————— :: S_Jal
+ψ; E ⊢ (C,σ,mem,reg,pc) → (C,σ,mem,reg',i')
+
+mem[C,pc] = i     decode i = Call C' P'
+C'.P' ∈ ψ[C].import ∨ C' = C       – checking interface
+σ' = (C,pc+1) :: σ                 – updating call stack
+——————————————————————————————————————————————————— :: S_Call
+ψ; E ⊢ (C,σ,mem,reg,pc) → (C',σ',mem,reg,E[C'][P'])
+
+mem[C,pc] = i     decode i = Jump r
+reg[r] = i'
+—————————————————————————————————————————— :: S_Jump
+ψ; E ⊢ (C,σ,mem,reg,pc) → (C,σ,mem,reg,i')
+
+mem[C,pc] = i     decode i = Return
+σ = (C',i') :: σ'              – return address from protected stack
+———————————————————————————————————————————— :: S_Return
+ψ; E ⊢ (C,σ,mem,reg,pc) → (C',σ',mem,reg,i')
+
+mem[C,pc] = i     decode i = Bnz r i'
+reg[r] ≠ 0
+————————————————————————————————————————————— :: S_BnzNZ
+ψ; E ⊢ (C,σ,mem,reg,pc) → (C,σ,mem,reg,pc+i')
+
+mem[C,pc] = i     decode i = Bnz r i'
+reg[r] = 0
+———————————————————————————————————————–———— :: S_BnzZ
+ψ; E ⊢ (C,σ,mem,reg,pc) → (C,σ,mem,reg,pc+1)
+
+Note: this semantics can be used to reduce *partial* programs.
+
+*** Lemma (Determinism)
+∀ ψ E ρ ρ₁ ρ₂.
+  ψ; E ⊢ ρ → ρ₁  ∧  ψ; E ⊢ ρ → ρ₂ ⇒
+    ρ₁ = ρ₂
+
+*** Note: this semantics has stuck states
+Here are all stuck states:
+- instruction decoding errors (decode is probably a partial function)
+- mem[C] could fail if accessing a non-existent component?
+  + this won't happen if the current component C and all
+    comps(ψ[C].import) are in dom(C) to start with; this particular
+    thing is something one can check statically, but whatever
+- access control check failure on calls (C'.P' ∈ ψ[C].import in S_Call)
+- return with empty call stack (σ = (C',i') : σ' in S_Return)
+- trying to execute the Halt instruction also leads to a stuck state
+  the semantics above
+They all correspond to easily detectable errors
+- they could lead to error states if needed
+
+
+* Structured full abstraction instance
+** Cross-level shapes
+
+s ::=
+  (ψ,            — whole program interface
+   {C₀,...,Cₙ})  — names of the components that the attacker gets
+
+** Source language
+
+*** Partial programs and contexts:
+
+P, Q, A ::= (ψ, φ)
+
+*** Well formedness
+
+⊢ ψ well formed
+∀ κ ∈ φ. interfaceof(κ) ⊆ ψ[κ.name]
+——————–——————————————–————————————–
+(ψ, φ) well formed
+
+*** Context application: A[P]
+
+(_, φ_A)[(_, φ_P)] ::=
+  φ_A ⊎ φ_P
+
+*** Context has shape: A ⊢ s
+
+comps(φ_A) = {C₀,...,Cₙ}
+————–—————————–—————————–—–
+(ψ, φ_A) ⊢ (ψ, {C₀,...,Cₙ})
+
+*** Program has shape: P ⊢ₙ s
+
+comps(φ_P) = comps(ψ)∖{C₀,...,Cₙ}
+————–—————————–—————————–————————
+(ψ, φ_P) ⊢ₙ (ψ, {C₀,...,Cₙ})
+
+*** Context application preserves well formedness
+
+∀ A P s. A well formed  ∧  P well formed  ⇒
+         A ⊢ s  ∧  P ⊢ₙ s ⇒
+         A[P] whole well formed
+
+** Target language
+
+*** Partial programs and contexts
+
+p, q, a ::= (ψ, mem, E)
+
+(no syntactic distinction between partial and whole programs)
+
+*** Well formedness
+
+⊢ ψ well formed
+dom(mem) = dom(E) ⊆ comps(ψ)
+————————————–——————————————–
+(ψ, mem, E) well formed
+
+*** Context has shape: a ⊢ s
+
+dom(E) = {C₀,...,Cₙ}
+————–—————————–—————————–—–——–
+(ψ, mem, E) ⊢ (ψ, {C₀,...,Cₙ})
+
+*** Program has shape: p ⊢ₙ s
+
+dom(E) = comps(ψ)∖{C₀,...,Cₙ}
+————–—————————–—————————–—–——–—
+(ψ, mem, E) ⊢ₙ (ψ, {C₀,...,Cₙ})
+
+*** Context application: a[p]
+
+(ψ, memₐ, Eₐ)[(_, memₚ, Eₚ)] ::=
+  (ψ, memₐ ⊎ memₚ, Eₐ ⊎ Eₚ)
+
+*** Context application preserves well formedness
+
+∀ a p s. a well formed  ∧  p well formed  ⇒
+         a ⊢ s  ∧  p ⊢ₙ s ⇒
+         a[p] whole well formed
+
+
+* Compiler
+
+Non-optimizing, naive compiler.
+
+This compiler explicitly clears *all* registers before each cross-component call.
+- we need to clear the registers our compiler uses in order to prevent
+  accidentally leaking information
+- we need to also clear the registers our compiler does not use in
+  order to prevent attacker components that cannot communicate
+  directly from using these registers as a side-channel
+
+** Procedure and expression compilations
+
+STACKBASE(C): Base address of component C's stack
+INTERNALENTRY(C,P): map from procedures to internal entry points
+                    (an address in that procedure's component)
+BUFADDR(C,b): map from buffer identifiers to addresses
+
+The memory cell at location STACKBASE(C) is used to (re)store the
+stack pointer when switching components.
+
+*** Macros
+
+**** Clearing *all* registers but r_com
+
+Assuming dom(reg) \ {r_com} = {r₀,...,rₙ}.
+
+CLEARREG ::=
+  Const 0 → r₀;
+  ...
+  Const 0 → rₙ
+
+**** Storing/restoring environment
+
+The environment is saved on cross-compartment calls and returns and
+restored when getting back control.
+
+STOREENV(C,r) ::=              store current stack pointer value
+  Const STACKBASE(C) → r;      (register r gets overwritten in the process)
+  Store *r ← rₛₚ
+
+RESTOREENV(C) ::=              restore stack pointer value, set rₒₙₑ
+  Const 1 → rₒₙₑ;
+  Const STACKBASE(C) → rₛₚ;
+  Load *rₛₚ → rₛₚ
+
+**** Storing/loading call argument variable
+
+LOADARG(C → r) ::=
+  Const BUFADDR(C,(b=0)) → r;
+  Load *r → r
+
+STOREARG(C ← r, r') ::=
+  Const BUFADDR(C,(b=0)) → r';
+  Store *r' ← r
+
+**** Operating the stack
+
+PUSH(r) ::=                    add the value in register r on top of the local stack
+  BinOp rₛₚ + rₒₙₑ → rₛₚ;
+  Store *rₛₚ ← r
+
+POP(r) ::=                     remove top value on the stack and put it into register r
+  Load *rₛₚ → r;
+  BinOp rₛₚ - rₒₙₑ → rₛₚ
+
+*** Compiler
+
+This compiler variant uses less stack & less registers & a smaller set
+of stack macros (just PUSH and POP).
+
+**** Invariants
+
+When the environment is set it is the case that:
+ * rₒₙₑ holds value 1;
+ * rₛₚ holds a pointer to the current top of the local stack;
+ * rₐᵤₓ₂ holds 0 if the call originated from the same component,
+               1 otherwise.
+
+Register rₐᵤₓ₁ is used to store temporary results.
+
+Expression compilation e↓ produces code which corresponds to reducing
+e and putting the resulting value in r_com. If e goes to an infinite
+loop or terminates the program, then so will e↓.
+
+The stack is used both to store intermediate results and to spill
+registers. Stack usage by compiled procedures is such that at return
+time (when hitting a Jump or Return instruction), the local stack
+pointer is exactly at the position where it was at the beginning of
+the call: every time the stack pointer increments by one (PUSH), dual
+code will decrement it by one (POP).
+
+**** Procedure compilation
+
+(C.P ↦ eₚ)↓ ::=
+
+lext — external call entry point
+lint — internal call entry point
+ lext: Const 1 → rₐᵤₓ₂;
+       RESTOREENV(C);
+       Bnz rₒₙₑ lmain;
+ lint: Const 0 → rₐᵤₓ₂;
+       PUSH(rᵣₐ);
+lmain: STOREARG(C ← r_com, rₐᵤₓ₁);     – store call argument in memory
+       (C,eₚ)↓;                        – compute result into r_com
+       Bnz rₐᵤₓ₂ lret;
+       POP(rᵣₐ);
+       Jump rᵣₐ;
+lret:  STOREENV(C,rₐᵤₓ₁);
+       CLEARREG;
+       Return
+
+**** Expressions compilation
+
+(C,i)↓ ::=
+  Const i → r_com
+
+(C,e₁⊗e₂)↓ when ⊗ ≠ (;) ::=
+  (C,e₁)↓;
+  PUSH(r_com);
+  (C,e₂)↓;
+  POP(rₐᵤₓ₁);
+  BinOp rₐᵤₓ₁ ⊗ r_com → r_com
+
+(C,e₁;e₂)↓ ::=                   – just an optimization
+  (C,e₁)↓;
+  (C,e₂)↓
+
+(C,if e then e₁ else e₂)↓ ::=
+      (C,e)↓;
+      Bnz r_com lnz;
+      (C,e₂)↓;
+      Bnz rₒₙₑ lend;  — will always branch
+ lnz: (C,e₁)↓;
+lend: Nop
+
+(C,b[e])↓ ::=
+  (C,e)↓;
+  Const BUFADDR(C,b) → rₐᵤₓ₁;
+  Binop rₐᵤₓ₁ + r_com → rₐᵤₓ₁;
+  Load *rₐᵤₓ₁ → r_com
+
+(C,b[e₁] := e₂)↓ ::=
+  (C,e₁)↓;
+  Const BUFADDR(C,b) → rₐᵤₓ₁;
+  Binop rₐᵤₓ₁ + r_com → rₐᵤₓ₁;
+  PUSH(rₐᵤₓ₁);
+  (C,e₂)↓;
+  POP(rₐᵤₓ₁);
+  Store *rₐᵤₓ₁ ← r_com
+
+(C,C'.P'(e))↓ when C' ≠ C ::=
+  (C,e)↓;
+  PUSH(rₐᵤₓ₂);
+  LOADARG(C → rₐᵤₓ₁);
+  PUSH(rₐᵤₓ₁);
+  STOREENV(C,rₐᵤₓ₁);
+  CLEARREG;
+  Call C' P';
+  RESTOREENV(C);
+  POP(rₐᵤₓ₁);
+  STOREARG(C ← rₐᵤₓ₁, rₐᵤₓ₂);
+  POP(rₐᵤₓ₂)
+
+(C,C.P(e))↓ ::=
+  (C,e)↓;
+  PUSH(rₐᵤₓ₂);
+  LOADARG(C → rₐᵤₓ₁);
+  PUSH(rₐᵤₓ₁);
+  Const INTERNALENTRY(C,P) → rₐᵤₓ₁;
+  Jal rₐᵤₓ₁;
+  POP(rₐᵤₓ₁);
+  STOREARG(C ← rₐᵤₓ₁, rₐᵤₓ₂);
+  POP(rₐᵤₓ₂)
+
+(C,exit)↓ ::=
+  Halt
+
+** Properties
+
+*** Separate compilation for whole programs
+
+∀ A P s. A well formed ∧ A fully defined ∧ A ⊢ s ⇒
+         P well formed ∧ P fully defined ∧ P ⊢ₙ s ⇒
+  (A[P])↓ ~L A↓[P↓]
+
+*** Whole programs compiler correctness
+
+∀ φ. φ whole well formed ∧ φ defined ⇒
+     (φ↓ terminates ⇔ φ terminates)
+
+∀ φ. φ whole well formed ∧ φ defined ⇒
+     (φ↓ diverges ⇔ φ diverges)
+
+φ terminates ≜
+  let Δ = procbodies(φ) in
+  ∃cfg. Δ ⊢ I(φ) →* cfg  ∧  Δ ⊢ cfg ↛
+
+φ diverges ≜
+  let Δ = procbodies(φ) in
+  ∀ cfg. Δ ⊢ I(φ) →* cfg ⇒
+         ∃ cfg'. Δ ⊢ cfg → cfg'
+
+p terminates ≜
+  let (ψ,mem,E) = p in
+  ∃ ρ. ψ; E ⊢ I(mem,E[main][0]) → ρ  ∧  ψ; E ⊢ ρ ↛
+
+p diverges ≜
+  let (ψ,mem,E) = p in
+  ∀ ρ. ψ; E ⊢ I(mem,E[main][0]) →* ρ ⇒
+       ∃ ρ'. ψ; E ⊢ ρ → ρ'
+
+*** Shape preservation
+
+∀ A s. A well formed ∧ A ⊢ s ⇒
+  A↓ well formed ∧ A↓ ⊢ s
+
+∀ P s. P well formed ∧ P ⊢ₙ s ⇒
+  P↓ well formed ∧ P↓ ⊢ₙ s
+
+
+* Proofs using trace semantics
+
+** Labeled reduction for partial programs
+
+We define a labeled reduction of the form:
+
+           α
+  ψ; E ⊢ θ → θ'
+
+E — external entry points for the *program components* only
+ψ – interfaces for *all components* (both program and context)
+both defined as in the low-level semantics
+
+Note: the set of program components is dom(E)
+                 context components is dom(ψ)∖dom(E)
+
+*** Syntax
+
+α ::=          action and origin
+  | Eα           external action and origin
+  | Iα           internal action and origin
+
+Eα ::=         external action and origin
+  | ea !         external action performed by the program
+  | ea ?         external action performed by the context
+
+ea, γ ::=         cross-boundary action
+  | C.P(reg)     cross-boundary call
+  | Ret reg      cross-boundary return
+  | ✓            termination
+
+Note that calls and return actions record the whole register file, not
+just the value in register r_com, since there is no a priori guarantee
+that components clean their other registers. The compiler will add
+code for this, but that will make no difference for compromised components.
+
+Iα ::=         internal action and origin
+  | ia +          internal action taken by the program
+  | ia -          internal action taken by the context
+
+ia ::=          internal action
+  | τ             silent step
+  | C.P(/)        internal call
+  | Ret /         internal return
+
+The notation / is used to for partial knowledge: one could expect a
+call argument or a return value to stand in place of /, but we
+actually don't know (nor care about) what the actual call argument or
+value is for an internal action.
+
+In a given state θ, control is either held by the program (Pθ) or by the
+context (Aθ). Internal steps always preserve control ownership, while
+cross-boundary calls and returns always transfer control (either from
+the program to the context, or from the context to the program).
+
+θ ::=        partial view on machine state
+  | Pθ         the program has control
+  | Aθ         the context has control
+  | EXITED
+
+Pθ ::= (
+     C,        current component
+     PΣ,       view on global protected call stack
+     mem,      *program*'s view on memory
+     reg,      register file
+     pc        program counter
+    )
+
+Aθ ::= (
+     C,        current component
+     AΣ,       view on global protected call stack
+     mem,      *program*'s view on memory
+     /,        register file unknown to the program
+     /         program counter unknown to the program
+    )
+
+PΣ ::=       partial view on the call stack
+             when the program has control
+  | σ
+  | σ ::       program internal call frames
+         AΣ    remainder of the global stack
+
+AΣ ::=       partial view on the call stack
+             when the context has control
+  | Aσ
+  | Aσ         partial view on context internal call frames
+      :: PΣ    remainder of the global stack
+
+Aσ ::=        context internal call frames: only remember components
+  | []
+  | (C, /) :: Aσ
+
+(σ is defined as above, in the low-level semantics)
+
+Intuition for PΣ and AΣ:
+a list of elements of alternating types (Aσ and σ)
+
+Program starts computation and program has control:
+σ :: (Aσ :: (... :: (Aσ₁ :: (σ₁ :: (Aσ₀ :: σ₀))) ...))
+
+Program starts computation and context has control:
+Aσ :: (σ :: (... :: (Aσ₁ :: (σ₁ :: (Aσ₀ :: σ₀))) ...))
+
+Context starts computation and program has control:
+σ :: (Aσ :: (... :: (Aσ₁ :: (σ₁ :: Aσ₀)) ...))
+
+Context starts computation and context has control:
+Aσ :: (σ :: (Aσ :: (... :: (Aσ₁ :: (σ₁ :: Aσ₀)) ...)))
+
+*** Extra notations for stack manipulation
+
+Top : PΣ → σ
+Top(σ)       ≜ σ
+Top(σ :: AΣ) ≜ σ
+
+Top : AΣ → Aσ
+Top(Aσ)       ≜ Aσ
+Top(Aσ :: PΣ) ≜ Aσ
+
+
+SetTop : (PΣ, σ) → PΣ
+SetTop(σ,       σ') ≜ σ'
+SetTop(σ :: AΣ, σ') ≜ σ' :: AΣ
+
+SetTop : (AΣ, Aσ) → AΣ
+SetTop(Aσ,       Aσ') ≜ Aσ'
+SetTop(Aσ :: AΣ, Aσ') ≜ Aσ' :: AΣ
+
+*** 1 - Internal program reductions
+
+We use the standard semantics with a (more) partial E. This gets stuck
+when calling or returning to the context (which is not in E), but then
+other rules will apply (6 and 7).
+
+Top(PΣ) = σ         PΣ' = SetTop(PΣ, σ')
+ψ; E ⊢ (C,σ,mem,reg,pc) → (C',σ',mem',reg',pc')
+————————————————————————————————————————————————– T_CallRetTau+
+                 action(C,σ,mem,reg,pc)
+ψ; E ⊢ (C,PΣ,mem,reg,pc) → (C',PΣ',mem',reg',pc')
+
+action(C,σ,mem,reg,pc) =
+  match decode(mem[C,pc]) with
+    Call C₀ P₀ -> C₀.P₀(/) +
+    Return     -> Ret / +
+    _          -> τ +
+
+*** 2 - Internal context reductions
+
+———————————————————————————————————————– T_Tau-
+                     τ -
+ψ; E ⊢ (C,AΣ,mem,/,/) → (C,AΣ,mem,/,/)
+
+C'.P' ∈ ψ[C].import ∨ C' = C       – check interface
+C' ∉ dom(E)                        — call target in context
+Top(AΣ) = Aσ      AΣ' = SetTop(AΣ, (C,/)::Aσ)
+————————————————————–———————————————–———————– T_Call-
+                    C'.P'(/) -
+ψ; E ⊢ (C,AΣ,mem,/,/) → (C',AΣ',mem,/,/)
+
+(C',/)::σ = Top(AΣ)     AΣ' = SetTop(AΣ,σ)
+—————————————————————————–———————————————– T_Ret-
+                    Ret / -
+ψ; E ⊢ (C,AΣ,mem,/,/) → (C',AΣ',mem,/,/)
+
+*** 3 - Call from context code to program code
+
+C'.P' ∈ ψ[C].import             – check interface
+C' ∈ dom(E)                     – call target in program
+Top(AΣ) = Aσ               AΣ' = SetTop(AΣ, (C,/)::Aσ)
+—————–———–———————————————–—————————–———————————–—————– T_Call?
+                    C'.P'(reg) ?
+ψ; E ⊢ (C,AΣ,mem,/,/) → (C',[]::AΣ',mem,reg,E[C'][P'])
+
+*** 4 - Return from context code to program code
+
+Top(PΣ) = (C,pc)::σ         PΣ' = SetTop(PΣ,σ)
+—————————————————————————————————————————–———– T_Ret?
+                       Ret reg ?
+ψ; E ⊢ (/,[]::PΣ,mem,/,/) → (C,PΣ',mem,reg,pc)
+
+*** 5 - Call from program code to context code
+
+mem[C,pc] = i     decode i = Call C' P'
+C'.P' ∈ ψ[C].import                – check interface
+C' ∉ dom(E)                        – call target in context
+Top(PΣ) = σ      PΣ' = SetTop(PΣ, (C,pc+1)::σ)
+—————————————————————————————————————————————– T_Call!
+                       C'.P'(reg) !
+ψ; E ⊢ (C,PΣ,mem,reg,pc) → (C',[]::PΣ',mem,/,/)
+
+*** 6 - Return from program code to context code
+
+mem[C,pc] = i     decode i = Return
+Top(AΣ) = (C',/)::Aσ        AΣ' = SetTop(AΣ,Aσ)
+———–——————————————————————————————————–———–———– T_Ret!
+                         Ret reg !
+ψ; E ⊢ (C,[]::AΣ,mem,reg,pc) → (C',AΣ',mem,/,/)
+
+*** 7 - Termination from context code
+
+———–———————————————————————–————— T_Exit?
+                      ✓?
+ψ; E ⊢ (C,AΣ,mem,/,/) → EXITED
+
+*** 8 - Termination from program code
+
+Top(PΣ) = σ
+ψ; E ⊢ (C,σ,mem,reg,pc) ↛
+—————–———————————————————————–————— T_Exit+
+                         ✓!
+ψ; E ⊢ (C,PΣ,mem,reg,pc) → EXITED
+
+** Traces
+
+t ≜ a word over alphabet Eα (as defined above).
+
+ε is the empty word.
+
+———————————— T_Refl
+         ε
+ψ; E ⊢ θ ⇒ θ
+
+         Iα
+ψ; E ⊢ θ → θ'
+————————————— T_Internal
+         ε
+ψ; E ⊢ θ ⇒ θ'
+
+         Eα
+ψ; E ⊢ θ → θ'
+————————————— T_Cross
+         Eα
+ψ; E ⊢ θ ⇒ θ'
+
+          t
+ψ; E ⊢ θ  ⇒ θ'
+          u
+ψ; E ⊢ θ' ⇒ θ''
+——————————————— T_Trans
+         t.u
+ψ; E ⊢ θ  ⇒ θ''
+
+** Traces of a program
+
+I(p) – initial state
+I(ψ,memₚ,Eₚ) when main ∈ dom(Eₚ) ≜
+  (C, [], mem, reg₀, Eₚ[main][0])   – program starts computation
+I(ψ,memₚ,Eₚ) when main ∉ dom(Eₚ) ≜
+  (C, [], mem, /, /)                – context starts computation
+
+Traces(p) – the set of traces that a program (or context) has
+                                           t
+Traces(ψ,memₚ,Eₚ) = {t | ∃θ.  ψ; Eₚ ⊢ I(p) ⇒ θ}
+
+** Traces with internal actions
+
+T ≜ a word over alphabet α
+  – generalized traces that include internal actions
+
+erase(T) – erase internal actions in a generalized trace to get a trace t
+erase(ε)       ≜ ε
+erase(Iα :: t) ≜ erase(t)
+erase(Eα :: t) ≜ Eα :: erase(t)
+
+** Trace dualization
+
+Intuition: permute context and program in all actions.
+
+(γ ?)⁻¹ ≜ γ !
+(γ !)⁻¹ ≜ γ ?
+
+ε⁻¹     ≜ ε
+Eα :: t ≜ Eα⁻¹ :: t⁻¹
+
+
+(ia -)⁻¹ ≜ ia +
+(ia +)⁻¹ ≜ ia -
+
+ε⁻¹     ≜ ε
+Iα :: T ≜ Iα⁻¹ :: T⁻¹
+Eα :: T ≜ Eα⁻¹ :: T⁻¹
+
+** Trace canonicalization
+
+Intuition: the same trace, where the *context* cleans all his
+           registers.
+
+ζ(γ) – clean registers in an external action
+ζ(C.P(reg)) ≜ C.P(reg[r←0,r≠r_com])
+ζ(Ret reg)  ≜ Ret reg[r←0,r≠r_com]
+ζ(✓)        ≜ ✓
+
+ζ(Eα) – clean registers in *context* actions only
+ζ(γ !) ≜ γ !
+ζ(γ ?) ≜ ζ(γ) ?
+
+ζ(t) — clean registers in context actions of a trace
+ζ(ε)       ≜ ε
+ζ(Eα :: t) ≜ ζ(Eα) :: ζ(t)
+
+ζ(t) — internal actions don't mention register values anyway
+ζ(ε)       ≜ ε
+ζ(Eα :: T) ≜ ζ(Eα) :: ζ(T)
+ζ(Iα :: t) ≜ Iα :: ζ(t)
+
+** State merging
+
+*** Aσ ⊆ σ
+
+——————–
+[] ⊆ []
+
+Aσ ⊆ σ
+————–———————————————————–
+(C, /) :: Aσ ⊆ (C, i) :: σ
+
+*** mergeable PΣ AΣ
+
+Aσ ⊆ σ
+—————————————–
+mergeable σ Aσ
+
+Aσ ⊆ σ
+mergeable PΣ AΣ
+—————————————————————————–
+mergeable σ::AΣ Aσ::PΣ
+
+*** merge PΣ AΣ (assuming: mergeable PΣ AΣ)
+
+merge PΣ AΣ ≜
+  match PΣ, AΣ with
+    σ, _ → σ
+    σ::AΣ, _::PΣ → σ ++ merge PΣ AΣ
+
+*** mergeable Pθ Aθ
+
+mergeable PΣ AΣ
+dom(memₚ) ∩ dom(memₐ) = ∅
+——————————————————————————————————————————————————–———
+mergeable (C, PΣ, memₚ, reg, pc) (C, AΣ, memₐ, /, /)
+
+*** merge Pθ Aθ (assuming: mergeable Pθ Aθ)
+
+merge Pθ Aθ ≜
+  match Pθ, Aθ with
+    (C, PΣ, memₚ, reg, pc), (_, AΣ, memₐ, /, /) →
+      (C, merge PΣ AΣ, memₚ ⊎ memₐ, reg, pc)
+
+** Properties
+
+*** Traces alternate between context and program actions
+
+∀ p t u v γ₀ γ₁ v. t ∈ Traces(p) ⇒
+  (t = u.γ₀?.Eα.v ⇒ ∃ γ₁. Eα = γ₁!)
+  ∧ (t = u.γ₀!.Eα.v ⇒ ∃ γ₁. Eα = γ₁?)
+
+*** Trace sets are prefix-closed
+
+∀ t u. t.u ∈ Traces(p) ⇒ t ∈ Traces(p)
+
+*** Opponents can take any action after non-terminating player actions
+
+∀ s a p t u γ γ'.
+  a well formed ∧ a ⊢ s ⇒
+  p well formed ∧ p ⊢ₙ s ⇒
+  γ ≠ ✓ ⇒
+    (t.γ! ∈ Traces(p) ∧ (t.γ!.γ'?)⁻¹ ∈ Traces(a) ⇒
+      t.γ!.γ'? ∈ Traces(p))
+    ∧
+    ((t.γ?)⁻¹ ∈ Traces(a) ∧ t.γ?.γ'! ∈ Traces(p) ⇒
+      (t.γ?.γ'!)⁻¹ ∈ Traces(a))
+
+Intuition: when the program gives control back to the context,
+i.e. when the program performs an external action that is not
+termination, the context can take any action that it can perform.
+The same property holds when interverting players.
+
+*** Compiled, fully-defined programs only yield canonical traces
+
+∀ t P. P well formed ∧ P fully defined ⇒
+  t ∈ Traces(P↓) ⇒ t⁻¹ = ζ(t⁻¹)
+
+(the same goes for fully-defined attackers)
+
+Intuition:
+
+The code of fully defined programs never changes (Stores are limited
+to buffers). Except for r_com, compiled programs always clean their
+registers before performing a call or a return. As a consequence, in
+their traces, except for r_com, all registers hold value 0 upon at !
+actions. This can be characterized by saying that the dual trace is
+canonical.
+
+*** Canonicalization is invisible to fully defined programs
+
+∀ t P. P well formed ∧ P fully defined ⇒
+  t ∈ Traces(P↓) ⇔ ζ(t) ∈ Traces(P↓)
+
+(the same goes for fully-defined attackers)
+
+Intuition:
+
+The code of fully defined programs never changes (Stores are limited
+to buffers). Except for r_com, compiled programs only read the content
+of registers *after* writing to them. As a consequence, any sequence
+of reductions followed under t can be followed under ζ(t).
+
+** Main lemmas
+
+*** Internal trace recovery
+
+∀ ψ E t θ θ'. ψ; E ⊢ θ ⇒ θ'   ⇒
+  ∃ (T=α₁...αₙ) (θ₀...θₙ₊₁).
+    θ₀ = θ ∧ θₙ₊₁ = θ' ∧ erase(T) = t ∧
+                   αᵢ
+    ∀i.  ψ; E ⊢ θᵢ → θᵢ₊₁
+
+
+Proof: We can repeatedly apply inversion to directly get the result.
+
+Note: Alternative point of view.
+
+Consider the alternate trace semantics
+           T
+  ψ; E ⊢ θ ⇒ θ'
+where the rules are copied except rule T_Internal which we replace with:
+
+         Iα
+ψ; E ⊢ θ → θ'
+————————————— T_Internal'
+         Iα
+ψ; E ⊢ θ ⇒ θ'
+
+There is a direct mapping between proofs of
+           t
+  ψ; E ⊢ θ ⇒ θ'
+and proofs of
+           T
+  ψ; E ⊢ θ ⇒ θ'
+in which t = erase(T).
+
+*** Action composition lemmas
+
+**** Internal action composition lemma
+
+∀ Eₚ Eₐ ψ Pθ Aθ Pθ' Aθ' Iα,
+  ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
+  dom(Eₚ) ∩ dom(Eₐ) = ∅ ⇒
+  mergeable Pθ Aθ       ⇒
+
+             Iα
+  ψ; Eₚ ⊢ Pθ → Pθ'      ⇒
+
+             Iα⁻¹
+  ψ; Eₐ ⊢ Aθ → Aθ'      ⇒
+
+  mergeable Pθ' Aθ' ∧
+  ψ; Eₚ ⊎ Eₐ ⊢ (merge Pθ Aθ) → (merge Pθ' Aθ')
+
+**** External non-terminating action composition lemma
+
+∀ Eₚ Eₐ ψ Pθ Aθ Pθ' Aθ' Eα,
+  ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
+  dom(Eₚ) ∩ dom(Eₐ) = ∅ ⇒
+  mergeable Pθ Aθ       ⇒
+
+             Eα
+  ψ; Eₚ ⊢ Pθ → Aθ'      ⇒
+
+             Eα⁻¹
+  ψ; Eₐ ⊢ Aθ → Pθ'      ⇒
+
+  mergeable Pθ' Aθ' ∧
+  ψ; Eₚ ⊎ Eₐ ⊢ (merge Pθ Aθ) → (merge Pθ' Aθ')
+
+**** External terminating action composition lemma
+
+∀ Eₚ Eₐ ψ Pθ Aθ Pθ' Aθ',
+  ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
+  dom(Eₚ) ∩ dom(Eₐ) = ∅ ⇒
+  mergeable Pθ Aθ       ⇒
+
+             ✓!
+  ψ; Eₚ ⊢ Pθ → EXITED     ⇒
+
+             ✓?
+  ψ; Eₐ ⊢ Aθ → EXITED     ⇒
+
+  ψ; Eₚ ⊎ Eₐ ⊢ (merge Pθ Aθ) ↛
+
+**** Proof
+
+The proof is similar for all lemmas.
+Start by inverting (mergeable Pθ Aθ): ∃ C, PΣ, AΣ, memₚ, memₐ, reg, pc
+  Pθ = (C, PΣ, memₚ, reg, pc)
+  Aθ = (C, AΣ, memₐ, /, /)
+  mergeable PΣ AΣ
+  dom(memₚ) ∩ dom(memₐ) = ∅
+
+Define state as:
+  state ≜ merge Pθ Aθ
+        = (C, merge PΣ AΣ, memₚ ⊎ memₐ, reg, pc)
+
+We proceed by case on action α. In each case, only one rule applies
+for Pθ →α and Aθ →α⁻¹ and we apply inversion on these rules.
+
+For non-terminating actions, these inversions are enough to check:
+(1) that mergeability conditions are met for Pθ' and Aθ';
+(2) that merge Pθ Aθ reduces to merge Pθ Aθ'.
+
+For terminating actions, these inversions are enough to check that
+merge Pθ Aθ does not reduce. More details are provided below.
+
+***** Iα = τ + (T_CallRetTau+ / T_Tau-)
+
+Inversion of T_Tau-:
+Aθ' = Aθ
+
+Inversion of T_CallRetTau+: ∃ C', σ', mem'ₚ, reg', pc', PΣ'
+ψ; Eₚ ⊢ (C,σ,memₚ,reg,pc) → (C',σ',mem'ₚ,reg',pc')
+Top(PΣ) = σ
+PΣ' = SetTop(PΣ, σ')
+Pθ = (C,PΣ,memₚ,reg,pc)
+Pθ' = (C',PΣ',mem'ₚ,reg',pc')
+decode(mem[C,pc]) ≠ Call _ _
+decode(mem[C,pc]) ≠ Return
+
+As an invariant of the operational semantics,
+  dom(mem'ₚ) = dom(memₚ).
+
+S_Call and S_Return are the only rules that modify C and σ in the
+low-level semantics. However, they do not apply since:
+  decode(mem[C,pc]) ≠ Call _ _
+  decode(mem[C,pc]) ≠ Return.
+Hence, C' = C and σ' = σ, i.e. PΣ' = PΣ.
+
+Thus,
+  Pθ' = (C, PΣ, mem'ₚ, reg', pc')
+  Aθ' = (C, AΣ, memₐ, /, /)
+which are mergeable since we know that
+  mergeable PΣ AΣ
+  dom(mem'ₚ) ∩ dom(memₐ) = dom(memₚ) ∩ dom(memₐ) = ∅.
+
+By case on the rule applied in
+  ψ; Eₚ ⊢ (C,σ,memₚ,reg,pc) → (C,σ,mem'ₚ,reg',pc')
+which we know is not S_Call and S_Return, we can show that
+  ψ; Eₚ ⊎ Eₐ ⊢ (C,merge PΣ AΣ,memₚ ⊎ memₐ, reg,pc) →
+                 (C,merge PΣ AΣ,mem'ₚ ⊎ memₐ,reg',pc').
+We already know that the rule doesn't change nor look at the stack,
+and doesn't change the component. Moreover, all potential memory reads
+and updates will happen in the memory of component C, which lives in
+memₚ.
+
+***** Iα = C'.P'(/) +
+
+Inversion of T_Call-: ∃ AΣ', Aσ
+  Aθ' = (C', AΣ', memₐ, /, /)
+  C'.P' ∈ ψ[C].import ∨ C' = C
+  C' ∉ dom(Eₐ)
+  Top(AΣ) = Aσ
+  AΣ' = SetTop(AΣ, (C,/)::Aσ)
+
+Inversion of T_CallRetTau+: ∃ C'',σ',mem'ₚ,reg',pc',PΣ',C₀,P₀
+  ψ; Eₚ ⊢ (C,σ,memₚ,reg,pc) → (C'',σ',mem'ₚ,reg',pc')
+  Top(PΣ) = σ
+  PΣ' = SetTop(PΣ, σ')
+  Pθ = (C,PΣ,memₚ,reg,pc)
+  Pθ' = (C',PΣ',mem'ₚ,reg',pc')
+  decode(mem[C,pc]) = Call C' P'
+
+Because of the condition on mem[C,pc], the only rule that can reduce
+(C,σ,memₚ,reg,pc) to (C'',σ',mem'ₚ,reg',pc') is S_Call.
+Inversion of S_Call:
+  C'.P' ∈ ψ[C].import ∨ C' = C
+  C' = C''
+  σ' = (C,pc+1)::σ
+  mem'ₚ = memₚ
+  reg' = reg
+  pc' = Eₚ[C'][P'].
+
+Hence
+  Pθ' = (C',SetTop(PΣ,(C,pc+1)::σ),memₚ,reg,Eₚ[C'][P'])
+  Aθ' = (C',SetTop(AΣ,(C,   /)::σ),memₐ,  /,         /)
+which are mergeable, and
+  merge Pθ' Aθ' = (C',
+                   (C,pc+1) :: merge PΣ AΣ,
+                   memₚ ⊎ memₐ, reg, Eₚ[C'][P']).
+We have also gathered all premises to apply rule S_Call.
+We conclude that
+  (C,merge PΣ AΣ,memₚ ⊎ memₐ, reg, pc)
+reduces to the state above, given that
+  (Eₐ⊎Eₚ)[C'][P'] = Eₚ[C'][P'].
+
+***** Iα = Ret / +
+
+Inversion of T_Ret-: ∃ C', AΣ', Aσ'
+Aθ' = (C', AΣ', memₐ, /, /)
+Top(AΣ) = (C',/)::Aσ'
+AΣ' = SetTop(AΣ, Aσ')
+
+Inversion of T_CallRetTau+: ∃ C'',σ',mem'ₚ,reg',pc',PΣ'
+ψ; Eₚ ⊢ (C,σ,memₚ,reg,pc) → (C'',σ',mem'ₚ,reg',pc')
+Top(PΣ) = σ
+PΣ' = SetTop(PΣ, σ')
+Pθ = (C,PΣ,memₚ,reg,pc)
+Pθ' = (C',PΣ',mem'ₚ,reg',pc')
+decode(mem[C,pc]) = Return
+
+Because of the condition on mem[C,pc], the only rule that can reduce
+(C,σ,memₚ,reg,pc) to (C'',σ',mem'ₚ,reg',pc') is S_Return.
+Inversion of S_Return: ∃ i'
+  σ = (C'', i')::σ'
+  mem'ₚ = memₚ
+  reg' = reg
+  pc' = i'.
+
+From the knowledge that
+  mergeable PΣ AΣ
+we can infer that
+  Top(AΣ) ⊆ Top(PΣ)
+i.e.
+  (C',/)::Aσ' ⊆ (C'',i')
+from which we can infer that C'' = C'.
+
+By inverting
+  mergeable PΣ AΣ
+we also get all the premises we need to conclude that
+  mergeable PΣ' AΣ'
+since
+  PΣ' = SetTop(PΣ, tail Top(PΣ))
+  AΣ' = SetTop(AΣ, tail Top(AΣ))
+where tail takes the tail of a list.
+
+Hence
+  Pθ' = (C',SetTop(PΣ, tail Top(PΣ)),memₚ,reg,i')
+  Aθ' = (C',SetTop(AΣ, tail Top(AΣ)),memₐ,  /, /)
+which are mergeable, and
+  merge Pθ' Aθ' = (C',
+                   tail (merge PΣ AΣ),
+                   memₚ ⊎ memₐ, reg, i').
+
+We have also gathered all premises to apply rule S_Return.
+We conclude that
+  (C,merge PΣ AΣ,memₚ ⊎ memₐ, reg, pc)
+reduces to the state above, given that ∃ σ''
+  merge PΣ AΣ = σ ++ σ'' = (C', i') :: (σ' ++ σ'').
+
+*** Action decomposition lemma
+
+∀ E Eₚ Eₐ ψ Pθ Aθ state',
+  ψ well formed  ∧  ψ ⊢ E well formed  ∧  E = Eₚ ⊎ Eₐ ⇒
+  mergeable Pθ Aθ ⇒
+
+  ψ; E ⊢ (merge Pθ Aθ) → state'    ⇒
+
+  ∃ Pθ' Aθ'.
+    state' = merge Pθ' Aθ' ∧
+                    Iα                   Iα⁻¹
+    (∃Iα. ψ; Eₚ ⊢ Pθ → Pθ'  ∧  ψ; Eₐ ⊢ Aθ → Aθ'
+     ∨              Eα                   Eα⁻¹
+     ∃Eα. ψ; Eₚ ⊢ Pθ → Aθ'  ∧  ψ; Eₐ ⊢ Aθ → Pθ')
+
+*** Trace composition lemmas
+
+**** Intermediate trace composition lemmas
+
+∀ Eₚ Eₐ ψ Pθ Aθ Pθ' Aθ',
+  ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
+  dom(Eₚ) ∩ dom(Eₐ) = ∅ ⇒
+  mergeable Pθ Aθ       ⇒
+
+             t
+  ψ; Eₚ ⊢ Pθ ⇒ Pθ'     ⇒
+
+            t⁻¹
+  ψ; Eₐ ⊢ Aθ ⇒ Aθ'     ⇒
+
+  mergeable Pθ' Aθ' ∧
+  ψ; Eₚ ⊎ Eₐ ⊢ (merge Pθ Aθ) →* (merge Pθ' Aθ')
+
+∀ Eₚ Eₐ ψ Pθ Aθ Pθ' Aθ',
+  ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
+  dom(Eₚ) ∩ dom(Eₐ) = ∅ ⇒
+  mergeable Pθ Aθ       ⇒
+
+             t
+  ψ; Eₚ ⊢ Pθ ⇒ Aθ'     ⇒
+
+             t⁻¹
+  ψ; Eₐ ⊢ Aθ ⇒ Pθ'     ⇒
+
+  mergeable Pθ' Aθ' ∧
+  ψ; Eₚ ⊎ Eₐ ⊢ (merge Pθ Aθ) →* (merge Pθ' Aθ')
+
+**** Terminating trace composition lemmas
+
+∀ Eₚ Eₐ ψ Pθ Aθ,
+  ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
+  dom(Eₚ) ∩ dom(Eₐ) = ∅ ⇒
+  mergeable Pθ Aθ       ⇒
+
+             Eα
+  ψ; Eₚ ⊢ Pθ ⇒ EXITED     ⇒
+
+            Eα⁻¹
+  ψ; Eₐ ⊢ Aθ ⇒ EXITED     ⇒
+
+  ∃ ρ. ψ; Eₚ ⊎ Eₐ ⊢ (merge Pθ Aθ) →* ρ ↛
+
+**** Diverging trace composition lemmas
+
+∀ Eₚ Eₐ ψ Pθ Aθ,
+  ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
+  dom(Eₚ) ∩ dom(Eₐ) = ∅ ⇒
+  mergeable Pθ Aθ       ⇒
+
+
+  ψ; Eₚ ⊢ Pθ ⇏          ⇒
+
+    ∀ ρ. ψ; Eₚ ⊎ Eₐ ⊢ (merge Pθ Aθ) →* ρ   ⇒
+         ∃ ρ'. ψ; Eₚ ⊎ Eₐ ⊢ ρ → ρ'
+
+**** Proofs
+
+***** Intermediate and terminating trace composition lemmas
+
+Apply internal trace recovery to
+             t
+  ψ; Eₚ ⊢ Pθ ⇒ θ'ₚ
+and
+            t⁻¹
+  ψ; Eₚ ⊢ Aθ ⇒ θ'ₐ
+to get
+  (Tₚ=αₚ₁...αₚₙ) (θₚ₀...θₚₙ₊₁) (Tₐ=αₐ₁...αₐₘ) (θₐ₀...θₐₘ₊₁)
+such that
+    θₚ₀ = Pθ ∧ θₚₙ₊₁ = θ'ₚ ∧ erase(Tₚ) = t ∧
+    θₐ₀ = Pθ ∧ θₐₘ₊₁ = θ'ₐ ∧ erase(Tₐ) = t⁻¹ ∧
+                  αₚᵢ
+    ∀i.  ψ; E ⊢ θᵢ → θᵢ₊₁
+                  αₐⱼ
+    ∀j.  ψ; E ⊢ θⱼ → θⱼ₊₁
+
+*** Trace decomposition lemma
+
+∀ E Eₚ Eₐ ψ Pθ Aθ state',
+  ψ well formed  ∧  ψ ⊢ E well formed  ∧  E = Eₚ ⊎ Eₐ ⇒
+  mergeable Pθ Aθ ⇒
+
+  ψ; E ⊢ (merge Pθ Aθ) →* state'    ⇒
+
+  ∃ Pθ' Aθ' t.
+    state' = merge Pθ' Aθ' ∧
+                 t                    t⁻¹
+    (ψ; Eₚ ⊢ Pθ ⇒ Pθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Aθ'
+     ∨           t                    t⁻¹
+     ψ; Eₚ ⊢ Pθ ⇒ Aθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Pθ')
+    ∧ (ψ; E ⊢ state' ↛   ⇒
+                   t.✓!                    t⁻¹.✓?
+        (ψ; Eₚ ⊢ Pθ ⇒ EXITED  ∧  ψ; Eₐ ⊢ Aθ → EXITED
+         ∨         t.✓?                    t⁻¹.✓!
+         ψ; Eₚ ⊢ Pθ ⇒ EXITED  ∧  ψ; Eₐ ⊢ Aθ → EXITED))
+
+*** Definability lemma (trace mapping)
+
+∀ s t γ₀. t = ζ(t) ⇒
+         (∃ p. p well formed ∧ p ⊢ₙ s ∧
+               t.γ₀! ∈ Traces(p)) ⇒
+  ∃A. A well formed ∧ A fully defined ∧ A ⊢ s ∧
+      (1) t⁻¹ ∈ Traces(A↓) ∧
+      (2) γ₀ ≠ ✓ ⇒ (t.γ₀!.✓?)⁻¹ ∈ Traces(A↓) ∧
+      (3) (∀ γ γ'. (t.γ!.γ'?)⁻¹ ∈ Traces(A↓) ⇒
+            ζ(γ) = ζ(γ₀) ∧ γ' = ✓)
+
+Proof intuition:
+  From p ⊢ₙ s we can deduce that s = (ψ,dom(ψ)∖dom(Eₚ)).
+  From the fact that t.γ₀! ∈ Traces(p) we can apply internal trace
+  recovery to trace t to get a trace with internal actions T such that
+    t = erase(T) ∧ T=ζ(T).
+
+  We have written an algorithm in OCaml that constructs A.
+  Its correctness would deserve its own proof and we later give some
+  intuition about it. Here, we assume it:
+    A well formed ∧ A fully defined ∧ A ⊢ s ∧
+      (1) erase(T⁻¹) = t⁻¹ ∈ Traces(A↓) ∧
+      (2) γ₀ ≠ ✓ ⇒ (t.γ₀!.✓?)⁻¹ ∈ Traces(A↓) ∧
+      (3) (∀ γ γ'. t.γ!.γ'? ∈ Traces(A↓) ⇒
+            ζ(γ) = ζ(γ₀) ∧ γ' = ✓)
+
+Implementation of the algorithm: <tracemapping.ml>
+
+Intuition about algorithm correctness:
+  The algorithm uses component-local counters to do a potentially
+  different action each time a context procedure is called.
+  The counter increments by one upon each call to a procedure in the
+  component. Based upon the value of the counter, we can produce the
+  series of action that is prescribed by T⁻¹.
+  This corresponds to function
+    reproduce_trace : state → trace → state
+  where state is the type that is used to progressively reconstruct
+  code for all procedures.
+
+  A key point is that T⁻¹ is a legitimate sequence of actions with
+  respect to interface ψ since it's extracted from a proof that
+    t ∈ Traces(p).
+  This allows us to define A such that
+    A well formed ∧ A ⊢ s ∧
+    (1) erase(T⁻¹) = t⁻¹ ∈ Traces(A↓).
+  In particular, the attacker will only produces calls that were
+  described in T, and all of these calls are valid with respect to
+  interface ψ.
+
+  A second key point is that after executing T⁻¹, we can choose a
+  different action to take depending on the next program external
+  action. If the next program action is a call, then counters allow us
+  to make a distinction between that call and the previous ones in
+  T. If the next program action is to return, then we can choose what
+  to action to take after control returns to the pending function that
+  is on top of the call stack.
+  This allows us to only terminate if the next program action
+  canonicalizes to γ₀ (provided that γ₀ gives back control,
+  i.e. γ₀ ≠  ✓): we choose the next program action to be termination
+  if the program takes a step that canonicalizes to γ₀, or divergence
+  otherwise. The latter is done by calling a private procedure that
+  unconditionally calls itself recursively.
+  This corresponds to function
+    discriminate_action : state → external_action → state.
+  Formally, this translates to:
+      (2) γ₀ ≠ ✓ ⇒ (t.γ₀!.✓?)⁻¹ ∈ Traces(A↓) ∧
+      (3) (∀ γ γ'. t.γ!.γ'? ∈ Traces(A↓) ⇒
+            ζ(γ) = ζ(γ₀) ∧ γ' = ✓).
+
+** Theorems
+*** 1st Theorem (the boring direction of structured full abstraction)
+
+∀ s P Q. P well formed ∧ P fully defined ∧ P ⊢ₙ s ⇒
+         Q well formed ∧ Q fully defined ∧ Q ⊢ₙ s ⇒
+  (∃ A. A well formed ∧ A fully defined ∧ A ⊢ s ∧ A[P] ≁H A[Q]) ⇒
+    ∃ a. a well formed ∧ a ⊢ s ∧ a[P↓] ≁L a[Q↓]
+
+Proof:
+
+Let s P Q. Assume a high-level context A such that
+  A well formed ∧ A fully defined ∧ A ⊢ s ∧ A[P] ≁H A[Q].
+Note that A[P] and A[Q] are both defined due to full-definedness
+conditions on A, P and Q. From the last condition on A we know that
+either
+  (1) *A[P] terminates ∧ A[Q] diverges*
+or
+  (2) A[Q] terminates ∧ A[P] diverges.
+We *assume (1)* without loss of generality ((2) is symmetric).
+
+Take a = A↓. From *shape preservation* we get that
+  A↓ well formed ∧ A↓ ⊢ s.
+Moreover from *whole program compiler correctness* it follows that
+  (A[P])↓ terminates ∧ (A[Q])↓ diverges.
+Applying *separate compilation* we get that
+  A↓[P↓] terminates ∧ A↓[Q↓] diverges,
+hence, because the low-level language is deterministic,
+  A↓[P↓] ≁L a[Q↓].
+QED.
+
+*** 2nd Theorem (the interesting direction of structured full abstraction)
+
+∀ s P Q. P well formed ∧ P fully defined ∧ P ⊢ₙ s ⇒
+         Q well formed ∧ Q fully defined ∧ Q ⊢ₙ s ⇒
+  (∃ a. a well formed ∧ a ⊢ s ∧ a[P↓] ≁L a[Q↓]) ⇒
+    ∃ A. A well formed ∧ A fully defined ∧ A ⊢ s ∧ A[P] ≁H A[Q]
+
+Proof:
+
+Suppose that a[P↓] terminates and a[Q↓] diverges.
+Apply trace decomposition to a,P↓ to get a trace tᵢ that ends with a
+termination marker ✓. Select the longest prefix tₚ of tᵢ such that
+tₚ ∈ Traces(Q↓). Because trace sets are prefix-closed, we know that
+tₚ ∈ Traces(P↓) and tₚ⁻¹ ∈ Traces(a).
+
+tₚ is a strict prefix of tᵢ since otherwise we could apply trace
+composition to a and Q↓ and get that a[Q↓] terminates.
+There thus exists Eα such that (∃tₛ. tᵢ = tₚ.Eα.tₛ).
+Eα cannot be a context action.
+Subproof:
+  Suppose it were. Then the preceding action must be a program action
+  that's not termination. However, because contexts can perform any
+  action after a non-terminating program action, (tₚ.Eα) ∈ Traces(Q↓).
+  This violates the fact that tₚ is the longest prefix of tᵢ in
+  Traces(Q↓).
+So Eα is a program action, i.e. there exists γ₀ such that Eα = γ₀!.
+
+Let t_c be the canonicalization of trace tₚ, i.e. t_c = ζ(tₚ).
+
+Since canonicalization is invisible to fully defined programs,
+  t_c.γ₀! = ζ(tₚ.γ₀!) ∈ Traces(P↓).
+Applying definability to t_c,γ₀ we get a high-level fully-defined
+attacker A such that
+  (1) t_c⁻¹ ∈ Traces(A↓) ∧
+  (2) γ₀ ≠ ✓ ⇒ (t_c.γ₀!.✓?)⁻¹ ∈ Traces(A↓) ∧
+  (3) (∀ γ γ'. t_c.γ!.γ'? ∈ Traces(A↓) ⇒
+         ζ(γ) = ζ(γ₀)).
+
+P↓ has trace t_c.γ₀! hence:
+ * either γ₀ = ✓, in this case A↓[P↓] terminates by applying trace
+   composition from (1) plus the fact that the program can take any
+   action after A↓ has given back control;
+ * or γ₀ lends back control to the context, then P↓ has trace
+   t_c.γ₀!.✓? since the context can take any action, so
+   using (2) and trace composition we can deduce that A↓[P↓]
+   terminates.
+In both cases, A↓[P↓] terminates.
+
+Since canonicalization is invisible to fully defined programs,
+  (a) t_c ∈ Traces(Q↓)  ∧
+  (b) (t_c.✓! = ζ(tₚ.✓!) ∈ Traces(Q↓) ⇒
+         tₚ.✓! ∈ Traces(Q↓))
+  (c) (t_c.γ₀! = ζ(tₚ.γ₀!) ∈ Traces(Q↓) ⇒
+         tₚ.γ₀! ∈ Traces(Q↓)).
+After following trace t_c, Q↓ cannot perform a terminating action,
+because otherwise, (b) would allow us to apply traces composition to
+a,Q↓ and get that a[Q↓] terminates.
+After following trace t_c, Q↓ cannot perform action γ₀ either,
+because otherwise, (c) would violate the fact that tₚ is the longest
+prefix of tᵢ in Traces(Q↓).
+
+So Q↓ only has two options.
+ * The first option is to perform no external action by going into
+   an infinite sequence of internal transitions. In this case we can
+   apply trace composition to get that $\comp{A}[\comp{Q}]$ diverges.
+
+ * The first option is to go into an infinite sequence of internal
+   transitions, in this case A↓[Q↓] obviously diverges.
+ * The second option is to give control back to the context using
+   *another action than γ₀*, call it γ, which is *not a terminating
+   action*.
+   Because fully-defined programs only yield canonical traces,
+     γ = ζ(γ) ∧ γ₀ = ζ(γ₀)
+   (remember that γ₀ was an action of P↓).
+   So (3) now tells us that if the context were to produce an action,
+   then we would have γ = γ₀. So the context doesn't produce any
+   action, which means that he goes into an infinite sequence of local
+   transitions.
+   We can apply trace composition to get that A↓[Q↓] diverges.
+In both cases, A↓[Q↓] diverges.
+QED.
+
+*** Corollary for non-compiled partial programs
+
+∀ s p q.
+  p well formed ∧ p ⊢ₙ s ⇒
+  q well formed ∧ q ⊢ₙ s ⇒
+  (∃P. P well formed ∧ P fully defined ∧ P ⊢ₙ s ∧
+       ∀a, a well formed ∧ a ⊢ s ⇒ a[p] ~L a[P↓]) ⇒
+  (∃Q. Q well formed ∧ Q fully defined ∧ Q ⊢ₙ s ∧
+       ∀a, a well formed ∧ a ⊢ s ⇒ a[q] ~L a[Q↓]) ⇒
+  (∃a. a well formed ∧ a ⊢ s ∧ a[p] ≁L a[q]) ⇒
+    ∃ A. A well formed ∧ A fully defined ∧ A ⊢ s ∧
+         A↓[p] ≁L A↓[q]
+
+Intuition:
+  If p is contextually equivalent to some P↓ and q to some Q↓, then
+  low-level attackers can't do more harm than the compilation of a
+  fully-defined high-level attacker.
+
+Proof:
+  Let s p q. Assume a P Q. We have that
+    a[P↓] ~L a[p] ≁L a[q] ~L a[Q↓].
+  By transitivity, it holds that
+    a[P↓] ≁L a[Q↓],
+  hence we can directly apply the 2nd theorem to get that
+    ∃ A. A well formed ∧ A fully defined ∧ A ⊢ s ∧ A[P] ≁H A[Q].
+  Assume such an A, then we can prove that
+    A↓[P↓] ≁L A↓[Q↓]
+  (proved in theorem 1).
+  Hence, since
+    A↓[p] ~L A↓[P↓] ∧ A↓[Q↓] ~L A↓[q]
+  we can deduce that
+    A↓[p] ≁L A↓[q].
+  QED.
