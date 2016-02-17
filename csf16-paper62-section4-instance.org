@@ -1171,9 +1171,9 @@ Top(AΣ) = (C',/)::Aσ        AΣ' = SetTop(AΣ,Aσ)
 
 *** 8 - Termination from program code
 
-Top(PΣ) = σ
-ψ; E ⊢ (C,σ,mem,reg,pc) ↛
-—————–———————————————————————–————— T_Exit+
+                                   α
+∀ α ≠ ✓!. ψ; E ⊢ (C,PΣ,mem,reg,pc) ↛
+—————–———————————————————————––————— T_Exit!
                          ✓!
 ψ; E ⊢ (C,PΣ,mem,reg,pc) → EXITED
 
@@ -1303,6 +1303,7 @@ merge PΣ AΣ ≜
 
 mergeable PΣ AΣ
 dom(memₚ) ∩ dom(memₐ) = ∅
+C ∈ dom(memₚ)
 ——————————————————————————————————————————————————–———
 mergeable (C, PΣ, memₚ, reg, pc) (C, AΣ, memₐ, /, /)
 
@@ -1407,6 +1408,70 @@ and proofs of
   ψ; E ⊢ θ ⇒ θ'
 in which t = erase(T).
 
+*** Action decomposition lemma
+
+∀ E Eₚ Eₐ ψ Pθ Aθ state',
+  ψ well formed  ∧  ψ ⊢ E well formed  ∧  E = Eₚ ⊎ Eₐ ⇒
+  mergeable Pθ Aθ ⇒
+
+  ψ; E ⊢ (merge Pθ Aθ) → state'    ⇒
+
+  ∃ Pθ' Aθ'.
+    state' = merge Pθ' Aθ' ∧
+                    Iα                   Iα⁻¹
+    (∃Iα. ψ; Eₚ ⊢ Pθ → Pθ'  ∧  ψ; Eₐ ⊢ Aθ → Aθ'
+     ∨              Eα                   Eα⁻¹
+     ∃Eα. ψ; Eₚ ⊢ Pθ → Aθ'  ∧  ψ; Eₐ ⊢ Aθ → Pθ')
+
+**** Proof
+
+Start by inverting (mergeable Pθ Aθ): ∃ C, PΣ, AΣ, memₚ, memₐ, reg, pc
+  Pθ = (C, PΣ, memₚ, reg, pc)
+  Aθ = (C, AΣ, memₐ, /, /)
+  mergeable PΣ AΣ
+  dom(memₚ) ∩ dom(memₐ) = ∅
+  C ∈ dom(memₚ)
+
+Define state as:
+  state ≜ merge Pθ Aθ
+        = (C, merge PΣ AΣ, memₚ ⊎ memₐ, reg, pc)
+
+We now proceed by case on the rule applied in
+  ψ; E ⊢ (merge Pθ Aθ) → state'
+and invert the rule.
+
+***** S_Nop, S_Const, S_Mov, S_BinOp, S_Load, S_Store, S_Jal, S_Jump, S_BnzNZ, S_BnzZ
+
+  These rules don't change the stack nor look at it. Neither do they
+  change the current compartment. They may only change the memory of
+  the current compartment C, which lives in memₚ. Hence, by inversion,
+  ∃ mem'ₚ reg' pc'.
+
+  state' = (C, merge PΣ AΣ, mem'ₚ ⊎ memₐ, reg', pc')
+
+  No matter the rule, one can check that we can also apply said rule
+  to get that:
+
+  ψ; Eₚ ⊢ (C, Top(PΣ), memₚ,  reg,  pc) →
+          (C, Top(PΣ), mem'ₚ, reg', pc')
+
+  Hence, we can apply rule T_CallRetTau+ and get that:
+                             τ+
+  ψ; Eₚ ⊢ (C,PΣ,memₚ,reg,pc) → Pθ'
+
+  where
+
+  Pθ' = (C, PΣ, mem'ₚ, reg', pc').
+
+  We can trivially apply rule T_Tau- and get that:
+
+             τ-
+  ψ; Eₐ ⊢ Aθ → Aθ
+
+  So we can take Aθ' = Aθ and get
+    state' = merge Pθ' Aθ'
+  then prove left by choosing Iα = τ+.
+
 *** Action composition lemmas
 
 **** Internal action composition lemma
@@ -1464,6 +1529,7 @@ Start by inverting (mergeable Pθ Aθ): ∃ C, PΣ, AΣ, memₚ, memₐ, reg, pc
   Aθ = (C, AΣ, memₐ, /, /)
   mergeable PΣ AΣ
   dom(memₚ) ∩ dom(memₐ) = ∅
+  C ∈ dom(memₚ)
 
 Define state as:
   state ≜ merge Pθ Aθ
@@ -1474,7 +1540,7 @@ for Pθ →α and Aθ →α⁻¹ and we apply inversion on these rules.
 
 For non-terminating actions, these inversions are enough to check:
 (1) that mergeability conditions are met for Pθ' and Aθ';
-(2) that merge Pθ Aθ reduces to merge Pθ Aθ'.
+(2) that merge Pθ Aθ reduces to merge Pθ' Aθ'.
 
 For terminating actions, these inversions are enough to check that
 merge Pθ Aθ does not reduce. More details are provided below.
@@ -1693,20 +1759,19 @@ We conclude that
 reduces to the state above, given that ∃ σ''
   merge PΣ AΣ = σ ++ σ'' = (C', pc') :: (σ' ++ σ'').
 
-*** Action decomposition lemma
+***** ✓ (T_Exit! / T_Exit?)
 
-∀ E Eₚ Eₐ ψ Pθ Aθ state',
-  ψ well formed  ∧  ψ ⊢ E well formed  ∧  E = Eₚ ⊎ Eₐ ⇒
-  mergeable Pθ Aθ ⇒
+Inversion of T_Exit!:
+                                     α
+∀ α ≠ ✓!. ψ; Eₚ ⊢ (C,PΣ,memₚ,reg,pc) ↛
 
-  ψ; E ⊢ (merge Pθ Aθ) → state'    ⇒
+Goal: ψ; Eₚ ⊎ Eₐ ⊢ (C, merge PΣ AΣ, memₚ ⊎ memₐ, reg, pc) ↛
 
-  ∃ Pθ' Aθ'.
-    state' = merge Pθ' Aθ' ∧
-                    Iα                   Iα⁻¹
-    (∃Iα. ψ; Eₚ ⊢ Pθ → Pθ'  ∧  ψ; Eₐ ⊢ Aθ → Aθ'
-     ∨              Eα                   Eα⁻¹
-     ∃Eα. ψ; Eₚ ⊢ Pθ → Aθ'  ∧  ψ; Eₐ ⊢ Aθ → Pθ')
+By contradiction. Assume one of the rules of the operational semantics
+applies. In this case, we can apply action decomposition to this
+reduction and get that Pθ reduces with either an internal action or an
+external action that isn't termination. But no such reduction is
+possible, from what we've learned by inverting T_Exit!.
 
 *** Trace composition lemmas
 
