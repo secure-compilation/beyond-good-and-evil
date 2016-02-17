@@ -36,7 +36,7 @@ type trace = action list
          context, who will diverge. *)
 
 (* Note: The trace input to the algorithm is not t itself, but a trace
-         with internal actions T that erases to T. More details are
+         with internal actions T that erases to t. More details are
          provided in the proof intuition section for the definability
          lemma. *)
 

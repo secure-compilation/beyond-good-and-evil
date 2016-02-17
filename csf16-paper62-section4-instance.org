@@ -306,7 +306,7 @@ i ≠ 0
 Δ ⊢ (C,  s,                                σ, C'.P'(□) :: K, iₐ) →
     (C', s[C',0,0 ↦ iₐ], (C,s[C,0,0],K) :: σ,            [], eₚ)
 
-Δ ⊢ (C, s, σ, (C',iₐ,K) :: σ, [], i) → (C', s[C,0,0 ↦ iₐ], σ, K, i)   (S_Return)
+Δ ⊢ (C, s, (C',iₐ,K) :: σ, [], i) → (C', s[C,0,0 ↦ iₐ], σ, K, i)   (S_Return)
 
 Note: At this level we don't need to enforce interfaces in the
 operational semantics. The interface is syntactically extracted from
@@ -615,7 +615,7 @@ reg' = reg[rᵣₐ → pc + 1]
 ψ; E ⊢ (C,σ,mem,reg,pc) → (C,σ,mem,reg',i')
 
 mem[C,pc] = i     decode i = Call C' P'
-C'.P' ∈ ψ[C].import ∨ C' = C       – checking interface
+C'.P' ∈ ψ[C].import  ∨  C' = C       – checking interface
 σ' = (C,pc+1) :: σ                 – updating call stack
 ——————————————————————————————————————————————————— :: S_Call
 ψ; E ⊢ (C,σ,mem,reg,pc) → (C',σ',mem,reg,E[C'][P'])
@@ -1376,6 +1376,7 @@ of reductions followed under t can be followed under ζ(t).
 
 *** Internal trace recovery
 
+                       t
 ∀ ψ E t θ θ'. ψ; E ⊢ θ ⇒ θ'   ⇒
   ∃ (T=α₁...αₙ) (θ₀...θₙ₊₁).
     θ₀ = θ ∧ θₙ₊₁ = θ' ∧ erase(T) = t ∧
