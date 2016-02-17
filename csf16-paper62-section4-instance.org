@@ -1140,10 +1140,10 @@ Top(AΣ) = Aσ               AΣ' = SetTop(AΣ, (C,/)::Aσ)
 
 *** 4 - Return from context code to program code
 
-Top(PΣ) = (C,pc)::σ         PΣ' = SetTop(PΣ,σ)
+Top(PΣ) = (C',pc)::σ         PΣ' = SetTop(PΣ,σ)
 —————————————————————————————————————————–———– T_Ret?
                        Ret reg ?
-ψ; E ⊢ (/,[]::PΣ,mem,/,/) → (C,PΣ',mem,reg,pc)
+ψ; E ⊢ (C,[]::PΣ,mem,/,/) → (C',PΣ',mem,reg,pc)
 
 *** 5 - Call from program code to context code
 
@@ -1484,22 +1484,22 @@ merge Pθ Aθ does not reduce. More details are provided below.
 Inversion of T_Tau-:
 Aθ' = Aθ
 
-Inversion of T_CallRetTau+: ∃ C', σ', mem'ₚ, reg', pc', PΣ'
+Inversion of T_CallRetTau+: ∃ C', σ, σ', mem'ₚ, reg', pc', PΣ'
 ψ; Eₚ ⊢ (C,σ,memₚ,reg,pc) → (C',σ',mem'ₚ,reg',pc')
 Top(PΣ) = σ
 PΣ' = SetTop(PΣ, σ')
 Pθ = (C,PΣ,memₚ,reg,pc)
 Pθ' = (C',PΣ',mem'ₚ,reg',pc')
-decode(mem[C,pc]) ≠ Call _ _
-decode(mem[C,pc]) ≠ Return
+decode(memₚ[C,pc]) ≠ Call _ _
+decode(memₚ[C,pc]) ≠ Return
 
 As an invariant of the operational semantics,
   dom(mem'ₚ) = dom(memₚ).
 
 S_Call and S_Return are the only rules that modify C and σ in the
 low-level semantics. However, they do not apply since:
-  decode(mem[C,pc]) ≠ Call _ _
-  decode(mem[C,pc]) ≠ Return.
+  decode(memₚ[C,pc]) ≠ Call _ _
+  decode(memₚ[C,pc]) ≠ Return.
 Hence, C' = C and σ' = σ, i.e. PΣ' = PΣ.
 
 Thus,
@@ -1519,7 +1519,7 @@ and doesn't change the component. Moreover, all potential memory reads
 and updates will happen in the memory of component C, which lives in
 memₚ.
 
-***** Iα = C'.P'(/) +
+***** Iα = C'.P'(/) + (T_CallRetTau+ / T_Call-)
 
 Inversion of T_Call-: ∃ AΣ', Aσ
   Aθ' = (C', AΣ', memₐ, /, /)
@@ -1528,13 +1528,13 @@ Inversion of T_Call-: ∃ AΣ', Aσ
   Top(AΣ) = Aσ
   AΣ' = SetTop(AΣ, (C,/)::Aσ)
 
-Inversion of T_CallRetTau+: ∃ C'',σ',mem'ₚ,reg',pc',PΣ',C₀,P₀
+Inversion of T_CallRetTau+: ∃ C'',σ,σ',mem'ₚ,reg',pc',PΣ',C₀,P₀
   ψ; Eₚ ⊢ (C,σ,memₚ,reg,pc) → (C'',σ',mem'ₚ,reg',pc')
   Top(PΣ) = σ
   PΣ' = SetTop(PΣ, σ')
   Pθ = (C,PΣ,memₚ,reg,pc)
   Pθ' = (C',PΣ',mem'ₚ,reg',pc')
-  decode(mem[C,pc]) = Call C' P'
+  decode(memₚ[C,pc]) = Call C' P'
 
 Because of the condition on mem[C,pc], the only rule that can reduce
 (C,σ,memₚ,reg,pc) to (C'',σ',mem'ₚ,reg',pc') is S_Call.
@@ -1547,8 +1547,8 @@ Inversion of S_Call:
   pc' = Eₚ[C'][P'].
 
 Hence
-  Pθ' = (C',SetTop(PΣ,(C,pc+1)::σ),memₚ,reg,Eₚ[C'][P'])
-  Aθ' = (C',SetTop(AΣ,(C,   /)::σ),memₐ,  /,         /)
+  Pθ' = (C',SetTop(PΣ,(C,pc+1)::Top(PΣ)),memₚ,reg,Eₚ[C'][P'])
+  Aθ' = (C',SetTop(AΣ,(C,   /)::Top(AΣ)),memₐ,  /,         /)
 which are mergeable, and
   merge Pθ' Aθ' = (C',
                    (C,pc+1) :: merge PΣ AΣ,
@@ -1559,20 +1559,20 @@ We conclude that
 reduces to the state above, given that
   (Eₐ⊎Eₚ)[C'][P'] = Eₚ[C'][P'].
 
-***** Iα = Ret / +
+***** Iα = Ret / + (T_CallRetTau+ / T_Ret-)
 
 Inversion of T_Ret-: ∃ C', AΣ', Aσ'
 Aθ' = (C', AΣ', memₐ, /, /)
 Top(AΣ) = (C',/)::Aσ'
 AΣ' = SetTop(AΣ, Aσ')
 
-Inversion of T_CallRetTau+: ∃ C'',σ',mem'ₚ,reg',pc',PΣ'
+Inversion of T_CallRetTau+: ∃ C'',σ,σ',mem'ₚ,reg',pc',PΣ'
 ψ; Eₚ ⊢ (C,σ,memₚ,reg,pc) → (C'',σ',mem'ₚ,reg',pc')
 Top(PΣ) = σ
 PΣ' = SetTop(PΣ, σ')
 Pθ = (C,PΣ,memₚ,reg,pc)
 Pθ' = (C',PΣ',mem'ₚ,reg',pc')
-decode(mem[C,pc]) = Return
+decode(memₚ[C,pc]) = Return
 
 Because of the condition on mem[C,pc], the only rule that can reduce
 (C,σ,memₚ,reg,pc) to (C'',σ',mem'ₚ,reg',pc') is S_Return.
@@ -1587,7 +1587,7 @@ From the knowledge that
 we can infer that
   Top(AΣ) ⊆ Top(PΣ)
 i.e.
-  (C',/)::Aσ' ⊆ (C'',i')
+  (C',/)::Aσ' ⊆ (C'',i')::σ'
 from which we can infer that C'' = C'.
 
 By inverting
@@ -1612,6 +1612,86 @@ We conclude that
   (C,merge PΣ AΣ,memₚ ⊎ memₐ, reg, pc)
 reduces to the state above, given that ∃ σ''
   merge PΣ AΣ = σ ++ σ'' = (C', i') :: (σ' ++ σ'').
+
+***** Eα = C'.P'(reg) ! (T_Call! / T_Call?)
+
+Inversion of T_Call?: ∃ AΣ', Aσ
+  Pθ' = (C', []::AΣ', memₐ, reg, E[C'][P'])
+  C'.P' ∈ ψ[C].import
+  C' ∈ dom(Eₐ)
+  Top(AΣ) = Aσ
+  AΣ' = SetTop(AΣ, (C,/)::Aσ)
+
+Inversion of T_Call!: ∃ PΣ', σ
+  Aθ' = (C',[]::PΣ',memₚ,/,/)
+  decode(memₚ[C,pc]) = Call C' P'
+  C'.P' ∈ ψ[C].import
+  C' ∉ dom(Eₚ)
+  Top(PΣ) = σ
+  PΣ' = SetTop(PΣ, (C,pc+1)::σ)
+
+Hence
+  Pθ' = (C',[]::SetTop(AΣ,(C,   /)::Top(AΣ)),memₐ,reg,Eₚ[C'][P'])
+  Aθ' = (C',[]::SetTop(PΣ,(C,pc+1)::Top(PΣ)),memₚ,  /,         /)
+which are mergeable, and
+  merge Pθ' Aθ' = (C',
+                   (C,pc+1) :: merge PΣ AΣ,
+                   memₚ ⊎ memₐ, reg, Eₚ[C'][P']).
+We have also gathered all premises to apply rule S_Call.
+We conclude that
+  (C,merge PΣ AΣ,memₚ ⊎ memₐ, reg, pc)
+reduces to the state above, given that
+  (Eₐ⊎Eₚ)[C'][P'] = Eₚ[C'][P'].
+
+***** Eα = Ret reg ! (T_Ret! / T_Ret?)
+
+Inversion of T_Ret?: ∃ C', PΣₐ, PΣ', σ, pc'
+Pθ' = (C', PΣ', memₐ, reg, pc')
+AΣ = [] :: PΣₐ
+Top(PΣₐ) = (C',pc')::σ
+PΣ' = SetTop(PΣₐ, σ)
+
+Inversion of T_Ret!: ∃ C'', AΣₚ, AΣ', Aσ
+Aθ' = (C'', AΣ', memₚ, /, /)
+decode(memₚ[C,pc]) = Return
+PΣ = [] :: AΣₚ
+Top(AΣₚ) = (C'',/)::Aσ
+AΣ' = SetTop(AΣₚ, Aσ)
+
+From the knowledge that
+  mergeable PΣ AΣ
+we can infer that
+  Top(AΣₚ) ⊆ Top(PΣₐ)
+i.e.
+  (C',/)::Aσ ⊆ (C'',pc')::σ
+from which we can infer that C'' = C'.
+
+By inverting
+  mergeable PΣ AΣ
+we also get
+  mergeable PΣₐ AΣₚ
+from which we also get all the premises we need to conclude that
+  mergeable PΣ' AΣ'
+since
+  PΣ' = SetTop(PΣₐ, tail Top(PΣₐ))
+  AΣ' = SetTop(AΣₚ, tail Top(AΣₚ))
+where tail takes the tail of a list.
+
+Hence
+  Pθ' = (C',SetTop(PΣₐ, tail Top(PΣₐ)),memₚ,reg,pc')
+  Aθ' = (C',SetTop(AΣₚ, tail Top(AΣₚ)),memₐ,  /,  /)
+which are mergeable, and
+  merge Pθ' Aθ' = (C',
+                   tail (merge PΣ AΣ),
+                   memₚ ⊎ memₐ, reg, i')
+since
+  merge PΣ AΣ = [] ++ merge PΣₐ AΣₚ = merge PΣₐ AΣₚ.
+
+We have also gathered all premises to apply rule S_Return.
+We conclude that
+  (C,merge PΣ AΣ,memₚ ⊎ memₐ, reg, pc)
+reduces to the state above, given that ∃ σ''
+  merge PΣ AΣ = σ ++ σ'' = (C', pc') :: (σ' ++ σ'').
 
 *** Action decomposition lemma
 
