@@ -1270,6 +1270,20 @@ Intuition: the same trace, where the *context* cleans all his
 ζ(Eα :: T) ≜ ζ(Eα) :: ζ(T)
 ζ(Iα :: t) ≜ Iα :: ζ(t)
 
+** State wellformedness
+
+C ∈ dom(E)
+dom(mem) = dom(E)
+Pθ = (C, PΣ, mem, reg, pc)
+—————————————————————–————
+E ⊢ Pθ well formed
+
+C ∉ dom(E)
+dom(mem) = dom(E)
+Aθ = (C, AΣ, mem, /, /)
+—————————————————————–————
+E ⊢ Aθ well formed
+
 ** State merging
 
 *** Aσ ⊆ σ
@@ -1303,7 +1317,6 @@ merge PΣ AΣ ≜
 
 mergeable PΣ AΣ
 dom(memₚ) ∩ dom(memₐ) = ∅
-C ∈ dom(memₚ)
 ——————————————————————————————————————————————————–———
 mergeable (C, PΣ, memₚ, reg, pc) (C, AΣ, memₐ, /, /)
 
@@ -1412,16 +1425,21 @@ in which t = erase(T).
 
 ∀ E Eₚ Eₐ ψ Pθ Aθ state',
   ψ well formed  ∧  ψ ⊢ E well formed  ∧  E = Eₚ ⊎ Eₐ ⇒
+  Eₚ ⊢ Pθ well formed ∧ Eₐ ⊢ Aθ well formed ⇒
   mergeable Pθ Aθ ⇒
 
   ψ; E ⊢ (merge Pθ Aθ) → state'    ⇒
 
   ∃ Pθ' Aθ'.
     state' = merge Pθ' Aθ' ∧
-                    Iα                   Iα⁻¹
-    (∃Iα. ψ; Eₚ ⊢ Pθ → Pθ'  ∧  ψ; Eₐ ⊢ Aθ → Aθ'
-     ∨              Eα                   Eα⁻¹
-     ∃Eα. ψ; Eₚ ⊢ Pθ → Aθ'  ∧  ψ; Eₐ ⊢ Aθ → Pθ')
+                    Iα                       Iα⁻¹
+    (∃Iα. ψ; Eₚ ⊢ Pθ → Pθ'      ∧  ψ; Eₐ ⊢ Aθ → Aθ'
+       ∧  Eₚ ⊢ Pθ' well formed  ∧  Eₐ ⊢ Aθ' well formed
+
+     ∨
+                    Eα                   Eα⁻¹
+     ∃Eα. ψ; Eₚ ⊢ Pθ → Aθ'  ∧  ψ; Eₐ ⊢ Aθ → Pθ'
+       ∧  Eₚ ⊢ Aθ' well formed  ∧  Eₐ ⊢ Pθ' well formed)
 
 **** Proof
 
@@ -1430,7 +1448,9 @@ Start by inverting (mergeable Pθ Aθ): ∃ C, PΣ, AΣ, memₚ, memₐ, reg, pc
   Aθ = (C, AΣ, memₐ, /, /)
   mergeable PΣ AΣ
   dom(memₚ) ∩ dom(memₐ) = ∅
-  C ∈ dom(memₚ)
+
+By the well formedness assumption on PΣ,
+  C ∈ dom(memₚ) = dom(Eₚ).
 
 Define state as:
   state ≜ merge Pθ Aθ
@@ -1444,10 +1464,11 @@ and invert the rule.
 
   These rules don't change the stack nor look at it. Neither do they
   change the current compartment. They may only change the memory of
-  the current compartment C, which lives in memₚ. Hence, by inversion,
-  ∃ mem'ₚ reg' pc'.
+  the current compartment C, which lives in memₚ by the well-formedness
+  assumption on PΣ. Hence, by inversion, ∃ mem'ₚ reg' pc'.
 
   state' = (C, merge PΣ AΣ, mem'ₚ ⊎ memₐ, reg', pc')
+  dom(mem'ₚ) = dom(memₚ)
 
   No matter the rule, one can check that we can also apply said rule
   to get that:
@@ -1466,11 +1487,78 @@ and invert the rule.
   We can trivially apply rule T_Tau- and get that:
 
              τ-
-  ψ; Eₐ ⊢ Aθ → Aθ
+  ψ; Eₐ ⊢ Aθ → Aθ.
 
   So we can take Aθ' = Aθ and get
     state' = merge Pθ' Aθ'
-  then prove left by choosing Iα = τ+.
+  then prove left by choosing Iα = τ+ (well formedness conditions are met).
+
+***** S_Call
+  By inversion, ∃ C' P'
+    state' = (C', (C, pc+1) :: merge PΣ AΣ, memₚ ⊎ memₐ, reg, (Eₚ ⊎ Eₐ)[C'][P'])
+    decode((memₚ ⊎ memₐ)[C,pc]) = Call C' P'
+    C'.P' ∈ ψ[C].import  ∨  C' = C
+
+  Component C lives in memₚ by the well formedness assumption, so
+    decode(memₚ[C,pc]) = decode((memₚ ⊎ memₐ)[C,pc]) = Call C' P'.
+
+****** Case C' ∈ dom(Eₚ) = dom(memₚ) (C' ∉ dom(Eₐ) = dom(memₐ))
+
+In this case
+  Eₚ[C'][P'] = (Eₚ ⊎ Eₐ)[C'][P'].
+
+We have all required premises to apply rule S_Call and get that ∀σ
+  ψ; Eₚ ⊢ ( C,              σ, memₚ, reg,         pc) →
+          (C', (C, pc+1) :: σ, memₚ, reg, Eₚ[C'][P'])
+which we can instantiate with σ=Top(PΣ) to get, using T_CallRetTau+, that
+         C'.P'(/) +
+  ψ; Eₚ ⊢ Pθ → Pθ'
+where
+  Pθ' = (C', SetTop(PΣ, (C, pc+1) :: Top(PΣ)), memₚ, reg, Eₚ[C'][P']).
+
+Moreover C' ∉ dom(Eₐ) since Eₐ ∩ Eₚ = ∅ follows from E = Eₐ ⊎ Eₚ.
+We have all required premises to apply rule T_Call- and get that
+        C'.P'(/) -
+  ψ; Eₐ ⊢ Aθ → Aθ'
+where
+  Aθ' = (C',SetTop(AΣ,(C,/)::Top(AΣ)),memₐ,/,/).
+
+We have all required premises to conclude that (mergeable Pθ' Aθ') and that
+  merge Pθ' Aθ' = (C',(C,pc+1)::merge PΣ AΣ,memₚ ⊎ memₐ,reg,Eₚ[C'][P'))
+                = state'.
+
+In other words we can prove left by choosing
+  Iα = C'.P'(/)+
+(well formedness conditions are met).
+
+****** Case C' ∈ dom(Eₐ) = dom(memₐ) (C' ∉ dom(Eₚ) = dom(memₚ))
+
+In this case
+  Eₐ[C'][P'] = (Eₚ ⊎ Eₐ)[C'][P'].
+
+Since C'∉ dom(Eₚ) and C, we have that C'≠C.
+Hence
+  C'.P' ∈ ψ[C].import.
+
+We have all required premises to apply rule T_Call! and get that
+         C'.P'(reg) !
+  ψ; Eₚ ⊢ Pθ → Aθ'
+where
+  Aθ' = (C', []::SetTop(PΣ, (C, pc+1)::Top(PΣ)), memₚ, /, /).
+
+We have all required premises to apply rule T_Call? and get that
+        C'.P'(reg) ?
+  ψ; Eₐ ⊢ Aθ → Pθ'
+where
+  Pθ' = (C',[]::SetTop(AΣ,(C,/)::Top(AΣ)),memₐ,reg,Eₐ[C'][P']).
+
+We have all required premises to conclude that (mergeable Pθ' Aθ') and that
+  merge Pθ' Aθ' = (C',[] ++ (C,pc+1)::merge PΣ AΣ,memₚ ⊎ memₐ,reg,Eₐ[C'][P'))
+                = state'.
+
+In other words we can prove right by choosing
+  Eα = C'.P'(reg)+
+(well formedness conditions are met).
 
 *** Action composition lemmas
 
@@ -1479,6 +1567,7 @@ and invert the rule.
 ∀ Eₚ Eₐ ψ Pθ Aθ Pθ' Aθ' Iα,
   ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
   dom(Eₚ) ∩ dom(Eₐ) = ∅ ⇒
+  Eₚ ⊢ Pθ well formed ∧ Eₐ ⊢ Aθ well formed ⇒
   mergeable Pθ Aθ       ⇒
 
              Iα
@@ -1495,6 +1584,7 @@ and invert the rule.
 ∀ Eₚ Eₐ ψ Pθ Aθ Pθ' Aθ' Eα,
   ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
   dom(Eₚ) ∩ dom(Eₐ) = ∅ ⇒
+  Eₚ ⊢ Pθ well formed ∧ Eₐ ⊢ Aθ well formed ⇒
   mergeable Pθ Aθ       ⇒
 
              Eα
@@ -1511,6 +1601,7 @@ and invert the rule.
 ∀ Eₚ Eₐ ψ Pθ Aθ Pθ' Aθ',
   ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
   dom(Eₚ) ∩ dom(Eₐ) = ∅ ⇒
+  Eₚ ⊢ Pθ well formed ∧ Eₐ ⊢ Aθ well formed ⇒
   mergeable Pθ Aθ       ⇒
 
              ✓!
@@ -1529,6 +1620,8 @@ Start by inverting (mergeable Pθ Aθ): ∃ C, PΣ, AΣ, memₚ, memₐ, reg, pc
   Aθ = (C, AΣ, memₐ, /, /)
   mergeable PΣ AΣ
   dom(memₚ) ∩ dom(memₐ) = ∅
+
+Moreover from the wellformedness condition on Pθ,
   C ∈ dom(memₚ)
 
 Define state as:
@@ -1780,6 +1873,7 @@ possible, from what we've learned by inverting T_Exit!.
 ∀ Eₚ Eₐ ψ Pθ Aθ Pθ' Aθ',
   ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
   dom(Eₚ) ∩ dom(Eₐ) = ∅ ⇒
+  Eₚ ⊢ Pθ well formed ∧ Eₐ ⊢ Aθ well formed ⇒
   mergeable Pθ Aθ       ⇒
 
              t
@@ -1794,6 +1888,7 @@ possible, from what we've learned by inverting T_Exit!.
 ∀ Eₚ Eₐ ψ Pθ Aθ Pθ' Aθ',
   ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
   dom(Eₚ) ∩ dom(Eₐ) = ∅ ⇒
+  Eₚ ⊢ Pθ well formed ∧ Eₐ ⊢ Aθ well formed ⇒
   mergeable Pθ Aθ       ⇒
 
              t
@@ -1810,6 +1905,7 @@ possible, from what we've learned by inverting T_Exit!.
 ∀ Eₚ Eₐ ψ Pθ Aθ,
   ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
   dom(Eₚ) ∩ dom(Eₐ) = ∅ ⇒
+  Eₚ ⊢ Pθ well formed ∧ Eₐ ⊢ Aθ well formed ⇒
   mergeable Pθ Aθ       ⇒
 
              Eα
@@ -1825,6 +1921,7 @@ possible, from what we've learned by inverting T_Exit!.
 ∀ Eₚ Eₐ ψ Pθ Aθ,
   ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
   dom(Eₚ) ∩ dom(Eₐ) = ∅ ⇒
+  Eₚ ⊢ Pθ well formed ∧ Eₐ ⊢ Aθ well formed ⇒
   mergeable Pθ Aθ       ⇒
 
 
@@ -1857,16 +1954,21 @@ such that
 
 ∀ E Eₚ Eₐ ψ Pθ Aθ state',
   ψ well formed  ∧  ψ ⊢ E well formed  ∧  E = Eₚ ⊎ Eₐ ⇒
+  Eₚ ⊢ Pθ well formed ∧ Eₐ ⊢ Aθ well formed ⇒
   mergeable Pθ Aθ ⇒
 
   ψ; E ⊢ (merge Pθ Aθ) →* state'    ⇒
 
   ∃ Pθ' Aθ' t.
     state' = merge Pθ' Aθ' ∧
-                 t                    t⁻¹
-    (ψ; Eₚ ⊢ Pθ ⇒ Pθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Aθ'
-     ∨           t                    t⁻¹
-     ψ; Eₚ ⊢ Pθ ⇒ Aθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Pθ')
+                   t                    t⁻¹
+    (  ψ; Eₚ ⊢ Pθ ⇒ Pθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Aθ'
+      ∧ Eₚ ⊢ Pθ' well formed ∧ Eₐ ⊢ Aθ' well formed
+  ∨
+                   t                    t⁻¹
+       ψ; Eₚ ⊢ Pθ ⇒ Aθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Pθ'
+      ∧ Eₚ ⊢ Aθ' well formed ∧ Eₐ ⊢ Pθ' well formed)
+
     ∧ (ψ; E ⊢ state' ↛   ⇒
                    t.✓!                    t⁻¹.✓?
         (ψ; Eₚ ⊢ Pθ ⇒ EXITED  ∧  ψ; Eₐ ⊢ Aθ → EXITED
