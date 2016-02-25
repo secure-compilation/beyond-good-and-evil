@@ -1,5 +1,9 @@
 
-Robust compilation
+* Robust compilation
+
+Goal: we want a (probably) weaker notion of secure compilation that
+only captures the integrity aspect of it, and leaves out the
+confidentiality aspect.
 
 * Gordon-Jeffrey:
 
@@ -42,3 +46,25 @@ with them.
 * Q: How does one define robust safety/compilation in these other settings?
 
 There are probably both intrinsic (asserts) and extrinsic (traces) ways to do it.
+
+* References
+
+Original robust safety work:
+http://ect.bell-labs.com/who/ajeffrey/papers/jcs03.pdf:
+- "We are mainly concerned not just with safety, but with safety in
+  the presence of an arbitrary hostile opponent, which we call robust
+  safety. (This use of "robust" to describe a property invariant under
+  composition with an arbitrary environment follows Grumberg and
+  Long [20])"
+
+[20] O. Grumberg and D.E. Long. Model checking and modular verification. ACM
+Transactions on Programming Languages and Systems, 16(3):843–871, 1994.
+http://www.cse.usf.edu/~zheng/lib/verification/compositional/grumberg-modular94.pdf
+
+David Swasey and Derek Dreyer ongoing work on robust safety in Iris
+(should ask them for a copy after ICFP)
+http://www.mpi-sws.org/~swasey/
+
+Quantification of Integrity. Mathematical Structures in Computer
+Science, 25(2):207-258, 2015. Michael R. Clarkson, Fred B. Schneider.
+https://www.cs.cornell.edu/~clarkson/papers/clarkson_integrity_journal.pdf
