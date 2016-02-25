@@ -1,0 +1,44 @@
+
+Robust compilation
+
+* Gordon-Jeffrey:
+
+P is robustly safe iff
+forall C. C[P] is safe
+- syntactic restriction on contexts
+  - where only P can break safety 
+  - C is assertion free -> C cannot break safety
+
+For them it could be that robust compilation is as hard to get as
+fully abstract one.
+
+They add syntactic assert statements, that prove certain (robust)
+safety properties of the program.
+
+* Our instance from CSF submission
+
+fully defined =? robustly defined
+- not simple to prevent the context 
+  + semantic dual restriction on contexts
+
+* Patrignani
+
+For them robust compilation seems much easier to obtain than full
+abstraction, since they could for instance allow pointers to be passed
+out without being turned into handlers. Distinguishing pointers
+(e.g. comparing them for equality) would probably not cause problems
+for robust compilation. At the same time they still need a way to
+preserve the integrity of pointers ... which they also achieve with
+handlers. Instead they could just cryptographically sign/MAC pointers
+or keep a big hash table with all the valid pointers that escape.
+
+* Micro-policies
+
+Robust compilation would at least save us from having to hide sizes of
+things and we can allow side- and covert-channels. Hopefully we can
+prove full abstraction without side-channels and robust compilation
+with them.
+
+* Q: How does one define robust safety/compilation in these other settings?
+
+There are probably both intrinsic (asserts) and extrinsic (traces) ways to do it.
