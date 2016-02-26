@@ -47,6 +47,11 @@ with them.
 
 There are probably both intrinsic (asserts) and extrinsic (traces) ways to do it.
 
+* Q: Does robust compilation allow refinement of non-determinism?
+
+What exactly is it about FA that prevents refinement of non-determinism?
+Would dropping the boring FA direction help with this, for instance?
+
 * References
 
 Original robust safety work:
