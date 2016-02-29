@@ -2,8 +2,86 @@
 * Robust compilation
 
 Goal: we want a (probably) weaker notion of secure compilation that
-only captures the integrity aspect of it, and leaves out the
-confidentiality aspect.
+only captures the integrity aspect of it (e.g. data invariants) and
+leaves out the confidentiality aspect. This should be easier to obtain
+and thus should reduce the enforcement overhead.
+
+* Stating robust compilation [the hard part]
+
+forall P. P  robustly safe ->
+          P↓ robustly safe
+
+forall P. (forall C. P  safe for C) ->
+          (forall c. P↓ safe for c)
+
+P safe for C  iff  C[P] is only unsafe because of C  (blame variant)
+
+All this is parameterized by notions of being "safe" at the source and
+at the target levels. There are probably both intrinsic (asserts) and
+extrinsic (traces) ways to define safety. The safety notions at the
+source and target level must "match".
+
+** TODO Intrinsic (asserts)
+** TODO Extrinsic (execution traces)
+
+P satisfies property Prop despite C
+
+** Extrinsic (state invariants, seems strictly weaker)
+
+P has invariant I despite C
+
+forall executions of C[P]:
+S₁ → S₂ → ... → Sₙ
+we have I(S₁) ∧  ... ∧ I(Sₙ)
+- where we somehow need to restrict I to the program's part of the state
+- we somehow need to port this invariant to the low level, where the
+  states are very different: so we need something like a simulation
+  relation, but only on the program's part of the state
+
+** TODO Trying to state something in terms of backward simulation
+
+Compiler ↓ is "good" if
+∃R a relation on execution states so that
+1. ∀C. (C[P],??[P↓]) ∈ R  – what should the ?? be though? C↓?
+2. ∀(S,s) ∈ R. s → s' ⇒
+   a. this is a context step and (S,s') ∈ R
+OR b. this is a program step and
+      a.1. ∃S'. S → S' and (S',s')
+      a.2. (S,s') ∈ R      – allow silent program steps?
+3. ???   – need more conditions, otherwise full relation would do?
+– Still unclear whether there is any way to force R to be sensible.
+  For instance R should only care about the program's part of state.
+  + Generally in simulation proofs the definition of R matters,
+    it's part of the statement and can't be hidden behind ∃
+– Beyond relaying on distinguishing program and context steps,
+  we only require that the context can't break R in any way
+
+This looks like at most a proof technique than like a final theorem.
+
+This might be stronger than compiler correctness
+(even in the "separate compilation" and "compositional" setting)
+
+** Stating this in terms of interaction traces
+
+If one was willing to trust some trace semantics capturing the
+interaction between the program and the context, then the property can
+be restated as:
+
+forall P. traces(P) ⊇ traces(P↓)
+
+One nice thing with this is that it seems to allow refinement of
+nondeterminism in the compiler.
+
+Another nice thing is that any properties over these interaction
+traces are clearly preserved by compilation,
+i.e. from Prop ⊇ traces(P) we directly get Prop ⊇ traces(P↓)
+[If we also look at infinite traces we might even go beyond safety
+ to arbitrary trace properties (i.e. safety + liveness)]
+
+The main problem is that I don't want to trust 2 trace semantics. So
+while this might be a nice proof technique for proving robust safety,
+I would like to avoid having this as the definition.
+
 
 * Gordon-Jeffrey:
 
@@ -13,17 +91,36 @@ forall C. C[P] is safe
   - where only P can break safety 
   - C is assertion free -> C cannot break safety
 
-For them it could be that robust compilation is as hard to get as
-fully abstract one.
+For them a whole program is safe is all asserts follow dynamically
+from the active assumes. Their type system ensures safety and robust
+safety statically. They have no compiler.
+
+In a setting like this in which integrity is obtained
+cryptographically using secret keys it could be that robust
+compilation is as hard to get as fully abstract one.
 
 They add syntactic assert statements, that prove certain (robust)
 safety properties of the program.
 
-* Our instance from CSF submission
+* One similar phenomenon from CSF submission: defined behavior
+
+Being defined is a safety property of whole source programs
+- it can be stated in terms of not reaching certain stuck states
+
+Difference to robust compilation:
+- we don't have a notion of being (un)defined in the target,
+  so "preserving defined behavior" makes no sense here
+- things could be different in CompCert, where up to a certain point
+  the intermediate languages involved will still have a notion of
+  (un)defined behavior, and the compiler steps have to preserve that
+  + undefined behavior due to the memory safety violations is probably
+    carried all the way to the target, because even the target ASM of
+    CompCert seems to use the same memory model
 
 fully defined =? robustly defined
-- not simple to prevent the context 
+- not simple to prevent the context from causing undefined behavior
   + semantic dual restriction on contexts
+- we break program-context circularity using blame
 
 * Patrignani
 
@@ -43,14 +140,25 @@ things and we can allow side- and covert-channels. Hopefully we can
 prove full abstraction without side-channels and robust compilation
 with them.
 
-* Q: How does one define robust safety/compilation in these other settings?
+We no longer need to do register cleaning, but we still need to
+restore our registers when we regain control.
 
-There are probably both intrinsic (asserts) and extrinsic (traces) ways to do it.
+* Biorthogonality
+
+The relation between this and biorthogonality is still very intriguing.
+
+Biorthogonality, Step-Indexing and Compiler Correctness
+Nick Benton, Chung-Kil Hur
+http://sf.snu.ac.kr/gil.hur/publications/realize.pdf
 
 * Q: Does robust compilation allow refinement of non-determinism?
 
 What exactly is it about FA that prevents refinement of non-determinism?
 Would dropping the boring FA direction help with this, for instance?
+
+Refinement of non-determinism seems useful for modeling implementation
+defined behaviors in the C source semantics. The alternative we would
+need now is to expose all implementation choices in the source semantics.
 
 * References
 
