@@ -1,4 +1,3 @@
-
 * Robust compilation
 
 Goal: we want a (probably) weaker notion of secure compilation that
@@ -40,9 +39,31 @@ we have I(S₁) ∧  ... ∧ I(Sₙ)
 
 ** TODO Trying to state something in terms of backward simulation
 
-Compiler ↓ is "good" if
+*** Take 3: just mapping contexts
+Compiler ↓ is "R-good" iff
+∀P. ∀c. ∃C. so that "c[P↓] R-simulates C[P]", i.e.
+1. (c[P↓],C[P]) ∈ R
+2. ∀s s' S. s → s' so that (s,S) ∈ R
+   a. (s',S) ∈ R
+   b. ∃S'. S → S' and (s',S') ∈ R
+
+The magic projection is just hidden in R, not gone, right?
+
+*** Take 2: mapping contexts + magically projecting
+Compiler ↓ is "R-good" iff
+∀c. ∃C. so that "c[P↓] R-simulates C[P]", i.e.
+1. (P↓,P) ∈ R
+2. ∀s s' S. s → s' so that (prog(s),prog(S)) ∈ R
+   a. (prog(s'),prog(S)) ∈ R
+   b. ∃S'. S → S' and (prof(s'),prog(S')) ∈ R
+- where prog(.) is a magic way to project out the program part
+  and throw away the context part
+
+*** Take 1
+Compiler ↓ is "good" iff
 ∃R a relation on execution states so that
 1. ∀C. (C[P],??[P↓]) ∈ R  – what should the ?? be though? C↓?
+                          – do we want context mapping ∀c. ... ∃C...?
 2. ∀(S,s) ∈ R. s → s' ⇒
    a. this is a context step and (S,s') ∈ R
 OR b. this is a program step and
@@ -69,7 +90,7 @@ be restated as:
 
 forall P. traces(P) ⊇ traces(P↓)
 
-One nice thing with this is that it seems to allow refinement of
+One nice thing with this is that it allows refinement of
 nondeterminism in the compiler.
 
 Another nice thing is that any properties over these interaction
@@ -82,13 +103,51 @@ The main problem is that I don't want to trust 2 trace semantics. So
 while this might be a nice proof technique for proving robust safety,
 I would like to avoid having this as the definition.
 
+So what should we require of the trace semantics to get rid of them?
+- looking at how the two trace semantics are used we probably only
+  need "soundness" for one and "completeness" for the other (although
+  it would be quite strange if we wouldn't have the dual properties too)
+- this should in any case be weaker/different than fully abstract
+  trace semantics, where they care about contextual equivalence:
+    traces(P) = traces(Q) ⇔ ∀C. C[P] ∼ C[Q]
+  http://www.mpi-sws.org/~marcopat/marcopat/Publications_files/llfatr-j.pdf
+  http://ect.bell-labs.com/who/ajeffrey/papers/esop05.pdf
+  + "soundness" and "completeness" already taken in this setting:
+    + soundness:    traces(P) ⊆ traces(Q) ⇒ ∀C. C[P]↓ ⇒ C[Q]↓
+    + completeness: (∀C. C[P]↓ ⇒ C[Q]↓)   ⇒ traces(P) ⊆ traces(Q)
+- the properties we're looking for are not relational
+- they could be related to trace decomposition and composition;
+  here are some lame attempts:
+  + t ∈ traces(P) ⇒ ∃C. t⁻¹ ∈ traces(C) and C[P] "can execute along trace t"
+  + C[P] →* S ⇒ ∃t. "corresponding to this interaction" so that
+                    t ∈ traces(P) ∧ t ∈ traces(C)
+  + one difficulty in defining these is that we don't have a "barb"
+    like termination, while in FA these are defined in terms of that
+  + a missing thing above is extracting an interaction trace from a
+    program execution
+
+Thee granularity of this is much coarser than properties that talk
+about execution traces; this might still follow from those though?
+
+* More complex context mapping? or not ...
+
+How would context mapping work for robust compilation? Say if c reads
+all of P↓'s memory, which should be intuitively allowed by our
+definition, the context C we produce has to simply guess all that
+information?
+- So our mapping of contexts needs to depend not only on the low-level
+  contexts, but also on the program P and on the whole compiler–which
+  wasn't the case for full abstraction, right???
+  - so could it be that robust compilation is in general
+    *more difficult* to prove than full abstraction?
+- wouldn't mapping interaction traces simplify this too though?
 
 * Gordon-Jeffrey:
 
 P is robustly safe iff
 forall C. C[P] is safe
 - syntactic restriction on contexts
-  - where only P can break safety 
+  - where only P can break safety
   - C is assertion free -> C cannot break safety
 
 For them a whole program is safe is all asserts follow dynamically
@@ -150,6 +209,27 @@ The relation between this and biorthogonality is still very intriguing.
 Biorthogonality, Step-Indexing and Compiler Correctness
 Nick Benton, Chung-Kil Hur
 http://sf.snu.ac.kr/gil.hur/publications/realize.pdf
+
+* Old notes (2015-09-10)
+** Exit = external observation caused only by program
+
+∀P. ∃c not including exit. c[P↓] exits ⇒
+    ∃C not including exit. C[P ] exits
+
+Not sure this is strong enough to be our property,
+but it looks like a very sensible corollary to expect.
+
+One way to instantiate this is with a program that detects its
+invariant being broken and only then aborts. This only works for
+dynamically checkable invariants though.
+
+This form of weak integrity preservation seems related to weak secrecy
+preservation in process calculi (with fresh channel creation):
+∀P. ∃c. (c | νx. P↓) outputs x ⇒
+    ∃C. (C | νx. P)  outputs x
+Here the contexts can only find out x if the program leaks it.
+
+** TODO some more ideas there (see Google doc)
 
 * Q: Does robust compilation allow refinement of non-determinism?
 
