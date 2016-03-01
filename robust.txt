@@ -5,6 +5,10 @@ only captures the integrity aspect of it (e.g. data invariants) and
 leaves out the confidentiality aspect. This should be easier to obtain
 and thus should reduce the enforcement overhead.
 
+In terms of reasoning, we want to use a (non-relational!) program
+logic to prove robust safety properties and have these properties be
+preserved by the compiler to the target level.
+
 * Stating robust compilation [the hard part]
 
 forall P. P  robustly safe ->
