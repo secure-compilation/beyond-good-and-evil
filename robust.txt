@@ -9,6 +9,17 @@ In terms of reasoning, we want to use a (non-relational!) program
 logic to prove robust safety properties and have these properties be
 preserved by the compiler to the target level.
 
+In practical terms, confidentiality is a bit of a lost cause for
+attackers running on the same machine because of side-channels. So
+robust compilation would be restricting things to the attacks we can
+actually hope to stop in practice. Generally, robust compilation
+should require doing fewer "silly things" than full abstraction, and
+thus should encounter less resistance in practice.
+
+Intuition:
+robust compilation = preservation of robust safety
+robust safety = safety despite an adversarial context
+
 * Stating robust compilation [the hard part]
 
 forall P. P  robustly safe ->
@@ -265,3 +276,7 @@ http://www.mpi-sws.org/~swasey/
 Quantification of Integrity. Mathematical Structures in Computer
 Science, 25(2):207-258, 2015. Michael R. Clarkson, Fred B. Schneider.
 https://www.cs.cornell.edu/~clarkson/papers/clarkson_integrity_journal.pdf
+
+Have a look at integrity protection in defensive JavaScript:
+http://www.defensivejs.com/
+http://www.defensivejs.com/usenixsec13.pdf
