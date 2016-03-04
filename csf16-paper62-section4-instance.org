@@ -1961,11 +1961,11 @@ such that
 
   ∃ Pθ' Aθ' t.
     state' = merge Pθ' Aθ' ∧
-                   t                    t⁻¹
+                  t                    t⁻¹
     (  ψ; Eₚ ⊢ Pθ ⇒ Pθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Aθ'
       ∧ Eₚ ⊢ Pθ' well formed ∧ Eₐ ⊢ Aθ' well formed
-  ∨
-                   t                    t⁻¹
+     ∨
+                  t                    t⁻¹
        ψ; Eₚ ⊢ Pθ ⇒ Aθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Pθ'
       ∧ Eₚ ⊢ Aθ' well formed ∧ Eₐ ⊢ Pθ' well formed)
 
@@ -1974,6 +1974,134 @@ such that
         (ψ; Eₚ ⊢ Pθ ⇒ EXITED  ∧  ψ; Eₐ ⊢ Aθ → EXITED
          ∨         t.✓?                    t⁻¹.✓!
          ψ; Eₚ ⊢ Pθ ⇒ EXITED  ∧  ψ; Eₐ ⊢ Aθ → EXITED))
+
+**** Proof
+
+***** Left hand side of ∧
+
+By induction on →*.
+
+****** Base case: reflexivity
+
+In this case
+  state' = (merge Pθ Aθ)
+hence we can choose
+  Pθ' = Pθ
+  Aθ' = Aθ
+  t = ε
+and trivially prove left by applying rule T_Refl.
+
+****** Inductive case: →*→
+Induction hypothesis gives us Pθ₀ Aθ₀ t₀ such that
+  ψ; E ⊢ (merge Pθ Aθ) →* state₀
+  ψ; E ⊢ state₀ → state'
+  state₀ = merge Pθ₀ Aθ₀ ∧
+                t₀                   t₀⁻¹
+  (  ψ; Eₚ ⊢ Pθ ⇒ Pθ₀  ∧  ψ; Eₐ ⊢ Aθ ⇒ Aθ₀
+    ∧ Eₚ ⊢ Pθ₀ well formed ∧ Eₐ ⊢ Aθ₀ well formed
+   ∨
+                t₀                   t₀⁻¹
+     ψ; Eₚ ⊢ Pθ ⇒ Aθ₀  ∧  ψ; Eₐ ⊢ Aθ ⇒ Pθ₀
+    ∧ Eₚ ⊢ Aθ₀ well formed ∧ Eₐ ⊢ Pθ₀ well formed)
+
+We proceed by case on this disjunction. The proof is similar in both
+cases.
+
+******* Left case
+
+In this case
+               t₀                   t₀⁻¹
+    ψ; Eₚ ⊢ Pθ ⇒ Pθ₀  ∧  ψ; Eₐ ⊢ Aθ ⇒ Aθ₀
+    ∧ Eₚ ⊢ Pθ₀ well formed ∧ Eₐ ⊢ Aθ₀ well formed
+
+We can apply action decomposition lemma to
+   ψ; E ⊢ state₀ → state'
+to get Pθ' Aθ' such that
+   state' = merge Pθ' Aθ'
+and
+                   Iα                        Iα⁻¹
+  (∃Iα. ψ; Eₚ ⊢ Pθ₀ → Pθ'      ∧  ψ; Eₐ ⊢ Aθ₀ → Aθ'
+     ∧  Eₚ ⊢ Pθ' well formed  ∧  Eₐ ⊢ Aθ' well formed
+
+   ∨
+                   Eα                    Eα⁻¹
+   ∃Eα. ψ; Eₚ ⊢ Pθ₀ → Aθ'  ∧  ψ; Eₐ ⊢ Aθ₀ → Pθ'
+     ∧  Eₚ ⊢ Aθ' well formed  ∧  Eₐ ⊢ Pθ' well formed).
+We proceed by case on this disjunction.
+
+In the left case, well formedness conditions
+  Eₚ ⊢ Pθ' well formed  ∧  Eₐ ⊢ Aθ' well formed
+are met.
+We can apply rule T_Internal twice to get that
+              ε
+  ψ; Eₚ ⊢ Pθ₀ ⇒ Pθ'
+              ε
+  ψ; Eₐ ⊢ Aθ₀ ⇒ Aθ'
+so we can apply rule T_Trans twice and deduce that
+                t₀                   t₀⁻¹
+     ψ; Eₚ ⊢ Pθ ⇒ Pθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Aθ'.
+Qed (we have proved left).
+
+In the right case, well formedness conditions
+  Eₚ ⊢ Aθ' well formed  ∧  Eₐ ⊢ Pθ' well formed
+are met.
+We can apply rule T_Cross twice to get that
+              Eα
+  ψ; Eₚ ⊢ Pθ₀ ⇒ Aθ'
+              Eα⁻¹
+  ψ; Eₐ ⊢ Aθ₀ ⇒ Pθ'
+so we can apply rule T_Trans twice and deduce that
+              t₀.Eα              t₀⁻¹.Eα⁻¹
+     ψ; Eₚ ⊢ Pθ ⇒ Aθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Aθ'.
+Qed (we have proved right).
+
+******* Right case
+
+In this case
+               t₀                   t₀⁻¹
+    ψ; Eₚ ⊢ Pθ ⇒ Aθ₀  ∧  ψ; Eₐ ⊢ Aθ ⇒ Pθ₀
+    ∧ Eₚ ⊢ Aθ₀ well formed ∧ Eₐ ⊢ Pθ₀ well formed
+
+We can apply action decomposition lemma to
+   ψ; E ⊢ state₀ → state'
+to get Pθ' Aθ' such that
+   state' = merge Pθ' Aθ'
+and
+                   Iα                        Iα⁻¹
+  (∃Iα. ψ; Eₐ ⊢ Pθ₀ → Pθ'      ∧  ψ; Eₚ ⊢ Aθ₀ → Aθ'
+     ∧  Eₐ ⊢ Pθ' well formed  ∧  Eₚ ⊢ Aθ' well formed
+
+   ∨
+                   Eα                    Eα⁻¹
+   ∃Eα. ψ; Eₐ ⊢ Pθ₀ → Aθ'  ∧  ψ; Eₚ ⊢ Aθ₀ → Pθ'
+     ∧  Eₐ ⊢ Aθ' well formed  ∧  Eₚ ⊢ Pθ' well formed).
+We proceed by case on this disjunction.
+
+In the left case, well formedness conditions
+  Eₐ ⊢ Pθ' well formed  ∧  Eₚ ⊢ Aθ' well formed
+are met.
+We can apply rule T_Internal twice to get that
+              ε
+  ψ; Eₐ ⊢ Pθ₀ ⇒ Pθ'
+              ε
+  ψ; Eₚ ⊢ Aθ₀ ⇒ Aθ'
+so we can apply rule T_Trans twice and deduce that
+                t₀                   t₀⁻¹
+     ψ; Eₚ ⊢ Pθ ⇒ Aθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Pθ'.
+Qed (we have proved right).
+
+In the right case, well formedness conditions
+  Eₐ ⊢ Aθ' well formed  ∧  Eₚ ⊢ Pθ' well formed
+are met.
+We can apply rule T_Cross twice to get that
+              Eα
+  ψ; Eₐ ⊢ Pθ₀ ⇒ Aθ'
+              Eα⁻¹
+  ψ; Eₚ ⊢ Aθ₀ ⇒ Pθ'
+so we can apply rule T_Trans twice and deduce that
+              t₀.Eα⁻¹            t₀⁻¹.Eα
+     ψ; Eₚ ⊢ Pθ ⇒ Pθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Aθ'.
+Qed (we have proved left).
 
 *** Definability lemma (trace mapping)
 
