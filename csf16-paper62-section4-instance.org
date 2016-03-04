@@ -1421,7 +1421,7 @@ and proofs of
   ψ; E ⊢ θ ⇒ θ'
 in which t = erase(T).
 
-*** Action decomposition lemma
+*** Non-terminating action decomposition lemma
 
 ∀ E Eₚ Eₐ ψ Pθ Aθ state',
   ψ well formed  ∧  ψ ⊢ E well formed  ∧  E = Eₚ ⊎ Eₐ ⇒
@@ -1861,10 +1861,57 @@ Inversion of T_Exit!:
 Goal: ψ; Eₚ ⊎ Eₐ ⊢ (C, merge PΣ AΣ, memₚ ⊎ memₐ, reg, pc) ↛
 
 By contradiction. Assume one of the rules of the operational semantics
-applies. In this case, we can apply action decomposition to this
-reduction and get that Pθ reduces with either an internal action or an
-external action that isn't termination. But no such reduction is
-possible, from what we've learned by inverting T_Exit!.
+applies. In this case, we can apply our non-terminating action
+decomposition lemma to this reduction and get that Pθ reduces with
+either an internal action or an external action from the program, that
+isn't termination. But no such reduction is possible, from what we've
+learned by inverting T_Exit!.
+
+*** Terminating action decomposition lemma
+
+∀ E Eₚ Eₐ ψ Pθ Aθ state',
+  ψ well formed  ∧  ψ ⊢ E well formed  ∧  E = Eₚ ⊎ Eₐ ⇒
+  Eₚ ⊢ Pθ well formed ∧ Eₐ ⊢ Aθ well formed ⇒
+  mergeable Pθ Aθ ⇒
+
+  ψ; E ⊢ (merge Pθ Aθ) ↛    ⇒
+
+             ✓!                       ✓?
+  ψ; Eₚ ⊢ Pθ → EXITED   ∧  ψ; Eₐ ⊢ Aθ → EXITED
+
+**** Proof
+
+Start by inverting (mergeable Pθ Aθ): ∃ C, PΣ, AΣ, memₚ, memₐ, reg, pc
+  Pθ = (C, PΣ, memₚ, reg, pc)
+  Aθ = (C, AΣ, memₐ, /, /)
+  mergeable PΣ AΣ
+  dom(memₚ) ∩ dom(memₐ) = ∅
+
+By the well formedness assumption on PΣ,
+  C ∈ dom(memₚ) = dom(Eₚ).
+
+Define state as:
+  state ≜ merge Pθ Aθ
+        = (C, merge PΣ AΣ, memₚ ⊎ memₐ, reg, pc)
+
+We can trivially apply T_Exit? to get that
+  ψ; Eₐ ⊢ Aθ → EXITED.
+In order to apply T_Exit! and conclude that
+             ✓!
+  ψ; Eₚ ⊢ Pθ → EXITED,
+we only have to show that
+                                     α
+  ∀ α ≠ ✓!. ψ; E ⊢ (C,PΣ,mem,reg,pc) ↛.
+
+We prove this by contradiction. Suppose such an α exists. The only
+rules that reduce a Pθ are those labeled with a program marker (! or
++). So α is an internal or external program action, which is not
+termination (since we know α ≠ ✓!). We can thus apply a
+non-terminating trace composition lemma to get Pθ' and Aθ' such that
+  ψ; E ⊢ (merge Pθ Aθ) → (merge Pθ' Aθ').
+This contradicts the hypothesis that
+  ψ; E ⊢ (merge Pθ Aθ) ↛.
+Qed.
 
 *** Trace composition lemmas
 
@@ -1900,7 +1947,7 @@ possible, from what we've learned by inverting T_Exit!.
   mergeable Pθ' Aθ' ∧
   ψ; Eₚ ⊎ Eₐ ⊢ (merge Pθ Aθ) →* (merge Pθ' Aθ')
 
-**** Terminating trace composition lemmas
+**** Terminating trace composition lemma
 
 ∀ Eₚ Eₐ ψ Pθ Aθ,
   ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
@@ -1916,7 +1963,7 @@ possible, from what we've learned by inverting T_Exit!.
 
   ∃ ρ. ψ; Eₚ ⊎ Eₐ ⊢ (merge Pθ Aθ) →* ρ ↛
 
-**** Diverging trace composition lemmas
+**** Diverging trace composition lemma
 
 ∀ Eₚ Eₐ ψ Pθ Aθ,
   ψ well formed  ∧  ψ ⊢ Eₚ well formed  ∧  ψ ⊢ Eₐ well formed ⇒
@@ -1970,32 +2017,38 @@ such that
       ∧ Eₚ ⊢ Aθ' well formed ∧ Eₐ ⊢ Pθ' well formed)
 
     ∧ (ψ; E ⊢ state' ↛   ⇒
-                   t.✓!                    t⁻¹.✓?
+                   t.✓!                  t⁻¹.✓?
         (ψ; Eₚ ⊢ Pθ ⇒ EXITED  ∧  ψ; Eₐ ⊢ Aθ → EXITED
-         ∨         t.✓?                    t⁻¹.✓!
+         ∨         t.✓?                  t⁻¹.✓!
          ψ; Eₚ ⊢ Pθ ⇒ EXITED  ∧  ψ; Eₐ ⊢ Aθ → EXITED))
 
 **** Proof
 
-***** Left hand side of ∧
-
 By induction on →*.
 
-****** Base case: reflexivity
+***** Base case: reflexivity
 
 In this case
-  state' = (merge Pθ Aθ)
-hence we can choose
+  state' = (merge Pθ Aθ).
+We can choose
   Pθ' = Pθ
   Aθ' = Aθ
-  t = ε
-and trivially prove left by applying rule T_Refl.
+  t = ε.
 
-****** Inductive case: →*→
+****** Left-hand side of ∧
+
+Prove left in the disjunction by applying rule rule T_Refl.
+
+****** Right-hand side of ∧
+
+Apply terminating action decomposition lemma.
+
+***** Inductive case: →*→
+
 Induction hypothesis gives us Pθ₀ Aθ₀ t₀ such that
   ψ; E ⊢ (merge Pθ Aθ) →* state₀
   ψ; E ⊢ state₀ → state'
-  state₀ = merge Pθ₀ Aθ₀ ∧
+  state₀ = merge Pθ₀ Aθ₀
                 t₀                   t₀⁻¹
   (  ψ; Eₚ ⊢ Pθ ⇒ Pθ₀  ∧  ψ; Eₐ ⊢ Aθ ⇒ Aθ₀
     ∧ Eₚ ⊢ Pθ₀ well formed ∧ Eₐ ⊢ Aθ₀ well formed
@@ -2004,7 +2057,20 @@ Induction hypothesis gives us Pθ₀ Aθ₀ t₀ such that
      ψ; Eₚ ⊢ Pθ ⇒ Aθ₀  ∧  ψ; Eₐ ⊢ Aθ ⇒ Pθ₀
     ∧ Eₚ ⊢ Aθ₀ well formed ∧ Eₐ ⊢ Pθ₀ well formed)
 
-We proceed by case on this disjunction. The proof is similar in both
+****** Left-hand side of ∧
+
+We show that
+  ∃ Pθ' Aθ' t.
+    state' = merge Pθ' Aθ' ∧
+                  t                    t⁻¹
+    (  ψ; Eₚ ⊢ Pθ ⇒ Pθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Aθ'
+      ∧ Eₚ ⊢ Pθ' well formed ∧ Eₐ ⊢ Aθ' well formed
+     ∨
+                  t                    t⁻¹
+       ψ; Eₚ ⊢ Pθ ⇒ Aθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Pθ'
+      ∧ Eₚ ⊢ Aθ' well formed ∧ Eₐ ⊢ Pθ' well formed).
+
+For this we proceed by case on the disjunction. The proof is similar in both
 cases.
 
 ******* Left case
@@ -2040,7 +2106,7 @@ We can apply rule T_Internal twice to get that
 so we can apply rule T_Trans twice and deduce that
                 t₀                   t₀⁻¹
      ψ; Eₚ ⊢ Pθ ⇒ Pθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Aθ'.
-Qed (we have proved left).
+Qed (we have proved left with t = t₀).
 
 In the right case, well formedness conditions
   Eₚ ⊢ Aθ' well formed  ∧  Eₐ ⊢ Pθ' well formed
@@ -2053,7 +2119,7 @@ We can apply rule T_Cross twice to get that
 so we can apply rule T_Trans twice and deduce that
               t₀.Eα              t₀⁻¹.Eα⁻¹
      ψ; Eₚ ⊢ Pθ ⇒ Aθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Aθ'.
-Qed (we have proved right).
+Qed (we have proved right with t = t₀.Eα).
 
 ******* Right case
 
@@ -2088,7 +2154,7 @@ We can apply rule T_Internal twice to get that
 so we can apply rule T_Trans twice and deduce that
                 t₀                   t₀⁻¹
      ψ; Eₚ ⊢ Pθ ⇒ Aθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Pθ'.
-Qed (we have proved right).
+Qed (we have proved right with t = t₀).
 
 In the right case, well formedness conditions
   Eₐ ⊢ Aθ' well formed  ∧  Eₚ ⊢ Pθ' well formed
@@ -2101,7 +2167,45 @@ We can apply rule T_Cross twice to get that
 so we can apply rule T_Trans twice and deduce that
               t₀.Eα⁻¹            t₀⁻¹.Eα
      ψ; Eₚ ⊢ Pθ ⇒ Pθ'  ∧  ψ; Eₐ ⊢ Aθ ⇒ Aθ'.
-Qed (we have proved left).
+Qed (we have proved left with t = t₀.Eα⁻¹).
+
+****** Right-hand side of ∧
+
+We have chosen t, Aθ', Pθ' when proving left-hand side. We now show
+that for this t,
+
+  (ψ; E ⊢ state' ↛   ⇒
+                   t.✓!                  t⁻¹.✓?
+        (ψ; Eₚ ⊢ Pθ ⇒ EXITED  ∧  ψ; Eₐ ⊢ Aθ → EXITED
+         ∨         t.✓?                  t⁻¹.✓!
+         ψ; Eₚ ⊢ Pθ ⇒ EXITED  ∧  ψ; Eₐ ⊢ Aθ → EXITED)).
+
+First, recall that we have shown that
+  state' = merge Aθ' Pθ'.
+Hence, if
+  ψ; E ⊢ state' ↛
+we have all the premises to apply terminating action decomposition and
+get that either
+             t                        t⁻¹
+  ψ; Eₚ ⊢ Pθ ⇒ Pθ'      ∧  ψ; Eₐ ⊢ Aθ ⇒ Aθ'
+  ∧
+              ✓!                       ✓?
+  ψ; Eₚ ⊢ Pθ' → EXITED  ∧  ψ; Eₐ ⊢ Aθ' → EXITED
+or
+             t                        t⁻¹
+  ψ; Eₚ ⊢ Pθ ⇒ Aθ'      ∧  ψ; Eₐ ⊢ Aθ ⇒ Pθ'
+  ∧
+              ✓?                       ✓!
+  ψ; Eₚ ⊢ Aθ' → EXITED  ∧  ψ; Eₐ ⊢ Pθ' → EXITED.
+In both cases, we can apply rules T_Cross and T_Trans and conclude
+that
+            t.✓!                   t⁻¹.✓?
+  ψ; Eₚ ⊢ Pθ ⇒ EXITED   ∧  ψ; Eₐ ⊢ Aθ ⇒ EXITED
+in the first case, and that
+            t.✓?                   t⁻¹.✓?
+  ψ; Eₚ ⊢ Pθ ⇒ EXITED   ∧  ψ; Eₐ ⊢ Aθ ⇒ EXITED
+in the second case.
+Qed.
 
 *** Definability lemma (trace mapping)
 
