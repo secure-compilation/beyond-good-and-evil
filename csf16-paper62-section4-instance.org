@@ -1274,15 +1274,63 @@ Intuition: the same trace, where the *context* cleans all his
 
 C ∈ dom(E)
 dom(mem) = dom(E)
+E ⊢ PΣ well formed
 Pθ = (C, PΣ, mem, reg, pc)
 —————————————————————–————
 E ⊢ Pθ well formed
 
 C ∉ dom(E)
 dom(mem) = dom(E)
+E ⊢ AΣ well formed
 Aθ = (C, AΣ, mem, /, /)
 —————————————————————–————
 E ⊢ Aθ well formed
+
+
+PΣ = σ
+E ⊢ σ well formed
+—————————————————————–————
+E ⊢ PΣ well formed
+
+PΣ = σ::AΣ
+Top(AΣ) = _ :: _
+E ⊢ σ well formed
+E ⊢ AΣ well formed
+—————————————————————–————
+E ⊢ PΣ well formed
+
+AΣ = Aσ
+E ⊢ Aσ well formed
+—————————————————————–————
+E ⊢ AΣ well formed
+
+AΣ = Aσ::PΣ
+Top(PΣ) = _ :: _
+E ⊢ Aσ well formed
+E ⊢ PΣ well formed
+—————————————————————–————
+E ⊢ AΣ well formed
+
+
+σ = []
+————————————–————
+E ⊢ σ well formed
+
+σ = (C, pc) :: σ'
+C ∈ dom(E)
+E ⊢ σ' well formed
+—————————————–————
+E ⊢ σ well formed
+
+Aσ = []
+————————————–————
+E ⊢ Aσ well formed
+
+Aσ = (C, /) :: Aσ'
+C ∉ dom(E)
+E ⊢ Aσ' well formed
+—————————————–————
+E ⊢ Aσ well formed
 
 ** State merging
 
@@ -1494,13 +1542,14 @@ and invert the rule.
   then prove left by choosing Iα = τ+ (well formedness conditions are met).
 
 ***** S_Call
-  By inversion, ∃ C' P'
-    state' = (C', (C, pc+1) :: merge PΣ AΣ, memₚ ⊎ memₐ, reg, (Eₚ ⊎ Eₐ)[C'][P'])
-    decode((memₚ ⊎ memₐ)[C,pc]) = Call C' P'
-    C'.P' ∈ ψ[C].import  ∨  C' = C
 
-  Component C lives in memₚ by the well formedness assumption, so
-    decode(memₚ[C,pc]) = decode((memₚ ⊎ memₐ)[C,pc]) = Call C' P'.
+By inversion, ∃ C' P'
+  state' = (C', (C, pc+1) :: merge PΣ AΣ, memₚ ⊎ memₐ, reg, (Eₚ ⊎ Eₐ)[C'][P'])
+  decode((memₚ ⊎ memₐ)[C,pc]) = Call C' P'
+  C'.P' ∈ ψ[C].import  ∨  C' = C
+
+Component C lives in memₚ by the well formedness assumption, so
+  decode(memₚ[C,pc]) = decode((memₚ ⊎ memₐ)[C,pc]) = Call C' P'.
 
 ****** Case C' ∈ dom(Eₚ) = dom(memₚ) (C' ∉ dom(Eₐ) = dom(memₐ))
 
@@ -1536,7 +1585,7 @@ In other words we can prove left by choosing
 In this case
   Eₐ[C'][P'] = (Eₚ ⊎ Eₐ)[C'][P'].
 
-Since C'∉ dom(Eₚ) and C, we have that C'≠C.
+Since C'∉ dom(Eₚ) and C∈dom(Eₚ), we have that C'≠C.
 Hence
   C'.P' ∈ ψ[C].import.
 
@@ -1553,11 +1602,79 @@ where
   Pθ' = (C',[]::SetTop(AΣ,(C,/)::Top(AΣ)),memₐ,reg,Eₐ[C'][P']).
 
 We have all required premises to conclude that (mergeable Pθ' Aθ') and that
-  merge Pθ' Aθ' = (C',[] ++ (C,pc+1)::merge PΣ AΣ,memₚ ⊎ memₐ,reg,Eₐ[C'][P'))
+  merge Pθ' Aθ' = (C',[] ++ (C,pc+1)::merge PΣ AΣ,memₚ ⊎ memₐ,reg,Eₐ[C'][P'])
                 = state'.
 
 In other words we can prove right by choosing
-  Eα = C'.P'(reg)+
+  Eα = C'.P'(reg)!
+(well formedness conditions are met).
+
+***** S_Return
+
+By inversion, ∃ C' P' σ'
+  merge PΣ AΣ = (C', i') :: σ'
+  state' = (C', σ', memₚ ⊎ memₐ, reg, i')
+  decode((memₚ ⊎ memₐ)[C,pc]) = Return
+
+Component C lives in memₚ by the well formedness assumption, so
+  decode(memₚ[C,pc]) = decode((memₚ ⊎ memₐ)[C,pc]) = Return.
+
+****** Case C' ∈ dom(Eₚ) = dom(memₚ) (C' ∉ dom(Eₐ) = dom(memₐ))
+
+In this case, it follows from the state wellformedness conditions that
+  Top(PΣ) = (C', i') :: tail Top(PΣ)
+  Top(AΣ) = (C',  /) :: tail Top(AΣ).
+
+We have all required premises to apply rule S_Return and get that ∀ σ
+  ψ; Eₚ ⊢ ( C, (C', i') :: σ, memₚ, reg, pc) →
+          (C',             σ, memₚ, reg, i')
+which we can instantiate with σ=tail Top(PΣ) to get, using
+T_CallRetTau+, that
+           Ret / +
+  ψ; Eₚ ⊢ Pθ → Pθ'
+where
+  Pθ' = (C', SetTop(PΣ, tail Top(PΣ)), memₚ, reg, i').
+
+We have all required premises to apply rule T_Ret- and get that
+           Ret / -
+  ψ; Eₐ ⊢ Aθ → Aθ'
+where
+  Aθ' = (C',SetTop(AΣ,tail Top(AΣ)),memₐ,/,/).
+
+We have all required premises to conclude that (mergeable Pθ' Aθ') and that
+  merge Pθ' Aθ' = (C',tail (merge PΣ AΣ),memₚ ⊎ memₐ,reg,i')
+                = state'.
+
+In other words we can prove left by choosing
+  Iα = Ret / +
+(well formedness conditions are met).
+
+****** Case C' ∈ dom(Eₐ) = dom(memₐ) (C' ∉ dom(Eₚ) = dom(memₚ))
+
+In this case, it follows from the state wellformedness conditions that
+  PΣ = [] :: AΣ'
+  Top(AΣ') = (C',  /) :: tail Top(AΣ')
+  AΣ = [] :: PΣ'
+  Top(PΣ') = (C', i') :: tail Top(PΣ').
+
+We have all required premises to apply rule T_Ret! and get that
+         C'.P'(reg) !
+  ψ; Eₚ ⊢ Pθ → Aθ'
+where
+  Aθ' = (C', SetTop(AΣ', tail Top(AΣ')), memₚ, /, /).
+
+We have all required premises to apply rule T_Ret? and get that
+        C'.P'(reg) ?
+  ψ; Eₐ ⊢ Aθ → Pθ'
+where
+  Pθ' = (C',SetTop(PΣ',tail Top(PΣ')),memₐ,reg,i').
+
+We have all required premises to conclude that (mergeable Pθ' Aθ') and that
+  merge Pθ' Aθ' = (C',tail (merge PΣ AΣ),memₚ ⊎ memₐ,reg,i')
+                = state'.
+
+In other words we can prove right by choosing
+  Eα = Ret reg!
 (well formedness conditions are met).
 
 *** Action composition lemmas
