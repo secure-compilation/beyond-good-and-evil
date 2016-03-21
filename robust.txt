@@ -257,7 +257,7 @@ need now is to expose all implementation choices in the source semantics.
 
 * References
 
-Original robust safety work:
+Original robust safety for protocols work by Gordon and Jeffrey:
 http://ect.bell-labs.com/who/ajeffrey/papers/jcs03.pdf:
 - "We are mainly concerned not just with safety, but with safety in
   the presence of an arbitrary hostile opponent, which we call robust
@@ -269,14 +269,25 @@ http://ect.bell-labs.com/who/ajeffrey/papers/jcs03.pdf:
 Transactions on Programming Languages and Systems, 16(3):843–871, 1994.
 http://www.cse.usf.edu/~zheng/lib/verification/compositional/grumberg-modular94.pdf
 
+Have a look at integrity protection in defensive JavaScript:
+http://www.defensivejs.com/usenixsec13.pdf
+or sections 2.2.4-2.2.6 of Antoine's thesis:
+http://antoine.delignat-lavaud.fr/doc/phd_thesis.pdf
++ independence: a function's input-output behavior is the same in
+  all contexts (this works even if F maintains state since it
+  requires that the context makes the same sequence of calls)
+  - this notion of integrity is tailored to high-level languages, and
+    a decent higher-level language would already satisfy this without
+    all the crap they need to do for JavaScript
+  - they don't have a compiler, it's all about JavaScript wrapping
+
+Un-type idea appears in more contexts, for instance JS*
+http://research.microsoft.com/en-us/um/people/nswamy/papers/js-star.pdf
+
 David Swasey and Derek Dreyer ongoing work on robust safety in Iris
-(should ask them for a copy after ICFP)
+(should ask them for a copy after CCS 2016 or POPL 2017 deadlines)
 http://www.mpi-sws.org/~swasey/
 
 Quantification of Integrity. Mathematical Structures in Computer
 Science, 25(2):207-258, 2015. Michael R. Clarkson, Fred B. Schneider.
 https://www.cs.cornell.edu/~clarkson/papers/clarkson_integrity_journal.pdf
-
-Have a look at integrity protection in defensive JavaScript:
-http://www.defensivejs.com/
-http://www.defensivejs.com/usenixsec13.pdf
