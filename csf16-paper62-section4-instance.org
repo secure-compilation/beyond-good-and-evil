@@ -31,6 +31,54 @@ procedures can of course be mutually recursive (global call stack)
 
 buffers are 2nd class
 
+** Example components that compute a factorial
+
+*** Recursive computation
+
+component factorial {
+  buff vars = { 0 }
+
+  proc main {
+    (* argument goes in vars[0] *)
+    if vars[0] <= 1 then
+      1
+    else
+      factorial.main(vars[0] - 1) * vars[0]
+  }
+}
+
+*** Using an auxiliary variable
+
+component factorial_buff {
+  buff vars = { 0, 0 } (* buffer size is static and doesn't change *)
+
+  proc main {
+    (* argument goes in vars[0] *)
+    vars[1] := 1;
+    factorial_buff.aux(vars[0])
+  }
+
+  private proc aux {
+    vars[1] := vars[1] * vars[0];
+    vars[0] := vars[0] - 1;
+    if vars[0] <= 1 then
+      vars[1]
+    else
+      factorial.aux(vars[0])
+  }
+}
+
+*** Integration in an actual program
+
+component main {
+  buff vars = { 0 }
+
+  proc main {
+    (* argument goes in vars[0] *)
+    factorial_buff.main(10)
+  }
+}
+
 ** Encoding variables with buffers
 - vars = 0                 – the first buffer used to store variables
 - x  =def  vars[x]         – variable lookup becomes buffer lookup
