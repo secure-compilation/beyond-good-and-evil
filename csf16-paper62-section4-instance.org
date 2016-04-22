@@ -1072,13 +1072,13 @@ lend: Nop
 
 ** Properties
 
-*** Separate compilation for whole programs
+*** Lemma: Separate compilation for whole programs
 
 ∀ A P s. A well formed ∧ A fully defined ∧ A ⊢ s ⇒
          P well formed ∧ P fully defined ∧ P ⊢ₙ s ⇒
   (A[P])↓ ~L A↓[P↓]
 
-*** Whole programs compiler correctness
+*** Assumption (Whole programs compiler correctness)
 
 ∀ φ. φ whole well formed ∧ φ defined ⇒
      (φ↓ terminates ⇔ φ terminates)
@@ -1104,7 +1104,7 @@ p diverges ≜
   ∀ ρ. ψ; E ⊢ I(mem,E[main][0]) →* ρ ⇒
        ∃ ρ'. ψ; E ⊢ ρ → ρ'
 
-*** Shape preservation
+*** Assumption (Shape preservation)
 
 ∀ A s. A well formed ∧ A ⊢ s ⇒
   A↓ well formed ∧ A↓ ⊢ s
