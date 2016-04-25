@@ -153,7 +153,7 @@ Definition initial_cfg (D:context) (s:state) : cfg :=
 (* ------- Definitions : small-step semantic definition ------- *)
 
 Reserved Notation "D ⊢ e '⇒' e'" (at level 40).
-Inductive smallStep : context -> cfg -> cfg -> Prop :=
+Inductive small_step : context * cfg -> context * cfg -> Prop :=
   | S_BinOp_Push : forall D C s d K e1 e2 op,
     D ⊢ (C, s, d, K, EBinop op e1 e2) ⇒
     (C, s, d, (CHoleOp op e2)::K, e1)
@@ -197,7 +197,18 @@ Inductive smallStep : context -> cfg -> cfg -> Prop :=
   | S_Return : forall D C s C' ia K d i,
     D ⊢ (C, s, (Call C' ia K)::d, [], i) ⇒
     (C', (update_state C 0 0 ia s), d, K, i)
-  where "D ⊢ e '⇒' e'" := (smallStep D e e').
+  where "D ⊢ e '⇒' e'" := (small_step (D, e) (D, e')).
+
+(* ------- Definitions : small-step multi-reduction ------- *)
+
+Inductive multi {X:Type} (R : relation X) : relation X :=
+  | multi_refl : forall (x : X), multi R x x
+  | multi_step : forall (x y z : X),
+                    R x y ->
+                    multi R y z ->
+                    multi R x z.
+
+Notation "D ⊢ e '⇒*' e'" := (multi small_step (D, e) (D, e')) (at level 40).
 
 (* _____________________________________ 
                 EXAMPLES
@@ -241,10 +252,11 @@ Definition context_fact : context :=
     (* C1 *)
     [
       (
-        IFB (LOAD 0<<EVal 0>>) THEN
+        IFB (EBinop ELeq (LOAD 0<<EVal 0>>) (EVal 1)) THEN
           EVal 1
         ELSE
-          EBinop EMul (CALL 0:::1 WITH EVal 2) (LOAD 0<<EVal 0>>)
+          EBinop EMul 
+        (CALL 1:::0 WITH (EBinop EMinus LOAD 0<<EVal 0>> (EVal 1))) (LOAD 0<<EVal 0>>)
       );
       (exit)
     ];
@@ -255,6 +267,8 @@ Definition context_fact : context :=
       (exit)
     ]
   ].
+
+Eval compute in (fetch_context 1 0 context_fact).
 
 Definition state_fact : state :=
   [ 
@@ -276,23 +290,77 @@ Definition state_fact : state :=
   ].
 
 Definition recursive_factorial : expr :=
-  IFB (LOAD 0<<EVal 0>>) THEN
-    EVal 1
-  ELSE
-    EBinop EMul 
-      (CALL 1:::0 WITH (EBinop EMinus LOAD 0<<EVal 0>> (EVal 1))) 
-      (LOAD 0<<EVal 0>>).
+  fetch_context 1 0 context_fact.
 
 Definition factorial_2 : expr :=
   CALL 1:::0 WITH EVal 2.
 
+Tactic Notation "subcompute" constr(t) :=
+  set (_x := t); compute in _x; unfold _x; clear _x.
+
 Example fact_2_eval :
-  context_fact ⊢ (1, state_fact, [], [], factorial_2) ⇒ 
-  (1, (update_state 0 0 0 2 state_fact), [], [], EVal 2).
+  context_fact ⊢ (1, state_fact, [], [], factorial_2) ⇒* 
+  (1, state_fact, [], [], EVal 2).
 Proof.
-  unfold factorial_2. unfold state_fact.
-  (* TODO *)
-Admitted.   
+  unfold factorial_2.
+  eapply multi_step. apply S_Call_Push.
+  eapply multi_step. apply S_Call_Pop. reflexivity.
+  eapply multi_step.
+    subcompute (fetch_context 1 0 context_fact).
+    apply S_If_Push.
+  eapply multi_step. apply S_BinOp_Push. 
+  eapply multi_step. apply S_Read_Push.
+  eapply multi_step. apply S_Read_Pop.
+  eapply multi_step.
+    subcompute (EVal (fetch_state 1 0 0 (update_state 1 0 0 2 state_fact))).
+    apply S_BinOp_Switch.
+  eapply multi_step. apply S_BinOp_Pop.
+  eapply multi_step. 
+    subcompute (eval_binop (ELeq, 2, 1)).
+    apply S_If_Pop_Z.
+  eapply multi_step. apply S_BinOp_Push.
+  eapply multi_step. apply S_Call_Push.
+  eapply multi_step. apply S_BinOp_Push.
+  eapply multi_step. apply S_Read_Push.
+  eapply multi_step. apply S_Read_Pop.
+  eapply multi_step. 
+    subcompute (fetch_state 1 0 0 (update_state 1 0 0 2 state_fact)).
+    apply S_BinOp_Switch.
+  eapply multi_step. apply S_BinOp_Pop.
+  eapply multi_step.
+    subcompute (eval_binop (EMinus, 2, 1)). 
+    apply S_Call_Pop. reflexivity.
+  eapply multi_step.
+    subcompute ((fetch_state 1 0 0 state_fact)).
+    subcompute (fetch_context 1 0 context_fact).
+    apply S_If_Push.
+  eapply multi_step. apply S_BinOp_Push. 
+  eapply multi_step. apply S_Read_Push.
+  eapply multi_step. apply S_Read_Pop.
+  eapply multi_step.
+    subcompute ((fetch_state 1 0 0 (update_state 1 0 0 1 (update_state 1 0 0 2 state_fact)))).
+    apply S_BinOp_Switch.
+  eapply multi_step. apply S_BinOp_Pop.
+  eapply multi_step.
+    subcompute (eval_binop (ELeq, 1, 1)).
+  apply S_If_Pop_NZ. intro H. inversion H.
+  eapply multi_step.
+    subcompute ((fetch_state 1 0 0 (update_state 1 0 0 2 state_fact))).
+    apply S_Return.
+  eapply multi_step. apply S_BinOp_Switch.
+  eapply multi_step. apply S_Read_Push.
+  eapply multi_step. apply S_Read_Pop.
+  eapply multi_step.
+    subcompute ((fetch_state 1 0 0
+       (update_state 1 0 0 2
+          (update_state 1 0 0 1
+             (update_state 1 0 0 2 state_fact))))).
+    apply S_BinOp_Pop.
+  eapply multi_step.
+    subcompute (eval_binop (EMul, 1, 2)).
+    apply S_Return.
+  simpl. apply multi_refl.
+Qed.   
 
 
 
