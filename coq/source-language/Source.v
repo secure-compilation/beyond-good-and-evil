@@ -162,7 +162,7 @@ Inductive smallStep : context -> cfg -> cfg -> Prop :=
     (C, s, d, (COpHole i1 op)::K, e2)
   | S_BinOp_Pop : forall D C s d i1 op K i2,
     D ⊢ (C, s, d, (COpHole i1 op)::K, EVal i2) ⇒
-    (C, s, d, K, (EBinop op (EVal i1) (EVal i2)))
+    (C, s, d, K, eval_binop (op, i1, i2))
   | S_If_Push : forall D C s d K e e1 e2,
     D ⊢ (C, s, d, K, (IFB e THEN e1 ELSE e2)) ⇒
     (C, s, d, (IFB □ THEN e1 ELSE e2)::K, e)
