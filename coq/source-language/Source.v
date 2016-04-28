@@ -8,6 +8,8 @@ Definition component_id := nat.
 Definition procedure_id := nat.
 Definition buffer_id := nat.
 
+(* ------- Definitions : Syntax ------- *)
+
 Inductive binop : Type :=
   | EEq
   | ELeq
@@ -33,6 +35,71 @@ Definition eval_binop (e : binop * nat * nat) : expr :=
   | (EAdd, a, b) => EVal (a+b)
   | (EMinus, a, b) => EVal (a-b)
   | (EMul, a, b) => EVal (a*b)
+  end.
+
+Definition buffer : Type := list nat.
+
+Definition component : Type := 
+  let name := nat in
+  let bnum := nat in
+  let buffers := list buffer in
+  let pnum := nat in
+  let export := nat in 
+  let procedures := list expr in
+  (name * bnum * buffers * pnum * export * procedures).
+
+Definition program : Type := list component.
+
+Definition interface : Type :=
+  let name := nat in
+  let export := nat in
+  let import := list (component_id * procedure_id) in
+  (name * export * import).
+
+Definition program_interfaces : Type := list interface.
+
+Fixpoint procsin (e:expr) : list (component_id * procedure_id) :=
+  match e with
+  | EVal i => [] 
+  | EExit => []
+  | ECall C P e => (C, P) :: (procsin e)
+  | ELoad b e => (procsin e)
+  | EBinop op e1 e2 => (procsin e1) ++ (procsin e2)
+  | EStore b e1 e2 => (procsin e1) ++ (procsin e2)
+  | EIfThenElse e e1 e2 => (procsin e) ++ (procsin e1) ++ (procsin e2)
+  end.
+
+Fixpoint filter_same_procsin_as (C : component)
+  (l : list (component_id * procedure_id)) :
+  (list (component_id * procedure_id)) :=
+  match l with
+  | [] => []
+  | h::t => 
+    match C with 
+    | (name, bnum, buffers, pnum, export, procedures) => 
+      if (beq_nat (fst h) name) then
+        filter_same_procsin_as C t
+      else
+        h :: (filter_same_procsin_as C t)
+    end
+  end.
+
+Definition extprocsin (C:component) (e:expr) :
+  list (component_id * procedure_id) :=
+  filter_same_procsin_as C (procsin e).
+
+Fixpoint generate_import (C : component)
+  (procedures : list expr) :
+  (list (component_id * procedure_id)) :=
+  match procedures with
+  | [] => []
+  | e::PS => (extprocsin C e) ++ (generate_import C PS)  
+  end.
+
+Definition interfaceof (C : component) : interface :=
+  match C with
+  | (name, bnum, buffers, pnum, export, procedures) => 
+    (name, export, generate_import C procedures)
   end.
 
 (* ------- Notations : main instructions ------- *)
