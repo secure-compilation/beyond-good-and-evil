@@ -205,13 +205,6 @@ Inductive small_step (D: context) : cfg -> cfg -> Prop :=
 
 (* ------- Definitions : small-step multi-reduction ------- *)
 
-Inductive multi {X:Type} (R : relation X) : relation X :=
-  | multi_refl : forall (x : X), multi R x x
-  | multi_step : forall (x y z : X),
-                    R x y ->
-                    multi R y z ->
-                    multi R x z.
-
 Notation "D ⊢ e '⇒*' e'" := (multi (small_step D) e e') (at level 40).
 
 
@@ -428,7 +421,7 @@ Qed.
 
 (* ---- Computational/Relational evaluation equivalence ---- *)
 
-Lemma eval_cfg_1step: 
+Lemma eval_cfg_1step : 
   forall (D:context) (c : cfg),
   (final_cfg c \/ D ⊢ c ⇒ eval_cfg D c 1).
 Proof.
@@ -574,19 +567,64 @@ Proof.
   { apply smallstep_implies_evalcfg. }
 Qed.
 
-(* ---- Determinism of evaluations ---- *)
+(* ---- Determinism of small-step evaluation ---- *)
 
 Theorem smallstep_deterministic :
-  forall (D:context) (c a b : cfg),
-  (D ⊢ c ⇒ a) -> (D ⊢ c ⇒ b) -> a = b.
+  forall D, deterministic (small_step D).
 Proof.
+  unfold deterministic.
   intros D c a b H0 H1.
   pose (smallstep_eval_1step D c a H0) as H0'.
   pose (smallstep_eval_1step D c b H1) as H1'.
   rewrite <- H0'. rewrite <- H1'. reflexivity.
 Qed.
 
+(* ---- Strong progress ---- *)
 
+Theorem smallstep_strongprogress :
+  forall c D, final_cfg c \/ exists c', D ⊢ c ⇒ c'.
+Proof.
+  intros. 
+  pose (eval_cfg_1step D c) as lemma.
+  destruct lemma.
+  Case "left".
+    left. apply H.
+  Case "right".
+    right. exists (eval_cfg D c 1).
+    apply H.
+Qed.
+
+(* ---- Normal forms ---- *)
+
+Definition normal_form {X:Type} (R:relation X) (t:X) : Prop :=
+  ~ exists t', R t t'.
+
+Theorem finalcfg_normalform_equivalence :
+  forall c D, final_cfg c <-> normal_form (small_step D) c.
+Proof.
+  intros. split.
+  Case "->".
+  { intro H. unfold normal_form. inversion H.
+    SCase "final value".
+      intro contra. destruct contra.
+      inversion H1.
+    SCase "final exit".
+      intro contra. destruct contra.
+      inversion H1.
+  }
+  Case "<-".
+  { intro H. unfold normal_form in H.
+    unfold not in H.
+    assert (final_cfg c \/ (exists c' : cfg, D ⊢ c ⇒ c')).
+      apply smallstep_strongprogress.
+    destruct H0.
+    SCase "left".
+      apply H0.
+    SCase "right".
+      apply H in H0.
+      contradiction.
+  }
+Qed.
 
 
 
