@@ -4,9 +4,9 @@ Require Export SfLib.
                   SYNTAX  
    _____________________________________ *)
 
-Definition component := nat.
-Definition procedure := nat.
-Definition buffer := nat.
+Definition component_id := nat.
+Definition procedure_id := nat.
+Definition buffer_id := nat.
 
 Inductive binop : Type :=
   | EEq
@@ -20,9 +20,9 @@ Inductive expr : Type :=
   | EVal : nat -> expr (* i *)
   | EBinop : binop -> expr -> expr -> expr (* e₁ ⊗ e₂ *)
   | EIfThenElse : expr -> expr -> expr -> expr (* if e then e₁ else e₂ *)
-  | ELoad : buffer -> expr -> expr (* b[e] *)
-  | EStore : buffer -> expr -> expr -> expr (* b[e] := e *)
-  | ECall : component -> procedure -> expr -> expr (* C.P(e) *)
+  | ELoad : buffer_id -> expr -> expr (* b[e] *)
+  | EStore : buffer_id -> expr -> expr -> expr (* b[e] := e *)
+  | ECall : component_id -> procedure_id -> expr -> expr (* C.P(e) *)
   | EExit : expr. (* exit *)
 
 Definition eval_binop (e : binop * nat * nat) : expr :=
@@ -90,7 +90,7 @@ Definition continuations :=
   list flatevalcon.
 
 Inductive call : Type :=
-  | Call : component -> nat -> continuations -> call.
+  | Call : component_id -> nat -> continuations -> call.
 
 Definition callStack :=
   list call.
@@ -98,7 +98,7 @@ Definition callStack :=
 Definition state :=
   list (list (list nat)).
 
-Definition fetch_state (C:component) (b:buffer) (i:nat) (s:state) :=
+Definition fetch_state (C:component_id) (b:buffer_id) (i:nat) (s:state) :=
   nth i (nth b (nth C s []) []) 0.
 
 Fixpoint update_value
@@ -111,8 +111,8 @@ Fixpoint update_value
             end
   end.
 
-Fixpoint update_buffer 
-  (b:buffer) (i:nat) (i':nat) (l:list (list nat)) : list (list nat) :=
+Fixpoint update_buffer
+  (b:buffer_id) (i:nat) (i':nat) (l:list (list nat)) : list (list nat) :=
   match l with
   | [] => []
   | h::t => match b with
@@ -122,7 +122,7 @@ Fixpoint update_buffer
   end.
 
 Fixpoint update_component
-  (C:component) (b:buffer) (i:nat) (i':nat) (s:state) : state :=
+  (C:component_id) (b:buffer_id) (i:nat) (i':nat) (s:state) : state :=
   match s with
   | [] => []
   | h::t => match C with
@@ -132,17 +132,17 @@ Fixpoint update_component
   end.
 
 Definition update_state
-  (C:component) (b:buffer) (i:nat) (i':nat) (s:state) : state :=
+  (C:component_id) (b:buffer_id) (i:nat) (i':nat) (s:state) : state :=
   update_component C b i i' s.
 
 Definition cfg : Type :=
-  component * state * callStack * continuations * expr.
+  component_id * state * callStack * continuations * expr.
 
 Definition context :=
   list (list expr).
 
 Definition fetch_context 
-  (C':component) (P':procedure) (D:context) : expr :=
+  (C':component_id) (P':procedure_id) (D:context) : expr :=
   nth P' (nth C' D []) exit.
 
 Definition main_cid := 0.
