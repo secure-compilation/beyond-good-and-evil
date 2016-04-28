@@ -157,51 +157,51 @@ Inductive final_cfg : cfg -> Prop :=
 (* ------- Definitions : small-step semantic definition ------- *)
 
 Reserved Notation "D ⊢ e '⇒' e'" (at level 40).
-Inductive small_step : context * cfg -> context * cfg -> Prop :=
-  | S_BinOp_Push : forall D C s d K e1 e2 op,
+Inductive small_step (D: context) : cfg -> cfg -> Prop :=
+  | S_BinOp_Push : forall C s d K e1 e2 op,
     D ⊢ (C, s, d, K, EBinop op e1 e2) ⇒
     (C, s, d, (CHoleOp op e2)::K, e1)
-  | S_BinOp_Switch : forall D C s d e2 K i1 op,
+  | S_BinOp_Switch : forall C s d e2 K i1 op,
     D ⊢ (C, s, d, (CHoleOp op e2)::K, EVal i1) ⇒
     (C, s, d, (COpHole i1 op)::K, e2)
-  | S_BinOp_Pop : forall D C s d i1 op K i2,
+  | S_BinOp_Pop : forall C s d i1 op K i2,
     D ⊢ (C, s, d, (COpHole i1 op)::K, EVal i2) ⇒
     (C, s, d, K, eval_binop (op, i1, i2))
-  | S_If_Push : forall D C s d K e e1 e2,
+  | S_If_Push : forall C s d K e e1 e2,
     D ⊢ (C, s, d, K, (IFB e THEN e1 ELSE e2)) ⇒
     (C, s, d, (IFB □ THEN e1 ELSE e2)::K, e)
-  | S_If_Pop_NZ : forall D C s d K e1 e2 i,
+  | S_If_Pop_NZ : forall C s d K e1 e2 i,
     ~(i=0) -> D ⊢ (C, s, d, (IFB □ THEN e1 ELSE e2)::K, EVal i) ⇒
     (C, s, d, K, e1)
-  | S_If_Pop_Z : forall D C s d e1 e2 K,
+  | S_If_Pop_Z : forall C s d e1 e2 K,
     D ⊢ (C, s, d, (IFB □ THEN e1 ELSE e2)::K, EVal 0) ⇒
     (C, s, d, K, e2)
-  | S_Read_Push : forall D C s d K b e,
+  | S_Read_Push : forall C s d K b e,
     D ⊢ (C, s, d, K, ELoad b e) ⇒
     (C, s, d, (CHoleLoad b)::K, e)
-  | S_Read_Pop : forall D C s d b K i,
+  | S_Read_Pop : forall C s d b K i,
     D ⊢ (C, s, d, (CHoleLoad b)::K, EVal i) ⇒
     (C, s, d, K, EVal (fetch_state C b i s))
-  | S_Write_Push : forall D C s d K b e1 e2,
+  | S_Write_Push : forall C s d K b e1 e2,
     D ⊢ (C, s, d, K, EStore b e1 e2) ⇒
     (C, s, d, (CHoleStore b e2)::K, e1)
-  | S_Write_Swap : forall D C s d b e2 K i,
+  | S_Write_Swap : forall C s d b e2 K i,
     D ⊢ (C, s, d, (CHoleStore b e2)::K, EVal i) ⇒
     (C, s, d, (CStoreHole b i)::K, e2)
-  | S_Write_Pop : forall D C s d b i K i',
+  | S_Write_Pop : forall C s d b i K i',
     D ⊢ (C, s, d, (CStoreHole b i)::K, EVal i') ⇒
     (C, (update_state C b i i' s), d, K, EVal i')
-  | S_Call_Push : forall D C s d K C' P' e,
+  | S_Call_Push : forall C s d K C' P' e,
     D ⊢ (C, s, d, K, ECall C' P' e) ⇒
     (C, s, d, (CCallHole C' P')::K, e)
-  | S_Call_Pop : forall D C' P' ep C s d K ia,
+  | S_Call_Pop : forall C' P' ep C s d K ia,
     (fetch_context C' P' D) = ep ->     
     D ⊢ (C, s, d, (CCallHole C' P')::K, EVal ia) ⇒
     (C', (update_state C' 0 0 ia s), (Call C (fetch_state C 0 0 s) K)::d, [], ep)
-  | S_Return : forall D C s C' ia K d i,
-    D ⊢ (C, s, (Call C' ia K)::d, [], i) ⇒
-    (C', (update_state C' 0 0 ia s), d, K, i)
-  where "D ⊢ e '⇒' e'" := (small_step (D, e) (D, e')).
+  | S_Return : forall C s C' ia K d i,
+    D ⊢ (C, s, (Call C' ia K)::d, [], EVal i) ⇒
+    (C', (update_state C' 0 0 ia s), d, K, EVal i)
+  where "D ⊢ e '⇒' e'" := (small_step D e e').
 
 (* ------- Definitions : small-step multi-reduction ------- *)
 
@@ -217,7 +217,7 @@ Inductive multi {X:Type} (R : relation X) : relation X :=
 Proof.
 Admitted.*)
 
-Notation "D ⊢ e '⇒*' e'" := (multi small_step (D, e) (D, e')) (at level 40).
+Notation "D ⊢ e '⇒*' e'" := (multi (small_step D) e e') (at level 40).
 
 (* _____________________________________ 
            EVALUATION FUNCTION
@@ -450,7 +450,7 @@ Proof.
   try reflexivity.
 Qed.
 
-Lemma final_become_final :
+Lemma final_becomes_final :
   forall D n c,
   final_cfg c -> (eval_cfg D c n = c).  
 Proof.
@@ -491,14 +491,14 @@ Proof.
     destruct e;
     destruct d; destruct K; 
     try (destruct f); try (destruct c as [C' i' K']);
-    try (apply final_become_final; try (apply final_value);
+    try (apply final_becomes_final; try (apply final_value);
     try (destruct d; destruct K; constructor));
     try (simpl; reflexivity);
     try (constructor).
   }
 Qed.
 
-Theorem smallstep_implies_evalcfg :
+Theorem evalcfg_implies_smallstep :
   forall (i: nat) (D:context) (c : cfg),
   (D ⊢ c ⇒* (eval_cfg D c i)).
 Proof.
@@ -514,18 +514,55 @@ Proof.
       inversion H;
       SCase "final cfg";
         try (
-          simpl; rewrite final_become_final;
+          simpl; rewrite final_becomes_final;
           try (apply multi_refl); apply final_value
         );
         destruct d;
         [destruct K| ];
-        simpl; rewrite final_become_final;
+        simpl; rewrite final_becomes_final;
         try (apply multi_refl); apply final_exit.
       SCase "evaluable".
         eapply multi_step.
         apply H.
         apply IHi'.
     }
+Qed.
+
+Lemma smallstep_eval_1step :
+  forall (D:context) (c c' : cfg),
+  (D ⊢ c ⇒ c') -> eval_cfg D c 1 = c'.
+Proof.
+  intros D c c' H.
+  destruct H;
+  try destruct d;
+  try destruct K;
+  try destruct f;
+  try destruct c;
+  try destruct i;
+  try reflexivity;
+  try (now contradiction H);
+  try (
+    unfold eval_cfg;
+    unfold basic_eval_cfg;
+    rewrite H; reflexivity
+  ).
+Qed.
+
+Theorem smallstep_implies_evalcfg :
+  forall (D:context) (c c' : cfg),
+  (D ⊢ c ⇒* c') -> (exists i, eval_cfg D c i = c').
+Proof.
+  intros.
+  induction H.
+  Case "multi_refl".
+  { exists 0. reflexivity. }
+  Case "multi_step".
+  { destruct IHmulti.
+    apply smallstep_eval_1step in H.
+    exists (1+x0).
+    rewrite <- eval_cfg_Sn_steps.
+    rewrite H. apply H1.
+  }
 Qed.
 
 Theorem smallstep_evalcfg_equivalence :
@@ -535,12 +572,10 @@ Proof.
   intros. split.
   Case "->".
   { intro H; inversion H; clear H.
-    rewrite <- H0. apply smallstep_implies_evalcfg.
+    rewrite <- H0. apply evalcfg_implies_smallstep.
   }
   Case "<-".
-  { intro H.
-    
-  }
+  { apply smallstep_implies_evalcfg. }
 Qed.
 
 
