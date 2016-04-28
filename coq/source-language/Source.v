@@ -150,6 +150,10 @@ Definition main_cid := 0.
 Definition initial_cfg (D:context) (s:state) : cfg :=
   (main_cid, (update_state main_cid 0 0 0 s), [], [], (fetch_context main_cid 0 D)).
 
+Inductive final_cfg : cfg -> Prop :=
+  | final_value : forall C s i, final_cfg (C, s, [], [], EVal i)
+  | final_exit  : forall C s d K, final_cfg (C, s, d, K, EExit). 
+
 (* ------- Definitions : small-step semantic definition ------- *)
 
 Reserved Notation "D ⊢ e '⇒' e'" (at level 40).
@@ -196,7 +200,7 @@ Inductive small_step : context * cfg -> context * cfg -> Prop :=
     (C', (update_state C' 0 0 ia s), (Call C (fetch_state C 0 0 s) K)::d, [], ep)
   | S_Return : forall D C s C' ia K d i,
     D ⊢ (C, s, (Call C' ia K)::d, [], i) ⇒
-    (C', (update_state C 0 0 ia s), d, K, i)
+    (C', (update_state C' 0 0 ia s), d, K, i)
   where "D ⊢ e '⇒' e'" := (small_step (D, e) (D, e')).
 
 (* ------- Definitions : small-step multi-reduction ------- *)
@@ -208,10 +212,66 @@ Inductive multi {X:Type} (R : relation X) : relation X :=
                     multi R y z ->
                     multi R x z.
 
+(*Lemma multi_steps_step {X:Type} (R : relation X) :
+  forall (x y z : X), multi R x y -> R y z -> multi R x z.
+Proof.
+Admitted.*)
+
 Notation "D ⊢ e '⇒*' e'" := (multi small_step (D, e) (D, e')) (at level 40).
 
 (* _____________________________________ 
-                EXAMPLES
+           EVALUATION FUNCTION
+   _____________________________________ *)
+
+Definition basic_eval_cfg (D:context) (c:cfg) : cfg :=
+  match c with
+  | (C, s, d, K, EBinop op e1 e2) => 
+    (C, s, d, (CHoleOp op e2) :: K, e1)
+  | (C, s, d, (CHoleOp op e2) :: K, EVal i1) =>
+    (C, s, d, (COpHole i1 op) :: K, e2)
+  | (C, s, d, (COpHole i1 op) :: K, EVal i2) =>
+    (C, s, d, K, (eval_binop (op, i1, i2)))
+  | (C, s, d, K, (EIfThenElse e1 e2 e3)) =>
+    (C, s, d, (CIfHoleThenElse e2 e3) :: K, e1)
+  | (C, s, d, (CIfHoleThenElse e2 e3) :: K, EVal 0) =>
+    (C, s, d, K, e3)
+  | (C, s, d, (CIfHoleThenElse e2 e3) :: K, EVal _) =>
+    (C, s, d, K, e2)
+  | (C, s, d, K, (ELoad b e)) =>
+    (C, s, d, (CHoleLoad b) :: K, e)
+  | (C, s, d, (CHoleLoad b) :: K, EVal i) =>
+    (C, s, d, K, EVal (fetch_state C b i s))
+  | (C, s, d, K, (EStore b e1 e2)) =>
+    (C, s, d, (CHoleStore b e2) :: K, e1)
+  | (C, s, d, (CHoleStore b e2) :: K, EVal i1) =>
+    (C, s, d, (CStoreHole b i1) :: K, e2)
+  | (C, s, d, (CStoreHole b i1) :: K, EVal i2) =>
+    (C, update_state C b i1 i2 s, d, K, EVal i2)
+  | (C, s, d, K, (ECall C' P' e)) =>
+    (C, s, d, (CCallHole C' P') :: K, e)
+  | (C, s, d, (CCallHole C' P') :: K, EVal i) =>
+    (C', (update_state C' 0 0 i s), ((Call C (fetch_state C 0 0 s) K) :: d), [], (fetch_context C' P' D))
+  | (C, s, (Call C' ia K) :: d', [], EVal i) =>
+    (C', update_state C' 0 0 ia s, d', K, EVal i)
+  | (_, _, [], [], EVal _) => c
+  | (_, _, _, _, EExit) => c
+  end.
+
+(* We define a maximum number of reductions because we can write
+infinite recursion and Coq doesn't allows non-terminating functions*)
+Fixpoint eval_cfg (D:context) (c:cfg) (limit:nat) : cfg :=
+  match limit with
+  | 0 => c
+  | S n => 
+    match c with
+    | (_, _, [], [], EVal _) => c
+    | (_, _, _, _, EExit) => c
+    | c' => eval_cfg D (basic_eval_cfg D c') n
+    end
+  end.
+
+(* _____________________________________ 
+       EXAMPLES / SANITY CHECKING
    _____________________________________ *)
 
 (* ------- Fetch state ------- *)
@@ -298,6 +358,8 @@ Definition factorial_2 : expr :=
 Tactic Notation "subcompute" constr(t) :=
   set (_x := t); compute in _x; unfold _x; clear _x.
 
+Eval compute in (eval_cfg context_fact (1, state_fact, [], [], factorial_2) 1000).
+
 Example fact_2_eval :
   context_fact ⊢ (1, state_fact, [], [], factorial_2) ⇒* 
   (1, state_fact, [], [], EVal 2).
@@ -362,6 +424,124 @@ Proof.
   simpl. apply multi_refl.
 Qed.   
 
+(* _____________________________________ 
+                PROOFS
+   _____________________________________ *)
+
+(* ---- Computational/Relational evaluation equivalence ---- *)
+
+(* Hypothesis final_decidable: forall c, final_cfg c \/ ~ (final_cfg c). *)
+
+Lemma eval_cfg_1step: 
+  forall (D:context) (c : cfg),
+  (final_cfg c \/ D ⊢ c ⇒ eval_cfg D c 1).
+Proof.
+  intros.
+  destruct c as [[[[C s] d] K] e].
+  destruct e;
+  destruct d as [|call d'];
+  destruct K as [|k K'];
+  try (left; constructor);
+  try (destruct k);
+  try (destruct call);
+  try (destruct n);
+  try (right; constructor);
+  try (intro contra; inversion contra);
+  try reflexivity.
+Qed.
+
+Lemma final_become_final :
+  forall D n c,
+  final_cfg c -> (eval_cfg D c n = c).  
+Proof.
+  intros.
+  inversion H.
+  Case "value".
+    induction n as [|n']; simpl; reflexivity.
+  Case "exit".
+    induction n as [|n'].
+    SCase "n = 0".
+      simpl. reflexivity.
+    SCase "n = S n'".
+      destruct d; destruct K; reflexivity.
+Qed.
+
+Lemma eval_cfg_Sn_steps : 
+  forall D c n,
+  eval_cfg D (eval_cfg D c 1) n = eval_cfg D c (S n).
+Proof.
+  intros.
+  pose (eval_cfg_1step D c) as lemma_1step.
+  destruct lemma_1step.
+  Case "final_cfg".
+  { inversion H.
+    SCase "final_value".
+      induction n as [|n']; simpl; reflexivity.
+    SCase "final_exit".
+      induction n as [|n'].
+      SSCase "n = 0".
+        simpl; reflexivity.
+      SSCase "n = S n'".
+        destruct d;
+        destruct K;
+        repeat (simpl; reflexivity).
+  }
+  Case "non-final".
+  { induction c as [[[[C s] d] K] e].
+    destruct e;
+    destruct d; destruct K; 
+    try (destruct f); try (destruct c as [C' i' K']);
+    try (apply final_become_final; try (apply final_value);
+    try (destruct d; destruct K; constructor));
+    try (simpl; reflexivity);
+    try (constructor).
+  }
+Qed.
+
+Theorem smallstep_implies_evalcfg :
+  forall (i: nat) (D:context) (c : cfg),
+  (D ⊢ c ⇒* (eval_cfg D c i)).
+Proof.
+  intros i D.
+  induction i as [| i'].
+  Case "i = 0".  
+    { intros c. simpl. apply multi_refl. } 
+  Case "i = S i'". 
+    { intros c.
+      rewrite <- (eval_cfg_Sn_steps D c i').
+      pose (eval_cfg_1step D c) as lemma.
+      destruct lemma.
+      inversion H;
+      SCase "final cfg";
+        try (
+          simpl; rewrite final_become_final;
+          try (apply multi_refl); apply final_value
+        );
+        destruct d;
+        [destruct K| ];
+        simpl; rewrite final_become_final;
+        try (apply multi_refl); apply final_exit.
+      SCase "evaluable".
+        eapply multi_step.
+        apply H.
+        apply IHi'.
+    }
+Qed.
+
+Theorem smallstep_evalcfg_equivalence :
+  forall (D:context) (c c' : cfg),
+  (exists i, eval_cfg D c i = c') <-> (D ⊢ c ⇒* c'). 
+Proof.
+  intros. split.
+  Case "->".
+  { intro H; inversion H; clear H.
+    rewrite <- H0. apply smallstep_implies_evalcfg.
+  }
+  Case "<-".
+  { intro H.
+    
+  }
+Qed.
 
 
 
