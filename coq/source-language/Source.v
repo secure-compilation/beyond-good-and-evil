@@ -212,12 +212,8 @@ Inductive multi {X:Type} (R : relation X) : relation X :=
                     multi R y z ->
                     multi R x z.
 
-(*Lemma multi_steps_step {X:Type} (R : relation X) :
-  forall (x y z : X), multi R x y -> R y z -> multi R x z.
-Proof.
-Admitted.*)
-
 Notation "D ⊢ e '⇒*' e'" := (multi (small_step D) e e') (at level 40).
+
 
 (* _____________________________________ 
            EVALUATION FUNCTION
@@ -269,6 +265,7 @@ Fixpoint eval_cfg (D:context) (c:cfg) (limit:nat) : cfg :=
     | c' => eval_cfg D (basic_eval_cfg D c') n
     end
   end.
+
 
 (* _____________________________________ 
        EXAMPLES / SANITY CHECKING
@@ -424,13 +421,12 @@ Proof.
   simpl. apply multi_refl.
 Qed.   
 
+
 (* _____________________________________ 
                 PROOFS
    _____________________________________ *)
 
 (* ---- Computational/Relational evaluation equivalence ---- *)
-
-(* Hypothesis final_decidable: forall c, final_cfg c \/ ~ (final_cfg c). *)
 
 Lemma eval_cfg_1step: 
   forall (D:context) (c : cfg),
@@ -578,9 +574,17 @@ Proof.
   { apply smallstep_implies_evalcfg. }
 Qed.
 
+(* ---- Determinism of evaluations ---- *)
 
-
-
+Theorem smallstep_deterministic :
+  forall (D:context) (c a b : cfg),
+  (D ⊢ c ⇒ a) -> (D ⊢ c ⇒ b) -> a = b.
+Proof.
+  intros D c a b H0 H1.
+  pose (smallstep_eval_1step D c a H0) as H0'.
+  pose (smallstep_eval_1step D c b H1) as H1'.
+  rewrite <- H0'. rewrite <- H1'. reflexivity.
+Qed.
 
 
 
