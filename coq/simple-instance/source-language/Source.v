@@ -38,6 +38,7 @@ Definition eval_binop (e : binop * nat * nat) : expr :=
   end.
 
 Definition buffer : Type := list nat.
+Definition procedure : Type := expr.
 
 Definition component : Type := 
   let name := nat in
@@ -45,7 +46,7 @@ Definition component : Type :=
   let buffers := list buffer in
   let pnum := nat in
   let export := nat in 
-  let procedures := list expr in
+  let procedures := list procedure in
   (name * bnum * buffers * pnum * export * procedures).
 
 Definition program : Type := list component.
@@ -55,6 +56,11 @@ Definition interface : Type :=
   let export := nat in
   let import := list (component_id * procedure_id) in
   (name * export * import).
+
+Definition get_import (i:interface) : list (component_id * procedure_id) :=
+  match i with
+  | (name, export, import) => import
+  end.
 
 Definition program_interfaces : Type := list interface.
 
@@ -225,46 +231,60 @@ Inductive final_cfg : cfg -> Prop :=
 
 Reserved Notation "D ⊢ e '⇒' e'" (at level 40).
 Inductive small_step (D: context) : cfg -> cfg -> Prop :=
+  (* S_BinOp_Push *)
   | S_BinOp_Push : forall C s d K e1 e2 op,
     D ⊢ (C, s, d, K, EBinop op e1 e2) ⇒
     (C, s, d, (CHoleOp op e2)::K, e1)
+  (* S_BinOp_Switch *)
   | S_BinOp_Switch : forall C s d e2 K i1 op,
     D ⊢ (C, s, d, (CHoleOp op e2)::K, EVal i1) ⇒
     (C, s, d, (COpHole i1 op)::K, e2)
+  (* S_BinOp_Pop *)
   | S_BinOp_Pop : forall C s d i1 op K i2,
     D ⊢ (C, s, d, (COpHole i1 op)::K, EVal i2) ⇒
     (C, s, d, K, eval_binop (op, i1, i2))
+  (* S_If_Push *)
   | S_If_Push : forall C s d K e e1 e2,
     D ⊢ (C, s, d, K, (IFB e THEN e1 ELSE e2)) ⇒
     (C, s, d, (IFB □ THEN e1 ELSE e2)::K, e)
+  (* S_If_Pop_NZ *)
   | S_If_Pop_NZ : forall C s d K e1 e2 i,
     ~(i=0) -> D ⊢ (C, s, d, (IFB □ THEN e1 ELSE e2)::K, EVal i) ⇒
     (C, s, d, K, e1)
+  (* S_If_Pop_Z *)
   | S_If_Pop_Z : forall C s d e1 e2 K,
     D ⊢ (C, s, d, (IFB □ THEN e1 ELSE e2)::K, EVal 0) ⇒
     (C, s, d, K, e2)
+  (* S_Read_Push *)
   | S_Read_Push : forall C s d K b e,
     D ⊢ (C, s, d, K, ELoad b e) ⇒
     (C, s, d, (CHoleLoad b)::K, e)
+  (* S_Read_Pop *)
   | S_Read_Pop : forall C s d b K i,
     D ⊢ (C, s, d, (CHoleLoad b)::K, EVal i) ⇒
     (C, s, d, K, EVal (fetch_state C b i s))
+  (* S_Write_Push *)
   | S_Write_Push : forall C s d K b e1 e2,
     D ⊢ (C, s, d, K, EStore b e1 e2) ⇒
     (C, s, d, (CHoleStore b e2)::K, e1)
+  (* S_Write_Swap *)
   | S_Write_Swap : forall C s d b e2 K i,
     D ⊢ (C, s, d, (CHoleStore b e2)::K, EVal i) ⇒
     (C, s, d, (CStoreHole b i)::K, e2)
+  (* S_Write_Pop *)
   | S_Write_Pop : forall C s d b i K i',
     D ⊢ (C, s, d, (CStoreHole b i)::K, EVal i') ⇒
     (C, (update_state C b i i' s), d, K, EVal i')
+  (* S_Call_Push *)
   | S_Call_Push : forall C s d K C' P' e,
     D ⊢ (C, s, d, K, ECall C' P' e) ⇒
     (C, s, d, (CCallHole C' P')::K, e)
+  (* S_Call_Pop *)
   | S_Call_Pop : forall C' P' ep C s d K ia,
     (fetch_context C' P' D) = ep ->     
     D ⊢ (C, s, d, (CCallHole C' P')::K, EVal ia) ⇒
     (C', (update_state C' 0 0 ia s), (Call C (fetch_state C 0 0 s) K)::d, [], ep)
+  (* S_Return *)
   | S_Return : forall C s C' ia K d i,
     D ⊢ (C, s, (Call C' ia K)::d, [], EVal i) ⇒
     (C', (update_state C' 0 0 ia s), d, K, EVal i)
