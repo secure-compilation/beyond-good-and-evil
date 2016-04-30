@@ -506,6 +506,15 @@ wfinv(φ) ::= Γ where
   φ = {κ₀, ..., κₙ}
   Γ = {wfinv(κ₀), ..., wfinv(κₙ)}
 
+*** Well-formedness of expressions: ι; η ⊢ e well formed
+
+extprocsin(ι.name, e) ⊆ ι.import                 – all used external procedures are imported
+∀(_.P ∈ intprocsin(ι.name, e)). P ∈ [0, η.pnum)  – all used internal procedures are defined
+bufsin(e) ⊆ [0,η.bnum)                           – all used buffers are defined
+———————————————————–——–———————————————————————–
+ι; η ⊢ e well formed
+
+
 *** Well-formedness of flat evaluation contexts: ι; η ⊢ E well formed
 
 extprocsin(ι.name, E) ⊆ ι.import                 – all used external procedures are imported
@@ -547,7 +556,7 @@ bufsin(E) ⊆ [0,η.bnum)                           – all used buffers are def
 
 Γ ⊢ s well formed
 ψ; Γ ⊢ σ well formed
-ψ[C]; Γ[C] ⊢ E well formed
+ψ[C]; Γ[C] ⊢ K well formed
 ψ[C]; Γ[C] ⊢ e well formed
 —————————————————–———————–—————————–—————————————
 ψ; Γ ⊢ (C, s, σ, K, e) well formed
