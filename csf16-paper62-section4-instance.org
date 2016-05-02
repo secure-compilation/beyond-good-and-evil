@@ -201,7 +201,7 @@ comps({ι₀, ..., ιₙ}) = {ι₀.name, ..., ιₙ.name} – all components of
 
 comps(ι.import) ⊆ comps(ψ)\{ι.name}     — all imported components are defined
 ∀(C.P ∈ ι.import). P ∈ [0, ψ[C].export) – all imported external procedures are public
-0 ≤ ψ.export                            — sanity check
+0 ≤ ι.export                            — sanity check
 ————————————–———–—————————————————–————
 ψ ⊢ ι well formed
 
