@@ -207,7 +207,7 @@ comps(ι.import) ⊆ comps(ψ)\{ι.name}     — all imported components are def
 
 ∀ ι ∈ ψ. ψ ⊢ ι well formed
 ∀ ι₁ ι₂ ∈ ψ. ι₁.name ≠ ι₂.name          — names are unique
-∃ι ∈ ψ.  ι.name = main ∧ 0 ∈ ι.export   — required to start the program
+∃ι ∈ ψ.  ι.name = main ∧ ι.export ≥ 1   — required to start the program
 ————————————–———–————————–———–——————–
 ⊢ ψ well formed
 
