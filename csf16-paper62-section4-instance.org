@@ -498,8 +498,9 @@ S_Return
 Γ[C] ::= ηᵢ₀ when {ηᵢ | ηᵢ.name = C} = {ηᵢ₀}
 
 wfinv(κ) ::= η where
-  η.pnum = φ.pnum
-  η.bnum = η.bnum
+  η.name = κ.name
+  η.pnum = κ.pnum
+  η.bnum = κ.bnum
   η.blens = map length κ.bufs
 
 wfinv(φ) ::= Γ where
