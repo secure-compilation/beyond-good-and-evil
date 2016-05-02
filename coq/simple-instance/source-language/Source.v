@@ -8,6 +8,8 @@ Definition component_id := nat.
 Definition procedure_id := nat.
 Definition buffer_id := nat.
 
+Definition main_cid := 0.
+
 (* ------- Definitions : Syntax ------- *)
 
 Inductive binop : Type :=
@@ -169,13 +171,13 @@ Definition callStack :=
   list call.
 
 Definition state :=
-  list (list (list nat)).
+  list (list buffer).
 
 Definition fetch_state (C:component_id) (b:buffer_id) (i:nat) (s:state) :=
   nth i (nth b (nth C s []) []) 0.
 
 Fixpoint update_value
-  (i:nat) (i':nat) (l:list nat) : list nat :=
+  (i:nat) (i':nat) (l:buffer) : buffer :=
   match l with
   | [] => [] 
   | h::t => match i with
@@ -185,7 +187,7 @@ Fixpoint update_value
   end.
 
 Fixpoint update_buffer
-  (b:buffer_id) (i:nat) (i':nat) (l:list (list nat)) : list (list nat) :=
+  (b:buffer_id) (i:nat) (i':nat) (l:list buffer) : list buffer :=
   match l with
   | [] => []
   | h::t => match b with
@@ -218,7 +220,7 @@ Definition fetch_context
   (C':component_id) (P':procedure_id) (D:context) : expr :=
   nth P' (nth C' D []) exit.
 
-Definition main_cid := 0.
+(* ------- Definitions : special configurations ------- *)
 
 Definition initial_cfg (D:context) (s:state) : cfg :=
   (main_cid, (update_state main_cid 0 0 0 s), [], [], (fetch_context main_cid 0 D)).
@@ -345,7 +347,6 @@ Fixpoint eval_cfg (D:context) (c:cfg) (limit:nat) : cfg :=
     | c' => eval_cfg D (basic_eval_cfg D c') n
     end
   end.
-
 
 (* _____________________________________ 
        EXAMPLES / SANITY CHECKING
@@ -503,7 +504,7 @@ Qed.
 
 
 (* _____________________________________ 
-                PROOFS
+             CLASSIC PROOFS
    _____________________________________ *)
 
 (* ---- Computational/Relational evaluation equivalence ---- *)
@@ -714,7 +715,47 @@ Proof.
 Qed.
 
 
+(* _____________________________________ 
+             WELL-FORMEDNESS
+   _____________________________________ *)
 
+(* ---- Undefined behaviors ---- *)
 
+Definition is_defined (C:component_id) (b:buffer_id) (i:nat) (s:state)
+   : Prop :=
+   let l := (length (nth b (nth C s []) [])) in
+   (ble_nat i l = true) /\ ~(i = l).
+
+Definition is_undefined (C:component_id) (b:buffer_id) (i:nat) (s:state)
+  : Prop :=
+  ~ (is_defined C b i s).
+
+Inductive undefined_cfg : cfg -> Prop :=
+  | undef_load : forall C s d b K i, 
+    is_undefined C b i s ->
+    undefined_cfg (C, s, d, (CHoleLoad b)::K, EVal i)
+  | undef_store  : forall C s d b K i i',
+    is_undefined C b i s ->
+    undefined_cfg (C, s, d, (CStoreHole b i)::K, EVal i'). 
+
+Example buff_def1 : is_undefined 0 0 4 state1.
+Proof.
+  unfold is_undefined.
+  unfold is_defined.
+  intro contra.
+  destruct contra.
+  simpl in *.
+  unfold not in H0.
+  apply H0.
+  reflexivity.
+Qed.
+
+Example buff_def2 : is_defined 0 0 1 state1.
+Proof.
+  unfold is_defined. simpl.
+  split.
+  reflexivity.
+  intro contra. inversion contra.
+Qed.
 
 
