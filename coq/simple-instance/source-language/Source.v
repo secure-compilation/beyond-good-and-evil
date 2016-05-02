@@ -40,7 +40,9 @@ Definition eval_binop (e : binop * nat * nat) : expr :=
   end.
 
 Definition buffer : Type := list nat.
+
 Definition procedure : Type := expr.
+Definition proc_call : Type := (component_id * procedure_id).
 
 Definition component : Type := 
   let name := nat in
@@ -51,22 +53,66 @@ Definition component : Type :=
   let procedures := list procedure in
   (name * bnum * buffers * pnum * export * procedures).
 
+Definition get_nameC (C:component) : component_id :=
+  match C with
+  | (name, _, _, _, _, _) => name
+  end.
+
+Definition get_bnum (C:component) : nat :=
+  match C with
+  | (_, bnum, _, _, _, _) => bnum
+  end.
+
+Definition get_buffers (C:component) : list buffer :=
+  match C with
+  | (_, _, buffers, _, _, _) => buffers
+  end.
+
+Definition get_pnum (C:component) : nat :=
+  match C with
+  | (_, _, _, pnum, _, _) => pnum
+  end.
+
+Definition get_exportC (C:component) : nat :=
+  match C with
+  | (_, _, _, _, export, _) => export
+  end.
+
+Definition get_procs (C:component) : list procedure :=
+  match C with
+  | (_, _, _, _, _, procs) => procs
+  end.
+
 Definition program : Type := list component.
+
+Definition proc_bodies (p:program) :=
+  map get_procs p. 
 
 Definition interface : Type :=
   let name := nat in
   let export := nat in
-  let import := list (component_id * procedure_id) in
+  let import := list proc_call in
   (name * export * import).
 
-Definition get_import (i:interface) : list (component_id * procedure_id) :=
+Definition get_name (i:interface) : component_id :=
   match i with
-  | (name, export, import) => import
+  | (name, _, _) => name
+  end.
+
+Definition get_import (i:interface) : 
+  list proc_call :=
+  match i with
+  | (_, _, import) => import
+  end.
+
+Definition get_export (i:interface) : nat :=
+  match i with
+  | (_, export, _) => export
   end.
 
 Definition program_interfaces : Type := list interface.
 
-Fixpoint procsin (e:expr) : list (component_id * procedure_id) :=
+Fixpoint procsin (e:expr) : list proc_call :=
   match e with
   | EVal i => [] 
   | EExit => []
@@ -78,8 +124,8 @@ Fixpoint procsin (e:expr) : list (component_id * procedure_id) :=
   end.
 
 Fixpoint filter_same_procsin_as (C : component)
-  (l : list (component_id * procedure_id)) :
-  (list (component_id * procedure_id)) :=
+  (l : list proc_call) :
+  (list proc_call) :=
   match l with
   | [] => []
   | h::t => 
@@ -93,21 +139,60 @@ Fixpoint filter_same_procsin_as (C : component)
   end.
 
 Definition extprocsin (C:component) (e:expr) :
-  list (component_id * procedure_id) :=
+  list proc_call :=
   filter_same_procsin_as C (procsin e).
+
+Fixpoint list_minus_imports 
+  (l1 l2 : list proc_call) : 
+  list proc_call :=
+  match l1 with
+  | [] => []
+  | (x, y)::t => if existsb (fun z => andb (beq_nat x (fst z)) (beq_nat y (snd z))) l2 then
+                  list_minus_imports t l2
+                 else
+                  (x, y) :: (list_minus_imports t l2)
+  end.
+
+Definition intprocsin (C:component) (e:expr) :
+  list proc_call :=
+  let ext := extprocsin C e in
+  list_minus_imports (procsin e) ext.
+
+Definition intprocsins_of_C (C:component) :
+  list proc_call :=
+  concat (map (intprocsin C) (get_procs C)).
 
 Fixpoint generate_import (C : component)
   (procedures : list expr) :
-  (list (component_id * procedure_id)) :=
+  (list proc_call) :=
   match procedures with
   | [] => []
   | e::PS => (extprocsin C e) ++ (generate_import C PS)  
   end.
 
-Definition interfaceof (C : component) : interface :=
+Definition interfaceof_C (C : component) : interface :=
   match C with
   | (name, bnum, buffers, pnum, export, procedures) => 
     (name, export, generate_import C procedures)
+  end.
+
+Definition interfaceof_p (p : program) : program_interfaces :=
+  map interfaceof_C p.
+
+Fixpoint bufsin (e:expr) : list buffer_id :=
+  match e with
+  | EVal _ => []
+  | EExit => []
+  | ECall C P e => bufsin e
+  | ELoad b e => [b] ++ (bufsin e)
+  | EStore b e1 e2 => [b] ++ (bufsin e1) ++ (bufsin e2)
+  | EBinop _ e1 e2 => (bufsin e1) ++ (bufsin e2)
+  | EIfThenElse e e1 e2 => (bufsin e) ++ (bufsin e1) ++ (bufsin e2) 
+  end.
+
+Definition bufsin_in_C (C:component) : list buffer_id :=
+  match C with
+  | (_, _, _, _, procs) => concat (map bufsin procs) 
   end.
 
 (* ------- Notations : main instructions ------- *)
@@ -757,5 +842,91 @@ Proof.
   reflexivity.
   intro contra. inversion contra.
 Qed.
+
+(* ---- Useful functions ---- *)
+
+Definition compsImport (l:list proc_call) :=
+   map fst l.
+
+Definition compsComponent (Cs:list component) :=
+  map get_nameC Cs.
+
+Definition compsInterface (Is:program_interfaces) :=
+  map get_name Is.
+
+(* ---- Well-formedness of an interface ---- *)
+Reserved Notation "'INTERFACE' Is |- i 'wellformed'" (at level 40).
+Inductive wellformed_interface (Is : program_interfaces) : 
+  interface -> Prop :=
+  | WF_interface : forall i,
+    let not_i := (fun i' => if (negb (beq_nat (get_name i) i')) then true else false) in
+    incl (compsImport (get_import i)) (filter (not_i) (compsInterface Is)) ->
+    forall C P, In (C,P) (get_import i) ->
+      let exp := (get_export (nth C Is (0, 0, []))) in 
+      (ble_nat 0 P = true /\ ble_nat P exp = true /\ P <> exp) ->
+    INTERFACE Is |- i wellformed 
+  where "'INTERFACE' Is |- i 'wellformed'" := (wellformed_interface Is i).
+
+(* ---- Well-formedness of a program interface ---- *)
+Reserved Notation "'INTERFACES' |- Is 'wellformed'" (at level 40).
+Inductive wellformed_interfaces : program_interfaces -> Prop :=
+  | WF_interfaces : forall Is,
+    (forall i, (In i Is) -> INTERFACE Is |- i wellformed) ->
+    (forall i1 i2, (In i1 Is /\ In i2 Is) -> get_name i1 <> get_name i2) ->
+    (exists i', In i' Is -> get_name i' = main_cid /\ (0 <> (get_export i'))) ->
+    INTERFACES |- Is wellformed 
+  where "'INTERFACES' |- Is 'wellformed'" := (wellformed_interfaces Is).
+
+(* ---- Compatibility between interfaces ---- *)
+Reserved Notation "'COMPATIBILITY' i1 ⊆ i2" (at level 40).
+Inductive compatibility_interface : interface -> interface -> Prop :=
+  | compatible_interface : forall i1 i2,
+    (get_name i1 = get_name i2) ->
+    (incl (get_import i1) (get_import i2)) ->
+    (get_export i1 = get_export i2) ->
+    COMPATIBILITY i1 ⊆ i2
+  where "'COMPATIBILITY' i1 ⊆ i2" := (compatibility_interface i1 i2).
+
+(* ---- Well-formedness of a component ---- *)
+Reserved Notation "'COMPONENT' Is |- k 'wellformed'" (at level 40).
+Inductive wellformed_component (Is:program_interfaces) : component -> Prop :=
+  | WF_component : forall k,
+    COMPATIBILITY (interfaceof_C k) ⊆ (nth (get_nameC k) Is (0, 0, [])) ->
+    (forall C P, In (C,P) (intprocsins_of_C k) -> 
+      (ble_nat 0 P = true /\ ble_nat P (get_pnum k) = true /\ P <> get_pnum k)) ->
+    ble_nat (get_exportC k) (get_pnum k) = true -> 
+    (ble_nat 1 (get_bnum k) = true /\ ble_nat 1 (length (nth 0 (get_buffers k) [])) = true) ->    
+    COMPONENT Is |- k wellformed
+  where "'COMPONENT' Is |- k 'wellformed'" := (wellformed_component Is k).
+
+(* ---- Well-formedness of a partial program ---- *)
+Reserved Notation "'PARTIAL_PROGRAM' Is |- p 'wellformed'" (at level 40).
+Inductive wellformed_partial_program (Is:program_interfaces) : program -> Prop :=
+  | WF_partial_program : forall p,
+    (forall k, In k p -> wellformed_component Is k) ->
+    PARTIAL_PROGRAM Is |- p wellformed
+  where "'PARTIAL_PROGRAM' Is |- p 'wellformed'" := (wellformed_partial_program Is p).
+
+(* ---- Well-formedness of a whole program ---- *)
+Reserved Notation "'WHOLE_PROGRAM' |- p 'wellformed'" (at level 40).
+Inductive wellformed_whole_program : program -> Prop :=
+  | WF_whole_program : forall p,
+    INTERFACES |- (interfaceof_p p) wellformed ->
+    PARTIAL_PROGRAM (interfaceof_p p) |- p wellformed -> 
+    WHOLE_PROGRAM |- p wellformed
+  where "'WHOLE_PROGRAM' |- p 'wellformed'" := (wellformed_whole_program p).
+
+Definition component_invariant (C:component) :=
+  match C with
+  | (name, bnum, buffers, pnum, _, _) =>
+    let blens := (map (@length nat) buffers) in
+    (name, pnum, bnum, blens)
+  end.
+
+(* _____________________________________ 
+        PROOF : PARTIAL TYPE SAFETY
+   _____________________________________ *)
+
+
 
 
