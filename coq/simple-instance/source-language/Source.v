@@ -123,22 +123,19 @@ Fixpoint procsin (e:expr) : list proc_call :=
   | EIfThenElse e e1 e2 => (procsin e) ++ (procsin e1) ++ (procsin e2)
   end.
 
-Fixpoint filter_same_procsin_as (C : component)
+Fixpoint filter_same_procsin_as (C : component_id)
   (l : list proc_call) :
   (list proc_call) :=
   match l with
   | [] => []
   | h::t => 
-    match C with 
-    | (name, bnum, buffers, pnum, export, procedures) => 
-      if (beq_nat (fst h) name) then
+      if (beq_nat (fst h) C) then
         filter_same_procsin_as C t
       else
         h :: (filter_same_procsin_as C t)
-    end
   end.
 
-Definition extprocsin (C:component) (e:expr) :
+Definition extprocsin (C:component_id) (e:expr) :
   list proc_call :=
   filter_same_procsin_as C (procsin e).
 
@@ -153,16 +150,16 @@ Fixpoint list_minus_imports
                   (x, y) :: (list_minus_imports t l2)
   end.
 
-Definition intprocsin (C:component) (e:expr) :
+Definition intprocsin (C:component_id) (e:expr) :
   list proc_call :=
   let ext := extprocsin C e in
   list_minus_imports (procsin e) ext.
 
 Definition intprocsins_of_C (C:component) :
   list proc_call :=
-  concat (map (intprocsin C) (get_procs C)).
+  concat (map (intprocsin (get_nameC C)) (get_procs C)).
 
-Fixpoint generate_import (C : component)
+Fixpoint generate_import (C : component_id)
   (procedures : list expr) :
   (list proc_call) :=
   match procedures with
@@ -173,10 +170,10 @@ Fixpoint generate_import (C : component)
 Definition interfaceof_C (C : component) : interface :=
   match C with
   | (name, bnum, buffers, pnum, export, procedures) => 
-    (name, export, generate_import C procedures)
+    (name, export, generate_import (get_nameC C) (get_procs C))
   end.
 
-Definition interfaceof_p (p : program) : program_interfaces :=
+Definition interfaceof_P (p : program) : program_interfaces :=
   map interfaceof_C p.
 
 Fixpoint bufsin (e:expr) : list buffer_id :=
@@ -231,6 +228,20 @@ Inductive flatevalcon : Type :=
   | CStoreHole : nat -> nat -> flatevalcon (* b[i] := □ *)
   | CCallHole : nat -> nat -> flatevalcon. (* C.P(□) *)
 
+(* Used for the well-formedness of flatevalcon. It's a 
+approximation for the search of procedure calls with
+conservation of the structure of the flatevalcon expression *)
+Fixpoint flatevalcon_to_expr (E:flatevalcon) : expr :=
+  match E with
+  | CHoleOp op e => EBinop op e e
+  | COpHole n op => EBinop op (EVal n) (EVal n)
+  | CIfHoleThenElse e e' => EIfThenElse e e' e'
+  | CHoleLoad b => ELoad b (EVal 0)
+  | CHoleStore b e => EStore b e e
+  | CStoreHole b i => EStore b (EVal i) (EVal i)
+  | CCallHole C P => ECall C P EExit 
+  end.
+
 (* ------- Notations : terms in a context ------- *)
 
 Notation "'IFB' □ 'THEN' e1 'ELSE' e2" :=
@@ -252,7 +263,7 @@ Definition continuations :=
 Inductive call : Type :=
   | Call : component_id -> nat -> continuations -> call.
 
-Definition callStack :=
+Definition call_stack :=
   list call.
 
 Definition state :=
@@ -296,7 +307,7 @@ Definition update_state
   update_component C b i i' s.
 
 Definition cfg : Type :=
-  component_id * state * callStack * continuations * expr.
+  component_id * state * call_stack * continuations * expr.
 
 Definition context :=
   list (list expr).
@@ -413,7 +424,9 @@ Definition basic_eval_cfg (D:context) (c:cfg) : cfg :=
   | (C, s, d, K, (ECall C' P' e)) =>
     (C, s, d, (CCallHole C' P') :: K, e)
   | (C, s, d, (CCallHole C' P') :: K, EVal i) =>
-    (C', (update_state C' 0 0 i s), ((Call C (fetch_state C 0 0 s) K) :: d), [], (fetch_context C' P' D))
+    let s' := (update_state C' 0 0 i s) in 
+    let e' := (fetch_context C' P' D) in
+    (C', s', ((Call C (fetch_state C 0 0 s) K) :: d), [], e')
   | (C, s, (Call C' ia K) :: d', [], EVal i) =>
     (C', update_state C' 0 0 ia s, d', K, EVal i)
   | (_, _, [], [], EVal _) => c
@@ -801,47 +814,8 @@ Qed.
 
 
 (* _____________________________________ 
-             WELL-FORMEDNESS
+     WELL-FORMEDNESS : PROGRAM SCOPE
    _____________________________________ *)
-
-(* ---- Undefined behaviors ---- *)
-
-Definition is_defined (C:component_id) (b:buffer_id) (i:nat) (s:state)
-   : Prop :=
-   let l := (length (nth b (nth C s []) [])) in
-   (ble_nat i l = true) /\ ~(i = l).
-
-Definition is_undefined (C:component_id) (b:buffer_id) (i:nat) (s:state)
-  : Prop :=
-  ~ (is_defined C b i s).
-
-Inductive undefined_cfg : cfg -> Prop :=
-  | undef_load : forall C s d b K i, 
-    is_undefined C b i s ->
-    undefined_cfg (C, s, d, (CHoleLoad b)::K, EVal i)
-  | undef_store  : forall C s d b K i i',
-    is_undefined C b i s ->
-    undefined_cfg (C, s, d, (CStoreHole b i)::K, EVal i'). 
-
-Example buff_def1 : is_undefined 0 0 4 state1.
-Proof.
-  unfold is_undefined.
-  unfold is_defined.
-  intro contra.
-  destruct contra.
-  simpl in *.
-  unfold not in H0.
-  apply H0.
-  reflexivity.
-Qed.
-
-Example buff_def2 : is_defined 0 0 1 state1.
-Proof.
-  unfold is_defined. simpl.
-  split.
-  reflexivity.
-  intro contra. inversion contra.
-Qed.
 
 (* ---- Useful functions ---- *)
 
@@ -853,6 +827,16 @@ Definition compsComponent (Cs:list component) :=
 
 Definition compsInterface (Is:program_interfaces) :=
   map get_name Is.
+
+(* Lower bound included, upper bound exluded *)
+Fixpoint generate_intlist (min:nat) (max:nat) : list nat :=
+  match max with
+  | 0 => []
+  | S n' => if beq_nat (S n') min then
+                []
+            else
+               (generate_intlist min n') ++ [n']
+  end.
 
 (* ---- Well-formedness of an interface ---- *)
 Reserved Notation "'INTERFACE' Is |- i 'wellformed'" (at level 40).
@@ -911,21 +895,167 @@ Inductive wellformed_partial_program (Is:program_interfaces) : program -> Prop :
 Reserved Notation "'WHOLE_PROGRAM' |- p 'wellformed'" (at level 40).
 Inductive wellformed_whole_program : program -> Prop :=
   | WF_whole_program : forall p,
-    INTERFACES |- (interfaceof_p p) wellformed ->
-    PARTIAL_PROGRAM (interfaceof_p p) |- p wellformed -> 
+    INTERFACES |- (interfaceof_P p) wellformed ->
+    PARTIAL_PROGRAM (interfaceof_P p) |- p wellformed -> 
     WHOLE_PROGRAM |- p wellformed
   where "'WHOLE_PROGRAM' |- p 'wellformed'" := (wellformed_whole_program p).
 
-Definition component_invariant (C:component) :=
+
+(* _____________________________________ 
+       WELL-FORMEDNESS : CFG SCOPE
+   _____________________________________ *)
+
+(* ---- Undefined behaviors ---- *)
+
+Definition is_defined (C:component_id) (b:buffer_id) (i:nat) (s:state)
+   : Prop :=
+   let l := (length (nth b (nth C s []) [])) in
+   (ble_nat i l = true) /\ ~(i = l).
+
+Definition is_undefined (C:component_id) (b:buffer_id) (i:nat) (s:state)
+  : Prop :=
+  ~ (is_defined C b i s).
+
+Inductive undefined_cfg : cfg -> Prop :=
+  | undef_load : forall C s d b K i, 
+    is_undefined C b i s ->
+    undefined_cfg (C, s, d, (CHoleLoad b)::K, EVal i)
+  | undef_store  : forall C s d b K i i',
+    is_undefined C b i s ->
+    undefined_cfg (C, s, d, (CStoreHole b i)::K, EVal i'). 
+
+Example buff_def1 : is_undefined 0 0 4 state1.
+Proof.
+  unfold is_undefined.
+  unfold is_defined.
+  intro contra.
+  destruct contra.
+  simpl in *.
+  unfold not in H0.
+  apply H0.
+  reflexivity.
+Qed.
+
+Example buff_def2 : is_defined 0 0 1 state1.
+Proof.
+  unfold is_defined. simpl.
+  split.
+  reflexivity.
+  intro contra. inversion contra.
+Qed.
+
+(* ---- Well-formedness invariants ---- *)
+
+Definition component_invariant : Type :=
+  let name := nat in
+  let pnum := nat in
+  let bnum := nat in
+  let blens := list nat in
+  (name * pnum * bnum * blens).
+
+Definition get_nameN (n:component_invariant) : nat :=
+  match n with
+  | (name, _, _, _) => name
+  end.
+
+Definition get_pnumN (n:component_invariant) : nat :=
+  match n with
+  | (_, pnum, _, _) => pnum
+  end.
+
+Definition get_bnumN (n:component_invariant) : nat :=
+  match n with
+  | (_, _, bnum, _) => bnum
+  end.
+
+Definition get_blens (n:component_invariant) : list nat :=
+  match n with
+  | (_, _, _, blens) => blens
+  end.
+
+Definition partial_program_invariant : Type :=
+  list component_invariant.
+
+Definition wfinv_of_C (C:component) : component_invariant :=
   match C with
   | (name, bnum, buffers, pnum, _, _) =>
     let blens := (map (@length nat) buffers) in
     (name, pnum, bnum, blens)
   end.
 
-(* _____________________________________ 
-        PROOF : PARTIAL TYPE SAFETY
-   _____________________________________ *)
+Definition wfinv_of_P (P:program) : partial_program_invariant :=
+  map wfinv_of_C P.
+
+(* ---- Well-formedness of an expression ---- *)
+Reserved Notation "'EXPR' i n |- e 'wellformed'" (at level 40).
+Inductive wellformed_expr (i:interface) (n:component_invariant) : 
+  expr -> Prop :=
+  | WF_expr : forall e,
+    incl (extprocsin (get_name i) e) (get_import i) ->
+    (forall C P, In (C,P) (intprocsin (get_name i) e) -> 
+      ble_nat 0 P = true /\ ble_nat P (get_pnumN n) = true /\ P <> get_pnumN n) ->   
+    incl (bufsin e) (generate_intlist 0 (get_bnumN n)) ->    
+    wellformed_expr i n e
+  where "'EXPR' i n |- e 'wellformed'" := (wellformed_expr i n e).
+
+(* ---- Well-formedness of a flat evaluation context ---- *)
+Reserved Notation "'FLATEVALCON' i n |- E 'wellformed'" (at level 40).
+Inductive wellformed_flatevalcon (i:interface) (n:component_invariant) : 
+  flatevalcon -> Prop :=
+  | WF_flatevalcon : forall E,
+    incl (extprocsin (get_name i) (flatevalcon_to_expr E)) (get_import i) ->
+    (forall C P, In (C,P) (intprocsin (get_name i) (flatevalcon_to_expr E)) -> 
+      ble_nat 0 P = true /\ ble_nat P (get_pnumN n) = true /\ P <> get_pnumN n) ->   
+    incl (bufsin (flatevalcon_to_expr E)) (generate_intlist 0 (get_bnumN n)) ->    
+    wellformed_flatevalcon i n E
+  where "'FLATEVALCON' i n |- E 'wellformed'" := (wellformed_flatevalcon i n E).
+
+(* ---- Well-formedness of a continuation ---- *)
+Reserved Notation "'CONTINUATIONS' i n |- K 'wellformed'" (at level 40).
+Inductive wellformed_continuations (i:interface) (n:component_invariant) : 
+  continuations -> Prop :=
+  | WF_empty_continuations :
+    wellformed_continuations i n []
+  | WF_continuations : forall E K,
+    (wellformed_flatevalcon i n E) ->
+    (wellformed_continuations i n K) ->
+    (wellformed_continuations i n (E::K))
+  where "'CONTINUATIONS' i n |- K 'wellformed'" := (wellformed_continuations i n K).
+
+(* ---- Well-formedness of a continuation ---- *)
+Reserved Notation "'CALLSTACK' i n |- K 'wellformed'" (at level 40).
+Inductive wellformed_callstack (Is:program_interfaces) 
+  (G:partial_program_invariant) : call_stack -> Prop :=
+  | WF_empty_callstack :
+    wellformed_callstack Is G []
+  | WF_callstack : forall C d i K,
+    (wellformed_continuations (nth C Is (0,0,[])) (nth C G (0,0,0,[])) K) ->
+    (wellformed_callstack Is G d) ->
+    (wellformed_callstack Is G ((Call C i K)::d))
+  where "'CALLSTACK' Is G |- d 'wellformed'" := (wellformed_callstack Is G d).
+
+(* ---- Well-formedness of a state ---- *)
+Reserved Notation "'STATE' G |- s 'wellformed'" (at level 40).
+Inductive wellformed_state (G:partial_program_invariant) : 
+  state -> Prop :=
+  | WF_state : forall b i s n,
+    ((In n G) -> is_defined (get_nameN n) b i s ) <->
+    (In b (generate_intlist 0 (get_bnumN n)) /\ 
+     In i (generate_intlist 0 (nth b (get_blens n) 0))) ->
+    wellformed_state G s
+  where "'STATE' G |- s 'wellformed'" := (wellformed_state G s).
+
+(* ---- Well-formedness of a configuration ---- *)
+Reserved Notation "'CFG' Is G |- c 'wellformed'" (at level 40).
+Inductive wellformed_cfg (Is:program_interfaces)
+  (G:partial_program_invariant) : cfg -> Prop :=
+  | WF_cfg : forall C s d K e,
+    wellformed_state G s ->
+    wellformed_callstack Is G d ->
+    wellformed_continuations (nth C Is (0,0,[])) (nth C G (0,0,0,[])) K ->
+    wellformed_expr (nth C Is (0,0,[])) (nth C G (0,0,0,[])) e ->
+    wellformed_cfg Is G (C, s, d, K, e)
+  where "'CFG' Is G |- c 'wellformed'" := (wellformed_state Is G c).
 
 
 
