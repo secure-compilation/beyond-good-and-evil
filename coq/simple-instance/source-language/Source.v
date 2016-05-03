@@ -1080,9 +1080,33 @@ Proof.
   inversion HI. inversion HPP.
   unfold initial_cfg_of. constructor.
   Case "State wellformed".
-  { induction p.
+  { destruct p; simpl.
+    SCase "p = []".
+      simpl in *.
+      apply (WF_state [] 0 0 [] (0,0,0,[])).
+      admit.
+      admit.
   }
-Admitted. 
+  Case "Callstack wellformed".
+  { constructor. }
+  Case "Continuations wellformed".
+  { constructor. }
+  Case "Expr".
+  { constructor. 
+    SCase "extprocsin(i.name, e) ⊆ i.import".
+      destruct p; simpl.
+      compute. intros. contradiction.
+      destruct c as [[[[[name bnum] buffers] pnum] export] procs].
+      destruct procs; simpl.
+      compute. intros. contradiction.
+      destruct p1; destruct name; simpl;
+      try (unfold incl; simpl; intros; contradiction).
+      destruct b; destruct p1_1; destruct p1_2;
+      try (unfold incl; simpl; intros; contradiction).
+      destruct b; destruct p1_2_1; destruct p1_2_2;
+      try (unfold incl; simpl; intros; contradiction).
+  }
+Admitted.
 
 Definition partial_progress : Prop :=
   forall P, wellformed_whole_program P ->
