@@ -310,7 +310,10 @@ Definition cfg : Type :=
   component_id * state * call_stack * continuations * expr.
 
 Definition context :=
-  list (list expr).
+  list (list procedure).
+
+Definition procbodies (P:program) : context :=
+  map (get_procs) P.
 
 Definition fetch_context 
   (C':component_id) (P':procedure_id) (D:context) : expr :=
@@ -1071,5 +1074,57 @@ Lemma initial_program_safety :
   let Is := interfaceof_P P in
   let G := wfinv_of_P P in
   wellformed_cfg Is G (initial_cfg_of P).
+Proof.
+  simpl. intros p HWP.
+  inversion HWP as [p' HI HPP].
+  inversion HI. inversion HPP.
+  unfold initial_cfg_of. constructor.
+  Case "State wellformed".
+  { induction p.
+  }
+Admitted. 
 
+Theorem partial_progress :
+  forall P, wellformed_whole_program P ->
+  let Is := interfaceof_P P in
+  let G := wfinv_of_P P in
+  let D := procbodies P in
+  forall cfg, wellformed_cfg Is G cfg ->
+  (final_cfg cfg \/ undefined_cfg cfg \/ (exists cfg', D ⊢ cfg ⇒ cfg')).
+Proof.
+Admitted.
+
+Theorem preservation :
+  forall P, wellformed_whole_program P ->
+  let Is := interfaceof_P P in
+  let G := wfinv_of_P P in
+  let D := procbodies P in
+  forall cfg cfg', 
+    (wellformed_cfg Is G cfg ->
+     D ⊢ cfg ⇒ cfg' ->
+     wellformed_cfg Is G cfg').
+Proof.
+Admitted.
+
+Theorem partial_type_safety :
+  forall P, wellformed_whole_program P ->
+  let Is := interfaceof_P P in
+  let G := wfinv_of_P P in
+  let D := procbodies P in
+  forall cfg, wellformed_cfg Is G cfg ->
+  (final_cfg cfg \/ undefined_cfg cfg \/ (exists cfg', D ⊢ cfg ⇒ cfg'))
+  /\
+  forall P, wellformed_whole_program P ->
+  let Is := interfaceof_P P in
+  let G := wfinv_of_P P in
+  let D := procbodies P in
+  forall cfg cfg', 
+    (wellformed_cfg Is G cfg ->
+     D ⊢ cfg ⇒ cfg' ->
+     wellformed_cfg Is G cfg').
+Proof.
+  split.
+  apply partial_progress; assumption.
+  apply preservation.
+Qed.
 
