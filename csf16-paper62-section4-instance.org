@@ -225,7 +225,7 @@ bufsin(κ) ⊆ [0,κ.bnum)                  – all used buffers are defined
 ——————————————————————————–———————————–
 ψ ⊢ κ well formed
 
-∀ κ ∈ ψ. ψ ⊢ κ well formed
+∀ κ ∈ φ. ψ ⊢ κ well formed
 ———————–—————————————————–
 ψ ⊢ φ well formed
 
@@ -600,10 +600,10 @@ i ∉ {0, ..., n}
 
 Formally:
   ∀ φ. φ well formed ⇒
-       Γ = wfinv(φ) ∧ Δ = procbodies(φ) ⇒
-  ∀ cfg cfg'. Γ ⊢ cfg well formed ⇒
+      ψ = interfaceof(φ)∧ Γ = wfinv(φ) ∧ Δ = procbodies(φ) ⇒
+  ∀ cfg cfg'. ψ;Γ ⊢ cfg well formed ⇒
               Δ ⊢ cfg → cfg' ⇒
-                Γ ⊢ cfg' well formed
+                ψ;Γ ⊢ cfg' well formed
 
 ** Undefined behavior
 *** Intuition
