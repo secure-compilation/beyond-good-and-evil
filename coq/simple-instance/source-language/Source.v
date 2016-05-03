@@ -1084,17 +1084,15 @@ Proof.
   }
 Admitted. 
 
-Theorem partial_progress :
+Definition partial_progress : Prop :=
   forall P, wellformed_whole_program P ->
   let Is := interfaceof_P P in
   let G := wfinv_of_P P in
   let D := procbodies P in
   forall cfg, wellformed_cfg Is G cfg ->
   (final_cfg cfg \/ undefined_cfg cfg \/ (exists cfg', D ⊢ cfg ⇒ cfg')).
-Proof.
-Admitted.
 
-Theorem preservation :
+Definition preservation : Prop :=
   forall P, wellformed_whole_program P ->
   let Is := interfaceof_P P in
   let G := wfinv_of_P P in
@@ -1103,28 +1101,22 @@ Theorem preservation :
     (wellformed_cfg Is G cfg ->
      D ⊢ cfg ⇒ cfg' ->
      wellformed_cfg Is G cfg').
+
+Theorem partial_progress_proof :
+  partial_progress.
+Proof.
+Admitted.
+
+Theorem preservation_proof :
+  preservation.
 Proof.
 Admitted.
 
 Theorem partial_type_safety :
-  forall P, wellformed_whole_program P ->
-  let Is := interfaceof_P P in
-  let G := wfinv_of_P P in
-  let D := procbodies P in
-  forall cfg, wellformed_cfg Is G cfg ->
-  (final_cfg cfg \/ undefined_cfg cfg \/ (exists cfg', D ⊢ cfg ⇒ cfg'))
-  /\
-  forall P, wellformed_whole_program P ->
-  let Is := interfaceof_P P in
-  let G := wfinv_of_P P in
-  let D := procbodies P in
-  forall cfg cfg', 
-    (wellformed_cfg Is G cfg ->
-     D ⊢ cfg ⇒ cfg' ->
-     wellformed_cfg Is G cfg').
+  partial_progress /\ preservation.
 Proof.
   split.
-  apply partial_progress; assumption.
-  apply preservation.
+  apply partial_progress_proof; assumption.
+  apply preservation_proof.
 Qed.
 
