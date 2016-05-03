@@ -205,6 +205,10 @@ comps(ι.import) ⊆ comps(ψ)\{ι.name}     — all imported components are def
 ————————————–———–—————————————————–————
 ψ ⊢ ι well formed
 
+AAA: What is the role of the above sanity check? Isn't that condition
+always satisfied for all indices? I thought they were natural
+numbers, and not integers.
+
 ∀ ι ∈ ψ. ψ ⊢ ι well formed
 ∀ ι₁ ι₂ ∈ ψ. ι₁.name ≠ ι₂.name          — names are unique
 ∃ι ∈ ψ.  ι.name = main ∧ ι.export ≥ 1   — required to start the program
@@ -313,7 +317,7 @@ K ::= E :: K | []                 – continuations
 
 s[C,b] ↦ [i₀, ..., iₙ]            – integer list for buffer b
 
-s[C,b,i] = iᵢ when s[C,b] = [i₀, ..., iₙ]
+s[C,b,j] = iⱼ when s[C,b] = [i₀, ..., iₙ] ─ read buffer C.b at position j
 
 Initial configurations:
 I(φ) — initial configuration for a whole program φ
@@ -321,6 +325,9 @@ I(φ) ::= (main, s[main,0,0 ↦ 0], [], [], φ[main].procs[0])
   where φ = {κ₀,...,κₙ}
         s = { κ₀.name,b ↦ κ₀.bufs[b] | b ∈ dom(κ₀.bufs) } ⊎ ... ⊎
               { κₙ.name,b ↦ κₙ.bufs[b] | b ∈ dom(κₙ.bufs) }
+
+AAA: Why do we have to initialize the argument of main to zero here?
+Couldn't we just assume that main initializes its own argument?
 
 Final configurations:
   (C,s, σ, K, exit) final  (Final_Exit)
@@ -361,6 +368,12 @@ i ≠ 0
     (C', s[C',0,0 ↦ iₐ], (C,s[C,0,0],K) :: σ,            [], eₚ)
 
 Δ ⊢ (C, s, (C',iₐ,K) :: σ, [], i) → (C', s[C',0,0 ↦ iₐ], σ, K, i)   (S_Return)
+
+AAA: This last rule seems wrong. Shouldn't the final state be s[C,0,0 ↦ iₐ]
+instead (that is, replacing C' by C)? In the current version, we
+restore the argument slot of the caller, but C_Call_Pop saves the
+argument slot of the callee. It is also inconsistent with the use of
+S_Return in the factorial example below.
 
 Note: At this level we don't need to enforce interfaces in the
 operational semantics. The interface is syntactically extracted from
@@ -412,11 +425,11 @@ S_BinOp_Push
 (□;factorial_buff.aux(vars[0])) :: [], vars[1] := 1)
 
 S_Write_Push
-(factorial_buff, s', (main,0,[]) :: [], 
+(factorial_buff, s', (main,0,[]) :: [],
 vars[□] := 1 :: (□;factorial_buff.aux(vars[0])) :: [], 1)
 
 S_Write_Swap
-(factorial_buff, s', (main,0,[]) :: [], 
+(factorial_buff, s', (main,0,[]) :: [],
 vars[1] := □ :: (□;factorial_buff.aux(vars[0])) :: [], 1)
 
 S_Write_Pop
@@ -444,7 +457,7 @@ S_Read_Pop
     where s''[factorial_buff, vars, 0] = 2
 
 S_Call_Pop
-(factorial_buff, s'', 
+(factorial_buff, s'',
  (factorial_buff,0,(1;□) :: [])) ::
    (main,0,[]) ::
    [], [], e)
@@ -460,7 +473,7 @@ where e =
       .
       .
 
-(factorial_buff, s''', 
+(factorial_buff, s''',
  (factorial_buff,0,(1;□) :: [])) ::
    (main,0,[]) ::
    [], [], 2)
