@@ -318,8 +318,13 @@ Definition fetch_context
 
 (* ------- Definitions : special configurations ------- *)
 
-Definition initial_cfg (D:context) (s:state) : cfg :=
-  (main_cid, (update_state main_cid 0 0 0 s), [], [], (fetch_context main_cid 0 D)).
+Fixpoint generate_state (P:program) : state :=
+  map get_buffers P.
+
+Definition initial_cfg_of (P:program) : cfg :=
+  let s := generate_state P in
+  let initial_proc := nth 0 (get_procs (nth main_cid P (0,0,[],0,0,[]))) EExit in
+  (main_cid, (update_state main_cid 0 0 0 s), [], [], initial_proc).
 
 Inductive final_cfg : cfg -> Prop :=
   | final_value : forall C s i, final_cfg (C, s, [], [], EVal i)
@@ -1057,6 +1062,14 @@ Inductive wellformed_cfg (Is:program_interfaces)
     wellformed_cfg Is G (C, s, d, K, e)
   where "'CFG' Is G |- c 'wellformed'" := (wellformed_state Is G c).
 
+(* _____________________________________ 
+        PROOF : PARTIAL TYPE SAFETY
+   _____________________________________ *)
 
+Lemma initial_program_safety :
+  forall P, wellformed_whole_program P ->
+  let Is := interfaceof_P P in
+  let G := wfinv_of_P P in
+  wellformed_cfg Is G (initial_cfg_of P).
 
 
