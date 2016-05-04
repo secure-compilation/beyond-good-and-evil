@@ -1149,6 +1149,9 @@ E — external entry points for the *program components* only
 ψ – interfaces for *all components* (both program and context)
 both defined as in the low-level semantics
 
+AAA: I am a little bit confused by the type of E. Is it a set of
+procedure identifiers C.P? Or is it a set of component identifiers C?
+
 Note: the set of program components is dom(E)
                  context components is dom(ψ)∖dom(E)
 
@@ -1575,6 +1578,8 @@ i.e. when the program performs an external action that is not
 termination, the context can take any action that it can perform.
 The same property holds when interverting players.
 
+AAA: One of the sides of the conjunction follows from the other, right?
+
 *** Compiled, fully-defined programs only yield canonical traces
 
 ∀ t P. P well formed ∧ P fully defined ⇒
@@ -1659,6 +1664,9 @@ in which t = erase(T).
                     Eα                   Eα⁻¹
      ∃Eα. ψ; Eₚ ⊢ Pθ → Aθ'  ∧  ψ; Eₐ ⊢ Aθ → Pθ'
        ∧  Eₚ ⊢ Aθ' well formed  ∧  Eₐ ⊢ Pθ' well formed)
+
+AAA: Same here; would it be possible to recover one side of the lemma
+from the other by symmetry?
 
 **** Proof
 
