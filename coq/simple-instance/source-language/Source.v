@@ -4,9 +4,9 @@ Require Export SfLib.
                   SYNTAX  
    _____________________________________ *)
 
-Definition component_id := nat.
-Definition procedure_id := nat.
-Definition buffer_id := nat.
+Definition component_id := option nat.
+Definition procedure_id := option nat.
+Definition buffer_id := option nat.
 
 Definition main_cid := 0.
 
@@ -21,7 +21,7 @@ Inductive binop : Type :=
   | EMul.
 
 Inductive expr : Type :=
-  | EVal : nat -> expr (* i *)
+  | EVal : option nat -> expr (* i *)
   | EBinop : binop -> expr -> expr -> expr (* e₁ ⊗ e₂ *)
   | EIfThenElse : expr -> expr -> expr -> expr (* if e then e₁ else e₂ *)
   | ELoad : buffer_id -> expr -> expr (* b[e] *)
@@ -31,15 +31,15 @@ Inductive expr : Type :=
 
 Definition eval_binop (e : binop * nat * nat) : expr :=
   match e with
-  | (EEq, a, b) => if (beq_nat a b) then EVal 1 else EVal 0
-  | (ELeq, a, b) => if (ble_nat a b) then EVal 1 else EVal 0
-  | (ESeq, a, b) => EVal b
-  | (EAdd, a, b) => EVal (a+b)
-  | (EMinus, a, b) => EVal (a-b)
-  | (EMul, a, b) => EVal (a*b)
+  | (EEq, a, b) => if (beq_nat a b) then EVal (Some 1) else EVal (Some 0)
+  | (ELeq, a, b) => if (ble_nat a b) then EVal (Some 1) else EVal (Some 0)
+  | (ESeq, a, b) => EVal (Some b)
+  | (EAdd, a, b) => EVal (Some (a+b))
+  | (EMinus, a, b) => EVal (Some (a-b))
+  | (EMul, a, b) => EVal (Some (a*b))
   end.
 
-Definition buffer : Type := list nat.
+Definition buffer : Type := list (option nat).
 
 Definition procedure : Type := expr.
 Definition proc_call : Type := (component_id * procedure_id).
@@ -55,7 +55,7 @@ Definition component : Type :=
 
 Definition get_nameC (C:component) : component_id :=
   match C with
-  | (name, _, _, _, _, _) => name
+  | (name, _, _, _, _, _) => Some name
   end.
 
 Definition get_bnum (C:component) : nat :=
@@ -96,7 +96,7 @@ Definition interface : Type :=
 
 Definition get_name (i:interface) : component_id :=
   match i with
-  | (name, _, _) => name
+  | (name, _, _) => Some name
   end.
 
 Definition get_import (i:interface) : 
@@ -128,26 +128,31 @@ Fixpoint filter_same_procsin_as (C : component_id)
   (list proc_call) :=
   match l with
   | [] => []
-  | h::t => 
-      if (beq_nat (fst h) C) then
-        filter_same_procsin_as C t
-      else
-        h :: (filter_same_procsin_as C t)
+  | (Some h, h')::t => 
+      match C with
+      | Some C' => if (beq_nat h C') then
+                    filter_same_procsin_as C t
+                   else
+                    (Some h, h') :: (filter_same_procsin_as C t)
+      | None => []
+      end
+  | _ => []
   end.
 
 Definition extprocsin (C:component_id) (e:expr) :
   list proc_call :=
   filter_same_procsin_as C (procsin e).
-
 Fixpoint list_minus_imports 
   (l1 l2 : list proc_call) : 
   list proc_call :=
   match l1 with
   | [] => []
-  | (x, y)::t => if existsb (fun z => andb (beq_nat x (fst z)) (beq_nat y (snd z))) l2 then
-                  list_minus_imports t l2
-                 else
-                  (x, y) :: (list_minus_imports t l2)
+  | (Some x, Some y)::t => 
+    if existsb (fun z => andb (beq_nat x (fst z)) (beq_nat y (snd z))) l2 then
+      list_minus_imports t l2
+    else
+      (x, y) :: (list_minus_imports t l2)
+  | _ => []
   end.
 
 Definition intprocsin (C:component_id) (e:expr) :
@@ -223,9 +228,9 @@ Inductive flatevalcon : Type :=
   | CHoleOp : binop -> expr -> flatevalcon (* □ ⊗ e₂ *)
   | COpHole : nat -> binop -> flatevalcon (* i₁ ⊗ □ *)
   | CIfHoleThenElse : expr -> expr -> flatevalcon (* if □ then e₁ else e₂ *)
-  | CHoleLoad : nat -> flatevalcon (* b[□] *)
-  | CHoleStore : nat -> expr -> flatevalcon (* b[□] := e *)
-  | CStoreHole : nat -> nat -> flatevalcon (* b[i] := □ *)
+  | CHoleLoad : option nat -> flatevalcon (* b[□] *)
+  | CHoleStore : option nat -> expr -> flatevalcon (* b[□] := e *)
+  | CStoreHole : option nat -> nat -> flatevalcon (* b[i] := □ *)
   | CCallHole : nat -> nat -> flatevalcon. (* C.P(□) *)
 
 (* Used for the well-formedness of flatevalcon. It's a 
@@ -269,7 +274,8 @@ Definition call_stack :=
 Definition state :=
   list (list buffer).
 
-Definition fetch_state (C:component_id) (b:buffer_id) (i:nat) (s:state) :=
+Definition fetch_state (C:component_id) (b:buffer_id) 
+  (i:nat) (s:state) :=
   nth i (nth b (nth C s []) []) 0.
 
 Fixpoint update_value
@@ -331,7 +337,7 @@ Definition initial_cfg_of (P:program) : cfg :=
 
 Inductive final_cfg : cfg -> Prop :=
   | final_value : forall C s i, final_cfg (C, s, [], [], EVal i)
-  | final_exit  : forall C s d K, final_cfg (C, s, d, K, EExit). 
+  | final_exit  : forall C s d K, final_cfg (C, s, d, K, EExit).
 
 (* ------- Definitions : small-step semantic definition ------- *)
 
@@ -931,7 +937,19 @@ Inductive undefined_cfg : cfg -> Prop :=
     undefined_cfg (C, s, d, (CHoleLoad b)::K, EVal i)
   | undef_store  : forall C s d b K i i',
     is_undefined C b i s ->
-    undefined_cfg (C, s, d, (CStoreHole b i)::K, EVal i'). 
+    undefined_cfg (C, s, d, (CStoreHole b i)::K, EVal i').
+
+Example undefined_cfg1 :
+  undefined_cfg (0, [], [], (CHoleLoad 0)::[], EVal 1).
+Proof.
+  constructor.
+  unfold is_undefined.
+  unfold is_defined.
+  intro contra.
+  destruct contra.
+  simpl in *.
+  inversion H.
+Qed. 
 
 Example buff_def1 : is_undefined 0 0 4 state1.
 Proof.
@@ -1031,7 +1049,7 @@ Inductive wellformed_continuations (i:interface) (n:component_invariant) :
     (wellformed_continuations i n (E::K))
   where "'CONTINUATIONS' i n |- K 'wellformed'" := (wellformed_continuations i n K).
 
-(* ---- Well-formedness of a continuation ---- *)
+(* ---- Well-formedness of a callstack ---- *)
 Reserved Notation "'CALLSTACK' i n |- K 'wellformed'" (at level 40).
 Inductive wellformed_callstack (Is:program_interfaces) 
   (G:partial_program_invariant) : call_stack -> Prop :=
@@ -1146,9 +1164,9 @@ Proof.
   induction WCFG.
   remember (C, s, d, K, e) as cfg. rewrite Heqcfg.
   destruct d; destruct K; destruct e;
-  try (left; constructor);
+  try (left; constructor); (* Eliminate final value cases *)
   try (destruct f); try (destruct n);
-  try (
+  try ( (* Progression cases *)
     right; right; 
     exists (eval_cfg (procbodies P) cfg 1);
     try (destruct c);
