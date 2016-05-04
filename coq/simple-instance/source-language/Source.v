@@ -853,9 +853,9 @@ Inductive wellformed_interface (Is : program_interfaces) :
   | WF_interface : forall i,
     let not_i := (fun i' => if (negb (beq_nat (get_name i) i')) then true else false) in
     incl (compsImport (get_import i)) (filter (not_i) (compsInterface Is)) ->
-    forall C P, In (C,P) (get_import i) ->
+    (forall C P, In (C,P) (get_import i) ->
       let exp := (get_export (nth C Is (0, 0, []))) in 
-      (ble_nat 0 P = true /\ ble_nat P exp = true /\ P <> exp) ->
+      In P (generate_intlist 0 exp)) ->
     INTERFACE Is |- i wellformed 
   where "'INTERFACE' Is |- i 'wellformed'" := (wellformed_interface Is i).
 
@@ -865,7 +865,7 @@ Inductive wellformed_interfaces : program_interfaces -> Prop :=
   | WF_interfaces : forall Is,
     (forall i, (In i Is) -> INTERFACE Is |- i wellformed) ->
     (forall i1 i2, (In i1 Is /\ In i2 Is) -> get_name i1 <> get_name i2) ->
-    (exists i', In i' Is -> get_name i' = main_cid /\ (0 <> (get_export i'))) ->
+    (exists i', (In i' Is) /\ (get_name i' = main_cid /\ (0 <> (get_export i')))) ->
     INTERFACES |- Is wellformed 
   where "'INTERFACES' |- Is 'wellformed'" := (wellformed_interfaces Is).
 
@@ -885,7 +885,8 @@ Inductive wellformed_component (Is:program_interfaces) : component -> Prop :=
   | WF_component : forall k,
     COMPATIBILITY (interfaceof_C k) ⊆ (nth (get_nameC k) Is (0, 0, [])) ->
     (forall C P, In (C,P) (intprocsins_of_C k) -> 
-      (ble_nat 0 P = true /\ ble_nat P (get_pnum k) = true /\ P <> get_pnum k)) ->
+      In P (generate_intlist 0 (get_pnum k))) ->
+    (incl (bufsin_in_C k) (generate_intlist 0 (get_bnum k))) ->
     ble_nat (get_exportC k) (get_pnum k) = true -> 
     (ble_nat 1 (get_bnum k) = true /\ ble_nat 1 (length (nth 0 (get_buffers k) [])) = true) ->    
     COMPONENT Is |- k wellformed
@@ -1001,7 +1002,7 @@ Inductive wellformed_expr (i:interface) (n:component_invariant) :
   | WF_expr : forall e,
     incl (extprocsin (get_name i) e) (get_import i) ->
     (forall C P, In (C,P) (intprocsin (get_name i) e) -> 
-      ble_nat 0 P = true /\ ble_nat P (get_pnumN n) = true /\ P <> get_pnumN n) ->   
+      In P (generate_intlist 0 (get_pnumN n))) -> 
     incl (bufsin e) (generate_intlist 0 (get_bnumN n)) ->    
     wellformed_expr i n e
   where "'EXPR' i n |- e 'wellformed'" := (wellformed_expr i n e).
@@ -1013,7 +1014,7 @@ Inductive wellformed_flatevalcon (i:interface) (n:component_invariant) :
   | WF_flatevalcon : forall E,
     incl (extprocsin (get_name i) (flatevalcon_to_expr E)) (get_import i) ->
     (forall C P, In (C,P) (intprocsin (get_name i) (flatevalcon_to_expr E)) -> 
-      ble_nat 0 P = true /\ ble_nat P (get_pnumN n) = true /\ P <> get_pnumN n) ->   
+      In P (generate_intlist 0 (get_pnumN n))) ->  
     incl (bufsin (flatevalcon_to_expr E)) (generate_intlist 0 (get_bnumN n)) ->    
     wellformed_flatevalcon i n E
   where "'FLATEVALCON' i n |- E 'wellformed'" := (wellformed_flatevalcon i n E).
@@ -1046,10 +1047,11 @@ Inductive wellformed_callstack (Is:program_interfaces)
 Reserved Notation "'STATE' G |- s 'wellformed'" (at level 40).
 Inductive wellformed_state (G:partial_program_invariant) : 
   state -> Prop :=
-  | WF_state : forall b i s n,
-    ((In n G) -> is_defined (get_nameN n) b i s ) <->
+  | WF_state : forall b i s,
+    (forall n, (In n G) ->
+     ((is_defined (get_nameN n) b i s ) <->
     (In b (generate_intlist 0 (get_bnumN n)) /\ 
-     In i (generate_intlist 0 (nth b (get_blens n) 0))) ->
+     In i (generate_intlist 0 (nth b (get_blens n) 0))))) ->
     wellformed_state G s
   where "'STATE' G |- s 'wellformed'" := (wellformed_state G s).
 
@@ -1080,12 +1082,15 @@ Proof.
   inversion HI. inversion HPP.
   unfold initial_cfg_of. constructor.
   Case "State wellformed".
-  { destruct p; simpl.
+  { destruct p.
     SCase "p = []".
-      simpl in *.
-      apply (WF_state [] 0 0 [] (0,0,0,[])).
+      simpl in H2. destruct H2.
+      destruct H2. contradiction.
+    SCase "p = h::t".
       admit.
-      admit.
+      (*destruct c as [[[[[name bnum] buffers] pnum] export] procs];
+      try (destruct name); try (destruct bnum); try (destruct buffers);
+      try (destruct pnum); try (destruct export); try (destruct procs).*)
   }
   Case "Callstack wellformed".
   { constructor. }
@@ -1095,16 +1100,23 @@ Proof.
   { constructor. 
     SCase "extprocsin(i.name, e) ⊆ i.import".
       destruct p; simpl.
-      compute. intros. contradiction.
-      destruct c as [[[[[name bnum] buffers] pnum] export] procs].
-      destruct procs; simpl.
-      compute. intros. contradiction.
-      destruct p1; destruct name; simpl;
-      try (unfold incl; simpl; intros; contradiction).
-      destruct b; destruct p1_1; destruct p1_2;
-      try (unfold incl; simpl; intros; contradiction).
-      destruct b; destruct p1_2_1; destruct p1_2_2;
-      try (unfold incl; simpl; intros; contradiction).
+      SSCase "p = []".
+        compute. intros. contradiction.
+      SSCase "p = h::t".
+        (*destruct c as [[[[[name bnum] buffers] pnum] export] procs];
+        try (destruct name);
+        try (destruct bnum); 
+        try (destruct procs);
+        try (destruct buffers);
+        try (destruct pnum);
+        try (destruct export);
+        try (destruct procs);
+        try (compute; intros; contradiction).*)
+        admit.
+    SCase "∀(_.P ∈ intprocsin(ι.name, e)). P ∈ [0, η.pnum)".
+      admit.
+    SCase "bufsin(e) ⊆ [0,η.bnum)".
+      admit.
   }
 Admitted.
 
@@ -1129,7 +1141,23 @@ Definition preservation : Prop :=
 Theorem partial_progress_proof :
   partial_progress.
 Proof.
-Admitted.
+  unfold partial_progress.
+  intros P WP cfg' WCFG.
+  induction WCFG.
+  remember (C, s, d, K, e) as cfg. rewrite Heqcfg.
+  destruct d; destruct K; destruct e;
+  try (left; constructor);
+  try (destruct f); try (destruct n);
+  try (
+    right; right; 
+    exists (eval_cfg (procbodies P) cfg 1);
+    try (destruct c);
+    rewrite Heqcfg; 
+    constructor
+  );
+  try (reflexivity);
+  try (unfold not; intro contra; inversion contra).
+Qed.
 
 Theorem preservation_proof :
   preservation.
