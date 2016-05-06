@@ -374,6 +374,9 @@ instead (that is, replacing C' by C)? In the current version, we
 restore the argument slot of the caller, but C_Call_Pop saves the
 argument slot of the callee. It is also inconsistent with the use of
 S_Return in the factorial example below.
+YJ: No, C is the callee and C' is the caller (contrary to the previous
+rule). We are giving back control to the caller and restoring its
+argument.
 
 Note: At this level we don't need to enforce interfaces in the
 operational semantics. The interface is syntactically extracted from
