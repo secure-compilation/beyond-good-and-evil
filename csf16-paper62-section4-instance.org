@@ -201,13 +201,8 @@ comps({ι₀, ..., ιₙ}) = {ι₀.name, ..., ιₙ.name} – all components of
 
 comps(ι.import) ⊆ comps(ψ)\{ι.name}     — all imported components are defined
 ∀(C.P ∈ ι.import). P ∈ [0, ψ[C].export) – all imported external procedures are public
-0 ≤ ι.export                            — sanity check
 ———————————————————————————————————————
 ψ ⊢ ι well formed
-
-AAA: What is the role of the above sanity check? Isn't that condition
-always satisfied for all indices? I thought they were natural
-numbers, and not integers.
 
 ∀ ι ∈ ψ. ψ ⊢ ι well formed
 ∀ ι₁ ι₂ ∈ ψ. ι₁.name ≠ ι₂.name          — names are unique
@@ -328,6 +323,8 @@ I(φ) ::= (main, s[main,0,0 ↦ 0], [], [], φ[main].procs[0])
 
 AAA: Why do we have to initialize the argument of main to zero here?
 Couldn't we just assume that main initializes its own argument?
+YJ: Yes we could. Do you think that would be simpler? Doesn't make a
+big difference to me.
 
 Final configurations:
   (C,s, σ, K, exit) final  (Final_Exit)
@@ -377,6 +374,8 @@ S_Return in the factorial example below.
 YJ: No, C is the callee and C' is the caller (contrary to the previous
 rule). We are giving back control to the caller and restoring its
 argument.
+YJ: In S_Call_Pop C denotes the caller, so this rule saves the
+argument slot of the caller, not the callee: s[C,0,0].
 
 Note: At this level we don't need to enforce interfaces in the
 operational semantics. The interface is syntactically extracted from
@@ -1154,6 +1153,9 @@ both defined as in the low-level semantics
 
 AAA: I am a little bit confused by the type of E. Is it a set of
 procedure identifiers C.P? Or is it a set of component identifiers C?
+YJ: Neither. It is morally a map from procedure identifiers C.P to
+integers. Currently, it is formally a map from Cs to maps from Ps to
+integers (not sure why; could change this).
 
 Note: the set of program components is dom(E)
                  context components is dom(ψ)∖dom(E)
@@ -1582,6 +1584,9 @@ termination, the context can take any action that it can perform.
 The same property holds when interverting players.
 
 AAA: One of the sides of the conjunction follows from the other, right?
+YJ: Yes. Actually they are exactly the same when we unfold
+⁻¹. Probably shouldn't keep both, but things will be clearer with the
+new notation.
 
 *** Compiled, fully-defined programs only yield canonical traces
 
@@ -1670,6 +1675,8 @@ in which t = erase(T).
 
 AAA: Same here; would it be possible to recover one side of the lemma
 from the other by symmetry?
+YJ: For this one I would need further detail on where you see a
+symmetry here.
 
 **** Proof
 
