@@ -444,20 +444,15 @@ Inductive small_step (D: context) : cfg -> cfg -> Prop :=
     (C, (update_state C b i i' s), d, K, EVal i')
   (* S_Call_Push *)
   | S_Call_Push : forall C s d K C' P' e,
-    (component_defined C' (list procedure) D = true) ->
-    (procedure_defined C' P' procedure D = true) ->
     D ⊢ (C, s, d, K, ECall C' P' e) ⇒
     (C, s, d, (CCallHole C' P')::K, e)
   (* S_Call_Pop *)
   | S_Call_Pop : forall C' P' ep C s d K ia,
-    (component_defined C' (list procedure) D = true) ->
-    (procedure_defined C' P' procedure D = true) ->
     (fetch_context C' P' D) = ep ->     
     D ⊢ (C, s, d, (CCallHole C' P')::K, EVal ia) ⇒
     (C', (update_state C' 0 0 ia s), (Call C (fetch_state C 0 0 s) K)::d, [], ep)
   (* S_Return *)
   | S_Return : forall C s C' ia K d i,
-    (component_defined C' (list procedure) D = true) ->
     D ⊢ (C, s, (Call C' ia K)::d, [], EVal i) ⇒
     (C', (update_state C' 0 0 ia s), d, K, EVal i)
   where "D ⊢ e '⇒' e'" := (small_step D e e').
@@ -545,23 +540,15 @@ Definition basic_eval_cfg (D:context) (c:cfg) : cfg :=
     (C, update_state C b i1 i2 s, d, K, EVal i2)
   (* S_Call_Push *)
   | (C, s, d, K, (ECall C' P' e)) =>
-    if andb (component_defined C' (list procedure) D)
-      (procedure_defined C' P' procedure D) then
       (C, s, d, (CCallHole C' P') :: K, e)
-    else c
   (* S_Call_Pop *)
   | (C, s, d, (CCallHole C' P') :: K, EVal i) =>
     let s' := (update_state C' 0 0 i s) in 
     let e' := (fetch_context C' P' D) in
-    if andb (component_defined C' (list procedure) D) 
-       (procedure_defined C' P' procedure D) then
       (C', s', ((Call C (fetch_state C 0 0 s) K) :: d), [], e')
-    else c
   (* S_Return *)
   | (C, s, (Call C' ia K) :: d', [], EVal i) =>
-    if (component_defined C' (list procedure) D) then
-      (C', update_state C' 0 0 ia s, d', K, EVal i)
-    else c
+    (C', update_state C' 0 0 ia s, d', K, EVal i)
   (* Final cfg *)
   | (_, _, [], [], EVal _) => c
   | (_, _, _, _, EExit) => c
@@ -675,9 +662,9 @@ Example fact_2_eval :
   (1, state_fact, [], [], EVal 2).
 Proof.
   unfold factorial_2.
-  eapply multi_step. apply S_Call_Push. reflexivity. reflexivity.
+  eapply multi_step. apply S_Call_Push.
   eapply multi_step. apply S_Call_Pop. 
-  reflexivity. reflexivity. reflexivity.
+  reflexivity. 
   eapply multi_step.
     subcompute (fetch_context 1 0 context_fact).
     apply S_If_Push.
@@ -692,7 +679,7 @@ Proof.
     subcompute (eval_binop (ELeq, 2, 1)).
     apply S_If_Pop_Z.
   eapply multi_step. apply S_BinOp_Push.
-  eapply multi_step. apply S_Call_Push. reflexivity. reflexivity.
+  eapply multi_step. apply S_Call_Push.
   eapply multi_step. apply S_BinOp_Push.
   eapply multi_step. apply S_Read_Push.
   eapply multi_step. apply S_Read_Pop. reflexivity. reflexivity.
@@ -702,7 +689,7 @@ Proof.
   eapply multi_step. apply S_BinOp_Pop.
   eapply multi_step.
     subcompute (eval_binop (EMinus, 2, 1)). 
-    apply S_Call_Pop. reflexivity. reflexivity. reflexivity.
+    apply S_Call_Pop. reflexivity.
   eapply multi_step.
     subcompute ((fetch_state 1 0 0 state_fact)).
     subcompute (fetch_context 1 0 context_fact).
@@ -719,7 +706,7 @@ Proof.
   apply S_If_Pop_NZ. intro H. inversion H.
   eapply multi_step.
     subcompute ((fetch_state 1 0 0 (update_state 1 0 0 2 state_fact))).
-    apply S_Return. reflexivity.
+    apply S_Return.
   eapply multi_step. apply S_BinOp_Switch.
   eapply multi_step. apply S_Read_Push.
   eapply multi_step. apply S_Read_Pop. reflexivity. reflexivity.
@@ -732,7 +719,7 @@ Proof.
   eapply multi_step.
     subcompute (eval_binop (EMul, 1, 2)).
     apply S_Return.
-  simpl. reflexivity. apply multi_refl.
+  simpl. apply multi_refl.
 Qed.   
 
 (* _____________________________________ 
@@ -1035,7 +1022,7 @@ Proof.
   try (reflexivity);
   try (unfold not; intro contra; inversion contra).
   (* Undefined cfg cases *)
-  { 
+  
 Qed.
 
 Theorem preservation_proof :
