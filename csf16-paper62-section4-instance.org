@@ -838,49 +838,53 @@ They all correspond to easily detectable errors
 * Structured full abstraction instance
 ** Cross-level shapes
 
+*** Definition: s
+
 s ::=
   (ψ,            — whole program interface
    {C₀,...,Cₙ})  — names of the components that the attacker gets
 
-** Source language
-
-*** Partial programs and contexts:
-
-P, Q, A ::= (ψ, φ)
-
-*** Well formedness
+*** Well-formedness: s well formed
 
 ⊢ ψ well formed
-∀ κ ∈ φ. interfaceof(κ) ⊆ ψ[κ.name]
-———————————————————————————————————
-(ψ, φ) well formed
+{C₀,...,Cₙ} ⊆ dom(ψ)
+————————————————————————————
+(ψ, {C₀,...,Cₙ}) well formed
+
+** Source language
+
+*** Partial programs and contexts: P, Q, A
+
+P, Q, A ::= φ
+
+(no syntactic distinction between partial and whole programs)
+
+*** Program has shape: P ⊢• s
+
+ψ ⊢ φ well formed
+comps(φ) = {C₀,...,Cₙ}
+——————————————————————
+φ ∈• (ψ, {C₀,...,Cₙ})
+
+*** Context has shape: A ∈∘ s
+
+ψ ⊢ φ well formed
+dom(φ) = comps(ψ)∖{C₀,...,Cₙ}
+—————————————————————————————
+φ ∈∘ (ψ, {C₀,...,Cₙ})
 
 *** Context application: A[P]
 
-(_, φ_A)[(_, φ_P)] ::=
-  φ_A ⊎ φ_P
-
-*** Context has shape: A ⊢ s
-
-comps(φ_A) = {C₀,...,Cₙ}
-———————————————————————————
-(ψ, φ_A) ⊢ (ψ, {C₀,...,Cₙ})
-
-*** Program has shape: P ⊢ₙ s
-
-comps(φ_P) = comps(ψ)∖{C₀,...,Cₙ}
-—————————————————————————————————
-(ψ, φ_P) ⊢ₙ (ψ, {C₀,...,Cₙ})
+φ_A[φ_P] ::= φ_A ⊎ φ_P
 
 *** Context application preserves well formedness
 
-∀ A P s. A well formed  ∧  P well formed  ⇒
-         A ⊢ s  ∧  P ⊢ₙ s ⇒
+∀ A P s. s well formed ∧ A ∈∘ s ∧ P ∈• s ⇒
          A[P] whole well formed
 
 ** Target language
 
-*** Partial programs and contexts
+*** Partial programs and contexts: p, q, a
 
 p, q, a ::= (ψ, mem, E)
 
@@ -893,31 +897,26 @@ dom(mem) = dom(E) ⊆ comps(ψ)
 ————————————————————————————
 (ψ, mem, E) well formed
 
-*** Context has shape: a ⊢ s
+*** Program has shape: p ∈• s
 
-dom(E) = {C₀,...,Cₙ}
-——————————————————————————————
-(ψ, mem, E) ⊢ (ψ, {C₀,...,Cₙ})
+∀ κ ∈ ψₚ, ψ[κ.name] = κ
+dom(E) = dom(mem) = comps(ψₚ) = {C₀,...,Cₙ}
+———————————————————————————————————————————
+(ψₚ, mem, E) ∈• (ψ, {C₀,...,Cₙ})
 
-*** Program has shape: p ⊢ₙ s
+*** Context has shape: a ∈∘ s
 
-dom(E) = comps(ψ)∖{C₀,...,Cₙ}
-———————————————————————————————
-(ψ, mem, E) ⊢ₙ (ψ, {C₀,...,Cₙ})
+∀ κ ∈ ψₐ, ψ[κ.name] = κ
+dom(E) = dom(mem) = comps(ψₐ) = comps(ψ)∖{C₀,...,Cₙ}
+————————————————————————————————————————————————————
+(ψₐ, mem, E) ∈• (ψ, {C₀,...,Cₙ})
 
 *** Context application: a[p]
 
-(ψ, memₐ, Eₐ)[(_, memₚ, Eₚ)] ::=
-  (ψ, memₐ ⊎ memₚ, Eₐ ⊎ Eₚ)
+(ψₐ, memₐ, Eₐ)[(ψₚ, memₚ, Eₚ)] ::=
+  (ψₐ ⊎ ψₚ, memₐ ⊎ memₚ, Eₐ ⊎ Eₚ)
 
-*** Context application preserves well formedness
-
-∀ a p s. a well formed  ∧  p well formed  ⇒
-         a ⊢ s  ∧  p ⊢ₙ s ⇒
-         a[p] whole well formed
-
-
-* Compiler
+* Compiler (changes in partial programs not propagated yet)
 
 Non-optimizing, naive compiler.
 
@@ -1138,7 +1137,7 @@ p diverges ≜
   P↓ well formed ∧ P↓ ⊢ₙ s
 
 
-* Proofs using trace semantics
+* Proofs using trace semantics (changes in trace notation & partial programs not propagated yet)
 
 ** Labeled reduction for partial programs
 
