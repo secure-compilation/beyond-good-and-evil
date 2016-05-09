@@ -4,9 +4,9 @@ Require Export SfLib.
                   SYNTAX  
    _____________________________________ *)
 
-Definition component_id := option nat.
-Definition procedure_id := option nat.
-Definition buffer_id := option nat.
+Definition component_id := nat.
+Definition procedure_id := nat.
+Definition buffer_id := nat.
 
 Definition main_cid := 0.
 
@@ -21,7 +21,7 @@ Inductive binop : Type :=
   | EMul.
 
 Inductive expr : Type :=
-  | EVal : option nat -> expr (* i *)
+  | EVal : nat -> expr (* i *)
   | EBinop : binop -> expr -> expr -> expr (* e₁ ⊗ e₂ *)
   | EIfThenElse : expr -> expr -> expr -> expr (* if e then e₁ else e₂ *)
   | ELoad : buffer_id -> expr -> expr (* b[e] *)
@@ -31,15 +31,15 @@ Inductive expr : Type :=
 
 Definition eval_binop (e : binop * nat * nat) : expr :=
   match e with
-  | (EEq, a, b) => if (beq_nat a b) then EVal (Some 1) else EVal (Some 0)
-  | (ELeq, a, b) => if (ble_nat a b) then EVal (Some 1) else EVal (Some 0)
-  | (ESeq, a, b) => EVal (Some b)
-  | (EAdd, a, b) => EVal (Some (a+b))
-  | (EMinus, a, b) => EVal (Some (a-b))
-  | (EMul, a, b) => EVal (Some (a*b))
+  | (EEq, a, b) => if (beq_nat a b) then EVal 1 else EVal 0
+  | (ELeq, a, b) => if (ble_nat a b) then EVal 1 else EVal 0
+  | (ESeq, a, b) => EVal b
+  | (EAdd, a, b) => EVal (a+b)
+  | (EMinus, a, b) => EVal (a-b)
+  | (EMul, a, b) => EVal (a*b)
   end.
 
-Definition buffer : Type := list (option nat).
+Definition buffer : Type := list nat.
 
 Definition procedure : Type := expr.
 Definition proc_call : Type := (component_id * procedure_id).
@@ -55,7 +55,7 @@ Definition component : Type :=
 
 Definition get_nameC (C:component) : component_id :=
   match C with
-  | (name, _, _, _, _, _) => Some name
+  | (name, _, _, _, _, _) => name
   end.
 
 Definition get_bnum (C:component) : nat :=
@@ -96,7 +96,7 @@ Definition interface : Type :=
 
 Definition get_name (i:interface) : component_id :=
   match i with
-  | (name, _, _) => Some name
+  | (name, _, _) => name
   end.
 
 Definition get_import (i:interface) : 
@@ -128,15 +128,11 @@ Fixpoint filter_same_procsin_as (C : component_id)
   (list proc_call) :=
   match l with
   | [] => []
-  | (Some h, h')::t => 
-      match C with
-      | Some C' => if (beq_nat h C') then
-                    filter_same_procsin_as C t
-                   else
-                    (Some h, h') :: (filter_same_procsin_as C t)
-      | None => []
-      end
-  | _ => []
+  | (h, h')::t => 
+      if (beq_nat h C) then
+        filter_same_procsin_as C t
+        else
+        (h, h') :: (filter_same_procsin_as C t)
   end.
 
 Definition extprocsin (C:component_id) (e:expr) :
@@ -147,12 +143,11 @@ Fixpoint list_minus_imports
   list proc_call :=
   match l1 with
   | [] => []
-  | (Some x, Some y)::t => 
+  | (x, y)::t => 
     if existsb (fun z => andb (beq_nat x (fst z)) (beq_nat y (snd z))) l2 then
       list_minus_imports t l2
     else
       (x, y) :: (list_minus_imports t l2)
-  | _ => []
   end.
 
 Definition intprocsin (C:component_id) (e:expr) :
@@ -228,10 +223,10 @@ Inductive flatevalcon : Type :=
   | CHoleOp : binop -> expr -> flatevalcon (* □ ⊗ e₂ *)
   | COpHole : nat -> binop -> flatevalcon (* i₁ ⊗ □ *)
   | CIfHoleThenElse : expr -> expr -> flatevalcon (* if □ then e₁ else e₂ *)
-  | CHoleLoad : option nat -> flatevalcon (* b[□] *)
-  | CHoleStore : option nat -> expr -> flatevalcon (* b[□] := e *)
-  | CStoreHole : option nat -> nat -> flatevalcon (* b[i] := □ *)
-  | CCallHole : nat -> nat -> flatevalcon. (* C.P(□) *)
+  | CHoleLoad : buffer_id -> flatevalcon (* b[□] *)
+  | CHoleStore : buffer_id -> expr -> flatevalcon (* b[□] := e *)
+  | CStoreHole : buffer_id -> nat -> flatevalcon (* b[i] := □ *)
+  | CCallHole : component_id -> procedure_id -> flatevalcon. (* C.P(□) *)
 
 (* Used for the well-formedness of flatevalcon. It's a 
 approximation for the search of procedure calls with
@@ -273,10 +268,6 @@ Definition call_stack :=
 
 Definition state :=
   list (list buffer).
-
-Definition fetch_state (C:component_id) (b:buffer_id) 
-  (i:nat) (s:state) :=
-  nth i (nth b (nth C s []) []) 0.
 
 Fixpoint update_value
   (i:nat) (i':nat) (l:buffer) : buffer :=
@@ -321,9 +312,104 @@ Definition context :=
 Definition procbodies (P:program) : context :=
   map (get_procs) P.
 
+(* ------- Definitions : definedness ------- *)
+
+Definition component_defined (C:component_id) 
+  (D:context) : bool :=
+  let l := (length D) in
+  if andb (ble_nat C l) (negb (beq_nat C l)) then
+    true
+  else
+    false.
+
+Definition procedure_defined (C:component_id) 
+  (P:procedure_id) (D:context) : bool :=
+  let l := (length (nth C D [])) in
+  if andb (component_defined C D)
+    (andb (ble_nat P l) (negb (beq_nat P l))) then
+    true
+  else
+    false.
+
+Definition buffer_defined (C:component_id) 
+  (b:buffer_id) (s:state) (D:context) : bool :=
+  let l := (length (nth C s [])) in
+  if andb (component_defined C D)
+    (andb (ble_nat b l) (negb (beq_nat b l))) then
+    true
+  else
+    false.
+
+Definition value_defined (C:component_id) (b:buffer_id) 
+  (i:nat) (s:state) (D:context) : bool :=
+  let l := (length (nth b (nth C s []) [])) in
+  if andb (component_defined C D)
+    (andb (buffer_defined C b s D) 
+    (andb (ble_nat i l) (negb (beq_nat i l)))) then
+    true
+  else
+    false.
+
+(* Undefinedness *)
+
+Definition component_undefined (C:component_id) 
+  (D:context)
+  : bool :=
+  negb (component_defined C D).
+
+Definition procedure_undefined (C:component_id) 
+  (P:procedure_id) (D:context) : bool :=
+  negb (procedure_defined C P D).
+
+Definition buffer_undefined (C:component_id) 
+  (b:buffer_id) (s:state) (D:context) : bool :=
+  negb (buffer_defined C b s D).
+
+Definition value_undefined (C:component_id) (b:buffer_id) 
+  (i:nat) (s:state) (D:context) : bool :=
+  negb (value_defined C b i s D).
+
+(* ---- Undefined behaviors ---- *)
+
+Inductive undefined_cfg : context -> cfg -> Prop :=
+  | undef_load : forall C s d b K i D, 
+    (value_undefined C b i s D = true) ->
+    undefined_cfg D (C, s, d, (CHoleLoad b)::K, EVal i)
+  | undef_store  : forall C s d b K i i' D,
+    (value_undefined C b i s D = true) ->
+    undefined_cfg D (C, s, d, (CStoreHole b i)::K, EVal i').
+
+Example undefined_cfg1 :
+  undefined_cfg [] (0, [], [], (CHoleLoad 0)::[], EVal 1).
+Proof.
+  constructor.
+  unfold value_undefined.
+  unfold value_defined.
+  reflexivity.
+Qed.
+
+Example buff_def1 : value_undefined 0 0 4 [[];[]] [] = true.
+Proof.
+  unfold value_undefined.
+  unfold value_defined.
+  reflexivity.
+Qed.
+
+Example buff_def2 : value_defined 0 0 1 [[[1;2;3];[];[]]] [[];[]] = true.
+Proof.
+  unfold value_defined.
+  simpl. reflexivity.
+Qed.
+
+(* ------- Definitions : fetch functions ------- *)
+
 Definition fetch_context 
   (C':component_id) (P':procedure_id) (D:context) : expr :=
   nth P' (nth C' D []) exit.
+
+Definition fetch_state (C:component_id) (b:buffer_id) 
+  (i:nat) (s:state) :=
+  nth i (nth b (nth C s []) []) 0.
 
 (* ------- Definitions : special configurations ------- *)
 
@@ -369,35 +455,43 @@ Inductive small_step (D: context) : cfg -> cfg -> Prop :=
     (C, s, d, K, e2)
   (* S_Read_Push *)
   | S_Read_Push : forall C s d K b e,
+    (buffer_defined C b s D = true) ->
     D ⊢ (C, s, d, K, ELoad b e) ⇒
     (C, s, d, (CHoleLoad b)::K, e)
   (* S_Read_Pop *)
   | S_Read_Pop : forall C s d b K i,
+    (buffer_defined C b s D = true) ->
     D ⊢ (C, s, d, (CHoleLoad b)::K, EVal i) ⇒
     (C, s, d, K, EVal (fetch_state C b i s))
   (* S_Write_Push *)
   | S_Write_Push : forall C s d K b e1 e2,
+    (buffer_defined C b s D = true) ->
     D ⊢ (C, s, d, K, EStore b e1 e2) ⇒
     (C, s, d, (CHoleStore b e2)::K, e1)
   (* S_Write_Swap *)
   | S_Write_Swap : forall C s d b e2 K i,
+    (buffer_defined C b s D = true) ->
     D ⊢ (C, s, d, (CHoleStore b e2)::K, EVal i) ⇒
     (C, s, d, (CStoreHole b i)::K, e2)
   (* S_Write_Pop *)
   | S_Write_Pop : forall C s d b i K i',
+    (buffer_defined C b s D = true) ->
     D ⊢ (C, s, d, (CStoreHole b i)::K, EVal i') ⇒
     (C, (update_state C b i i' s), d, K, EVal i')
   (* S_Call_Push *)
   | S_Call_Push : forall C s d K C' P' e,
+    (procedure_defined C' P' D = true) ->
     D ⊢ (C, s, d, K, ECall C' P' e) ⇒
     (C, s, d, (CCallHole C' P')::K, e)
   (* S_Call_Pop *)
   | S_Call_Pop : forall C' P' ep C s d K ia,
+    (procedure_defined C' P' D = true) ->
     (fetch_context C' P' D) = ep ->     
     D ⊢ (C, s, d, (CCallHole C' P')::K, EVal ia) ⇒
     (C', (update_state C' 0 0 ia s), (Call C (fetch_state C 0 0 s) K)::d, [], ep)
   (* S_Return *)
   | S_Return : forall C s C' ia K d i,
+    (component_defined C' D = true) ->
     D ⊢ (C, s, (Call C' ia K)::d, [], EVal i) ⇒
     (C', (update_state C' 0 0 ia s), d, K, EVal i)
   where "D ⊢ e '⇒' e'" := (small_step D e e').
@@ -413,36 +507,67 @@ Notation "D ⊢ e '⇒*' e'" := (multi (small_step D) e e') (at level 40).
 
 Definition basic_eval_cfg (D:context) (c:cfg) : cfg :=
   match c with
-  | (C, s, d, K, EBinop op e1 e2) => 
+  (* S_BinOp_Push *)
+  | (C, s, d, K, EBinop op e1 e2) =>
     (C, s, d, (CHoleOp op e2) :: K, e1)
+  (* S_BinOp_Switch *)
   | (C, s, d, (CHoleOp op e2) :: K, EVal i1) =>
     (C, s, d, (COpHole i1 op) :: K, e2)
+  (* S_BinOp_Pop *)
   | (C, s, d, (COpHole i1 op) :: K, EVal i2) =>
     (C, s, d, K, (eval_binop (op, i1, i2)))
+  (* S_If_Push *)
   | (C, s, d, K, (EIfThenElse e1 e2 e3)) =>
     (C, s, d, (CIfHoleThenElse e2 e3) :: K, e1)
+  (* S_If_Pop_NZ *)
   | (C, s, d, (CIfHoleThenElse e2 e3) :: K, EVal 0) =>
     (C, s, d, K, e3)
+  (* S_If_Pop_Z *)
   | (C, s, d, (CIfHoleThenElse e2 e3) :: K, EVal _) =>
     (C, s, d, K, e2)
+  (* S_Read_Push *)
   | (C, s, d, K, (ELoad b e)) =>
-    (C, s, d, (CHoleLoad b) :: K, e)
+    if (buffer_defined C b s D) then
+      (C, s, d, (CHoleLoad b) :: K, e)
+    else c
+  (* S_Read_Pop *)
   | (C, s, d, (CHoleLoad b) :: K, EVal i) =>
-    (C, s, d, K, EVal (fetch_state C b i s))
+    if (buffer_defined C b s D) then
+      (C, s, d, K, EVal (fetch_state C b i s)) 
+    else c
+  (* S_Write_Push *)
   | (C, s, d, K, (EStore b e1 e2)) =>
-    (C, s, d, (CHoleStore b e2) :: K, e1)
+    if (buffer_defined C b s D) then
+      (C, s, d, (CHoleStore b e2) :: K, e1)
+    else c
+  (* S_Write_Swap *)
   | (C, s, d, (CHoleStore b e2) :: K, EVal i1) =>
-    (C, s, d, (CStoreHole b i1) :: K, e2)
+    if (buffer_defined C b s D) then
+      (C, s, d, (CStoreHole b i1) :: K, e2)
+    else c
+  (* S_Write_Pop *)
   | (C, s, d, (CStoreHole b i1) :: K, EVal i2) =>
-    (C, update_state C b i1 i2 s, d, K, EVal i2)
+    if (buffer_defined C b s D) then
+      (C, update_state C b i1 i2 s, d, K, EVal i2)
+    else c
+  (* S_Call_Push *)
   | (C, s, d, K, (ECall C' P' e)) =>
-    (C, s, d, (CCallHole C' P') :: K, e)
+    if (procedure_defined C' P' D) then
+      (C, s, d, (CCallHole C' P') :: K, e)
+    else c
+  (* S_Call_Pop *)
   | (C, s, d, (CCallHole C' P') :: K, EVal i) =>
     let s' := (update_state C' 0 0 i s) in 
     let e' := (fetch_context C' P' D) in
-    (C', s', ((Call C (fetch_state C 0 0 s) K) :: d), [], e')
+    if (procedure_defined C' P' D) then
+      (C', s', ((Call C (fetch_state C 0 0 s) K) :: d), [], e')
+    else c
+  (* S_Return *)
   | (C, s, (Call C' ia K) :: d', [], EVal i) =>
-    (C', update_state C' 0 0 ia s, d', K, EVal i)
+    if (component_defined C' D) then
+      (C', update_state C' 0 0 ia s, d', K, EVal i)
+    else c
+  (* Final cfg *)
   | (_, _, [], [], EVal _) => c
   | (_, _, _, _, EExit) => c
   end.
@@ -555,14 +680,15 @@ Example fact_2_eval :
   (1, state_fact, [], [], EVal 2).
 Proof.
   unfold factorial_2.
-  eapply multi_step. apply S_Call_Push.
-  eapply multi_step. apply S_Call_Pop. reflexivity.
+  eapply multi_step. apply S_Call_Push. reflexivity.
+  eapply multi_step. apply S_Call_Pop. 
+  reflexivity. reflexivity.
   eapply multi_step.
     subcompute (fetch_context 1 0 context_fact).
     apply S_If_Push.
   eapply multi_step. apply S_BinOp_Push. 
-  eapply multi_step. apply S_Read_Push.
-  eapply multi_step. apply S_Read_Pop.
+  eapply multi_step. apply S_Read_Push. reflexivity.
+  eapply multi_step. apply S_Read_Pop. reflexivity.
   eapply multi_step.
     subcompute (EVal (fetch_state 1 0 0 (update_state 1 0 0 2 state_fact))).
     apply S_BinOp_Switch.
@@ -571,24 +697,24 @@ Proof.
     subcompute (eval_binop (ELeq, 2, 1)).
     apply S_If_Pop_Z.
   eapply multi_step. apply S_BinOp_Push.
-  eapply multi_step. apply S_Call_Push.
+  eapply multi_step. apply S_Call_Push. reflexivity.
   eapply multi_step. apply S_BinOp_Push.
-  eapply multi_step. apply S_Read_Push.
-  eapply multi_step. apply S_Read_Pop.
+  eapply multi_step. apply S_Read_Push. reflexivity.
+  eapply multi_step. apply S_Read_Pop. reflexivity.
   eapply multi_step. 
     subcompute (fetch_state 1 0 0 (update_state 1 0 0 2 state_fact)).
     apply S_BinOp_Switch.
   eapply multi_step. apply S_BinOp_Pop.
   eapply multi_step.
     subcompute (eval_binop (EMinus, 2, 1)). 
-    apply S_Call_Pop. reflexivity.
+    apply S_Call_Pop. reflexivity. reflexivity.
   eapply multi_step.
     subcompute ((fetch_state 1 0 0 state_fact)).
     subcompute (fetch_context 1 0 context_fact).
     apply S_If_Push.
   eapply multi_step. apply S_BinOp_Push. 
-  eapply multi_step. apply S_Read_Push.
-  eapply multi_step. apply S_Read_Pop.
+  eapply multi_step. apply S_Read_Push. reflexivity.
+  eapply multi_step. apply S_Read_Pop. reflexivity.
   eapply multi_step.
     subcompute ((fetch_state 1 0 0 (update_state 1 0 0 1 (update_state 1 0 0 2 state_fact)))).
     apply S_BinOp_Switch.
@@ -598,10 +724,10 @@ Proof.
   apply S_If_Pop_NZ. intro H. inversion H.
   eapply multi_step.
     subcompute ((fetch_state 1 0 0 (update_state 1 0 0 2 state_fact))).
-    apply S_Return.
+    apply S_Return. reflexivity.
   eapply multi_step. apply S_BinOp_Switch.
-  eapply multi_step. apply S_Read_Push.
-  eapply multi_step. apply S_Read_Pop.
+  eapply multi_step. apply S_Read_Push. reflexivity.
+  eapply multi_step. apply S_Read_Pop. reflexivity.
   eapply multi_step.
     subcompute ((fetch_state 1 0 0
        (update_state 1 0 0 2
@@ -611,7 +737,7 @@ Proof.
   eapply multi_step.
     subcompute (eval_binop (EMul, 1, 2)).
     apply S_Return.
-  simpl. apply multi_refl.
+  simpl. reflexivity. apply multi_refl.
 Qed.   
 
 
@@ -920,57 +1046,6 @@ Inductive wellformed_whole_program : program -> Prop :=
        WELL-FORMEDNESS : CFG SCOPE
    _____________________________________ *)
 
-(* ---- Undefined behaviors ---- *)
-
-Definition is_defined (C:component_id) (b:buffer_id) (i:nat) (s:state)
-   : Prop :=
-   let l := (length (nth b (nth C s []) [])) in
-   (ble_nat i l = true) /\ ~(i = l).
-
-Definition is_undefined (C:component_id) (b:buffer_id) (i:nat) (s:state)
-  : Prop :=
-  ~ (is_defined C b i s).
-
-Inductive undefined_cfg : cfg -> Prop :=
-  | undef_load : forall C s d b K i, 
-    is_undefined C b i s ->
-    undefined_cfg (C, s, d, (CHoleLoad b)::K, EVal i)
-  | undef_store  : forall C s d b K i i',
-    is_undefined C b i s ->
-    undefined_cfg (C, s, d, (CStoreHole b i)::K, EVal i').
-
-Example undefined_cfg1 :
-  undefined_cfg (0, [], [], (CHoleLoad 0)::[], EVal 1).
-Proof.
-  constructor.
-  unfold is_undefined.
-  unfold is_defined.
-  intro contra.
-  destruct contra.
-  simpl in *.
-  inversion H.
-Qed. 
-
-Example buff_def1 : is_undefined 0 0 4 state1.
-Proof.
-  unfold is_undefined.
-  unfold is_defined.
-  intro contra.
-  destruct contra.
-  simpl in *.
-  unfold not in H0.
-  apply H0.
-  reflexivity.
-Qed.
-
-Example buff_def2 : is_defined 0 0 1 state1.
-Proof.
-  unfold is_defined. simpl.
-  split.
-  reflexivity.
-  intro contra. inversion contra.
-Qed.
-
 (* ---- Well-formedness invariants ---- *)
 
 Definition component_invariant : Type :=
@@ -1012,6 +1087,34 @@ Definition wfinv_of_C (C:component) : component_invariant :=
 
 Definition wfinv_of_P (P:program) : partial_program_invariant :=
   map wfinv_of_C P.
+
+Definition component_defined_invariant 
+  (C:component_id) (PPI:partial_program_invariant) : bool :=
+  let l := (length PPI) in
+  if (andb (ble_nat C l) (negb (beq_nat C l))) then
+    true
+  else
+    false.
+
+Definition buffer_defined_invariant (C:component_id) 
+  (b:buffer_id) (s:state) (PPI:partial_program_invariant) : bool :=
+  let l := (length (nth C s [])) in
+  if andb (component_defined_invariant C PPI)
+    (andb (ble_nat b l) (negb (beq_nat b l))) then
+    true
+  else
+    false.
+
+Definition value_defined_invariant 
+  (C:component_id) (b:buffer_id) (i:nat) (s:state)
+  (PPI:partial_program_invariant) : bool :=
+  let l := (length (nth b (nth C s []) [])) in
+  if andb (component_defined_invariant C PPI)
+    (andb (buffer_defined_invariant C b s PPI) 
+    (andb (ble_nat i l) (negb (beq_nat i l)))) then
+    true
+  else
+    false.
 
 (* ---- Well-formedness of an expression ---- *)
 Reserved Notation "'EXPR' i n |- e 'wellformed'" (at level 40).
@@ -1067,7 +1170,7 @@ Inductive wellformed_state (G:partial_program_invariant) :
   state -> Prop :=
   | WF_state : forall b i s,
     (forall n, (In n G) ->
-     ((is_defined (get_nameN n) b i s ) <->
+     ((value_defined_invariant (get_nameN n) b i s G = true) <->
     (In b (generate_intlist 0 (get_bnumN n)) /\ 
      In i (generate_intlist 0 (nth b (get_blens n) 0))))) ->
     wellformed_state G s
@@ -1144,7 +1247,7 @@ Definition partial_progress : Prop :=
   let G := wfinv_of_P P in
   let D := procbodies P in
   forall cfg, wellformed_cfg Is G cfg ->
-  (final_cfg cfg \/ undefined_cfg cfg \/ (exists cfg', D ⊢ cfg ⇒ cfg')).
+  (final_cfg cfg \/ undefined_cfg D cfg \/ (exists cfg', D ⊢ cfg ⇒ cfg')).
 
 Definition preservation : Prop :=
   forall P, wellformed_whole_program P ->
