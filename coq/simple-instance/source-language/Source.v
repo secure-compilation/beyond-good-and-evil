@@ -433,13 +433,12 @@ Inductive small_step (D: context) : cfg -> cfg -> Prop :=
     (C, s, d, (CHoleStore b e2)::K, e1)
   (* S_Write_Swap *)
   | S_Write_Swap : forall C s d b e2 K i,
-    (buffer_defined C b s = true) ->
-    (value_defined C b i s = true) ->
     D ⊢ (C, s, d, (CHoleStore b e2)::K, EVal i) ⇒
     (C, s, d, (CStoreHole b i)::K, e2)
   (* S_Write_Pop *)
   | S_Write_Pop : forall C s d b i K i',
     (buffer_defined C b s = true) ->
+    (value_defined C b i s = true) ->
     D ⊢ (C, s, d, (CStoreHole b i)::K, EVal i') ⇒
     (C, (update_state C b i i' s), d, K, EVal i')
   (* S_Call_Push *)
@@ -532,12 +531,12 @@ Definition basic_eval_cfg (D:context) (c:cfg) : cfg :=
     (C, s, d, (CHoleStore b e2) :: K, e1)
   (* S_Write_Swap *)
   | (C, s, d, (CHoleStore b e2) :: K, EVal i1) =>
-    if andb (buffer_defined C b s) (value_defined C b i1 s) then
-      (C, s, d, (CStoreHole b i1) :: K, e2)
-    else c
+    (C, s, d, (CStoreHole b i1) :: K, e2)
   (* S_Write_Pop *)
   | (C, s, d, (CStoreHole b i1) :: K, EVal i2) =>
-    (C, update_state C b i1 i2 s, d, K, EVal i2)
+    if andb (buffer_defined C b s) (value_defined C b i1 s) then
+      (C, update_state C b i1 i2 s, d, K, EVal i2)
+    else c
   (* S_Call_Push *)
   | (C, s, d, K, (ECall C' P' e)) =>
       (C, s, d, (CCallHole C' P') :: K, e)
@@ -949,10 +948,10 @@ Proof.
       simpl in H2. destruct H2.
       destruct H2. contradiction.
     SCase "p = h::t".
-      admit.
-      (*destruct c as [[[[[name bnum] buffers] pnum] export] procs];
+      (* destruct c as [[[[[name bnum] buffers] pnum] export] procs];
       try (destruct name); try (destruct bnum); try (destruct buffers);
-      try (destruct pnum); try (destruct export); try (destruct procs).*)
+      try (destruct pnum); try (destruct export); try (destruct procs). *)
+      admit.
   }
   Case "Callstack wellformed".
   { constructor. }
@@ -1020,14 +1019,42 @@ Proof.
     constructor
   );
   try (reflexivity);
-  try (unfold not; intro contra; inversion contra).
+  try (unfold not; intro contra; inversion contra);
   (* Undefined cfg cases *)
-  
+  try (right; left).
+Admitted.
+
+Lemma wf_flatevalcon_implies_expr :
+  forall i n E,
+  wellformed_expr i n (flatevalcon_to_expr E) -> 
+  wellformed_flatevalcon i n E.
+Proof.
+  intros.
+  inversion H.
+  constructor.
+  apply H0.
+  apply H1.
+  apply H2.
 Qed.
 
 Theorem preservation_proof :
   preservation.
 Proof.
+  unfold preservation.
+  intros.
+  inversion H1; constructor;
+  (* State *)
+    try (inversion H0 as [n s'];
+    rewrite <- H8 in H2;
+    inversion H2; apply H4);
+  (* Callstack *)
+    try (inversion H0 as [n s'];
+    rewrite <- H8 in H2;
+    inversion H2; apply H5);
+  (* Continuations *)
+    try (inversion H0 as [n s']).
+    rewrite <- H8 in H2.
+    inversion H2. constructor.
 Admitted.
 
 Theorem partial_type_safety :
@@ -1046,7 +1073,7 @@ Qed.
 
 Lemma eval_cfg_1step : 
   forall (D:context) (c : cfg),
-  (final_cfg c \/ D ⊢ c ⇒ eval_cfg D c 1).
+  (final_cfg c \/ undefined_cfg D c \/ D ⊢ c ⇒ eval_cfg D c 1).
 Proof.
   intros.
   destruct c as [[[[C s] d] K] e].
@@ -1057,10 +1084,11 @@ Proof.
   try (destruct k);
   try (destruct call);
   try (destruct n);
-  try (right; constructor);
+  try (right; right; constructor);
   try (intro contra; inversion contra);
-  try reflexivity.
-Qed.
+  try reflexivity;
+  try (right; left; constructor).
+Admitted.
 
 Lemma final_becomes_final :
   forall D n c,
@@ -1110,6 +1138,23 @@ Proof.
   }
 Qed.
 
+Lemma boolean_transfert :
+  forall a b, negb a = b <-> a = negb b.
+Proof.
+  intros.
+  split.
+  Case "->".
+    intro.
+    destruct a; destruct b;
+    try (inversion H);
+    try (reflexivity).
+  Case "<-".
+    intro.
+    destruct a; destruct b;
+    try (inversion H);
+    try (reflexivity).
+Qed.
+
 Theorem evalcfg_implies_smallstep :
   forall (i: nat) (D:context) (c : cfg),
   (D ⊢ c ⇒* (eval_cfg D c i)).
@@ -1133,6 +1178,14 @@ Proof.
         [destruct K| ];
         simpl; rewrite final_becomes_final;
         try (apply multi_refl); apply final_exit.
+      destruct H.
+      SCase "undefined".
+          inversion H;
+          destruct d; try (destruct c0); simpl; 
+          apply boolean_transfert in H0; simpl in H0;
+          apply boolean_transfert in H1; simpl in H1;
+          rewrite H0; rewrite H1; simpl;
+          apply IHi'.
       SCase "evaluable".
         eapply multi_step.
         apply H.
@@ -1157,7 +1210,8 @@ Proof.
     unfold eval_cfg;
     unfold basic_eval_cfg;
     rewrite H; reflexivity
-  ).
+  );
+  try (simpl; rewrite H; rewrite H0; simpl; reflexivity).
 Qed.
 
 Theorem smallstep_implies_evalcfg :
@@ -1205,15 +1259,19 @@ Qed.
 (* ---- Strong progress ---- *)
 
 Theorem smallstep_strongprogress :
-  forall c D, final_cfg c \/ exists c', D ⊢ c ⇒ c'.
+  forall c D, 
+  undefined_cfg D c \/ final_cfg c \/ exists c', D ⊢ c ⇒ c'.
 Proof.
   intros. 
   pose (eval_cfg_1step D c) as lemma.
   destruct lemma.
-  Case "left".
+  Case "final".
+    right. left. apply H.
+  destruct H.
+  Case "undefined".
     left. apply H.
-  Case "right".
-    right. exists (eval_cfg D c 1).
+  Case "evaluable".
+    right. right. exists (eval_cfg D c 1).
     apply H.
 Qed.
 
@@ -1223,28 +1281,37 @@ Definition normal_form {X:Type} (R:relation X) (t:X) : Prop :=
   ~ exists t', R t t'.
 
 Theorem finalcfg_normalform_equivalence :
-  forall c D, final_cfg c <-> normal_form (small_step D) c.
+  forall c D, final_cfg c \/ undefined_cfg D c
+  <-> normal_form (small_step D) c.
 Proof.
   intros. split.
   Case "->".
-  { intro H. unfold normal_form. inversion H.
+  { intro H. unfold normal_form.
+    destruct H. inversion H.
     SCase "final value".
       intro contra. destruct contra.
       inversion H1.
     SCase "final exit".
       intro contra. destruct contra.
       inversion H1.
+    SCase "undefined".
+      intro contra. destruct contra.
+      admit.
   }
   Case "<-".
   { intro H. unfold normal_form in H.
     unfold not in H.
-    assert (final_cfg c \/ (exists c' : cfg, D ⊢ c ⇒ c')).
+    assert (undefined_cfg D c \/ final_cfg c \/ 
+           (exists c' : cfg, D ⊢ c ⇒ c')).
       apply smallstep_strongprogress.
     destruct H0.
-    SCase "left".
-      apply H0.
-    SCase "right".
+    SCase "undefined".
+      right. apply H0.
+    destruct H0.
+    SCase "final".
+      left. apply H0.
+    SCase "evaluable".
       apply H in H0.
       contradiction.
   }
-Qed.
+Admitted.
