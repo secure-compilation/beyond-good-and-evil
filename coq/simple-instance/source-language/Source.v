@@ -484,7 +484,7 @@ Proof.
   constructor.
   unfold value_undefined.
   unfold value_defined.
-  reflexivity.
+  reflexivity. reflexivity.
 Qed.
 
 Example buff_def1 : value_undefined 0 0 4 [[];[]] = true.
@@ -1035,7 +1035,7 @@ Proof.
   try (reflexivity);
   try (unfold not; intro contra; inversion contra).
   (* Undefined cfg cases *)
-  {   
+  { 
 Qed.
 
 Theorem preservation_proof :
