@@ -202,7 +202,7 @@ comps({ι₀, ..., ιₙ}) = {ι₀.name, ..., ιₙ.name} – all components of
 comps(ι.import) ⊆ comps(ψ)\{ι.name}     — all imported components are defined
 ∀(C.P ∈ ι.import). P ∈ [0, ψ[C].export) – all imported external procedures are public
 0 ≤ ι.export                            — sanity check
-————————————–———–—————————————————–————
+———————————————————————————————————————
 ψ ⊢ ι well formed
 
 AAA: What is the role of the above sanity check? Isn't that condition
@@ -212,13 +212,13 @@ numbers, and not integers.
 ∀ ι ∈ ψ. ψ ⊢ ι well formed
 ∀ ι₁ ι₂ ∈ ψ. ι₁.name ≠ ι₂.name          — names are unique
 ∃ι ∈ ψ.  ι.name = main ∧ ι.export ≥ 1   — required to start the program
-————————————–———–————————–———–——————–
+—————————————————————————————————————
 ⊢ ψ well formed
 
 ι₁.name = ι₂.name
 ι₁.import ⊆ ι₂.import
 ι₁.export = ι₂.export
-————————————————–———–
+—————————————————————
 ι₁ ⊆ ι₂                – interface compatibility
 
 interfaceof(κ) ⊆ ψ[κ.name]               – κ appears in ψ with a compatible interface
@@ -226,17 +226,17 @@ interfaceof(κ) ⊆ ψ[κ.name]               – κ appears in ψ with a compat
 bufsin(κ) ⊆ [0,κ.bnum)                  – all used buffers are defined
 κ.export ≤ κ.pnum                       – sanity check
 κ.bnum ≥ 1 ∧ length(κ.bufs[0]) ≥ 1      – sanity check, to transfer call argument
-——————————————————————————–———————————–
+———————————————————————————————————————
 ψ ⊢ κ well formed
 
 ∀ κ ∈ φ. ψ ⊢ κ well formed
-———————–—————————————————–
+——————————————————————————
 ψ ⊢ φ well formed
 
 ψ = interfaceof(φ) ⇒
   ⊢ ψ well formed
   ψ ⊢ φ well formed
-———————————————–——––
+————————————————————
 φ whole well formed
 
 ** Big-step semantics
@@ -254,47 +254,47 @@ s[C,b,i] ::: i'
 s[C,b,i ↦ i'] ::: s'
   update local buffer cell after checking bounds
 
-—————–————–——————– :: E_Int
+—————————————————— :: E_Int
 Δ, C ⊢ s, i ⇓ s, i
 
 Δ, C ⊢ s, e₁ ⇓ s', i₁
 Δ, C ⊢ s', e₂ ⇓ s'', i₂
-——————————–————–—–—————————————— :: E_BinOp
+———————————————————————————————— :: E_BinOp
 Δ, C ⊢ s, e₁ ⊗ e₂ ⇓ s'', i₁ ⊗ i₂
 
 Δ, C ⊢ s, e ⇓ s', i   where i ≠ 0
 Δ, C ⊢ s', e₁ ⇓ s'', i₁
-———————–——————–——–————————————————–————— :: E_IfNZ
+———————————————————————————————————————— :: E_IfNZ
 Δ, C ⊢ s, if e then e₁ else e₂ ⇓ s'', i₁
 
 Δ, C ⊢ s, e ⇓ s', 0
 Δ, C ⊢ s', e₂ ⇓ s'', i₂
-———————–——————–——–————————————————–————— :: E_IfZ
+———————————————————————————————————————— :: E_IfZ
 Δ, C ⊢ s, if e then e₁ else e₂ ⇓ s'', i₂
 
 Δ, C ⊢ s, e ⇓ s', i
-–—–————————–—————–——–———–————– :: E_Read
+—————————————————————————————— :: E_Read
 Δ, C ⊢ s, b[e] ⇓ s', s'[C,b,i]
 
 Δ, C ⊢ s, e₁ ⇓ s', i
 Δ, C ⊢ s', e₂ ⇓ s'', i'
-–—–—————————–——————–——–———–—————–—————————— :: E_Write
+——————————————————————————————————————————— :: E_Write
 Δ, C ⊢ s, b[e₁] := e₂ ⇓ s''[C,b,i ↦ i'], i'
 
 Δ[C',P] = eₚ
 Δ, C ⊢ s, e ⇓ s', iₐ
 Δ, C' ⊢ s'[C',0,0 ↦ iₐ], eₚ ⇓ s'', iᵣ
-—————–———––——————————–——–———–————————————–———— :: E_Call
+—————————————————————————————————————————————— :: E_Call
 Δ, C ⊢ s, C'.P(e) ⇓ s''[C,0,0 ↦ s'[C,0,0]], iᵣ
 
-–—————————————–——–———–———– :: E_Exit
+—————————————————————————— :: E_Exit
 Δ, C ⊢ s, exit ⇓ s, EXITED
 + error monad rules to propagate this everywhere
 
 e.g.
 
 Δ, C ⊢ s, e₁ ⇓ s', EXITED
-——————————–————–—–—————————————— :: E_BinOp
+———————————————————————————————— :: E_BinOp
 Δ, C ⊢ s, e₁ ⊗ e₂ ⇓ s', EXITED
 
 ** Small-step semantics
@@ -344,7 +344,7 @@ Final configurations:
     (C, s, σ, if □ then e₁ else e₂ :: K, e)                      (S_If_Push)
 
 i ≠ 0
-—————————————–—–——————————————————————————————–——————————————— (S_If_Pop_NZ)
+—————————————————————————————————————————————————————————————— (S_If_Pop_NZ)
 Δ ⊢ (C, s, σ, if □ then e₁ else e₂ :: K, i) → (C, s, σ, K, e₁)
 
 Δ ⊢ (C, s, σ, if □ then e₁ else e₂ :: K, 0) → (C, s, σ, K, e₂)   (S_If_Pop_Z)
@@ -363,7 +363,7 @@ i ≠ 0
 Δ ⊢ (C, s, σ, K, C'.P'(e)) → (C, s, σ, C'.P'(□) :: K, e)   (S_Call_Push)
 
 Δ[C',P'] = eₚ
-————————————————————————–————————————————–––——————–————————–————–—— (S_Call_Pop)
+——————————————————————————————————————————————————————————————————— (S_Call_Pop)
 Δ ⊢ (C,  s,                                σ, C'.P'(□) :: K, iₐ) →
     (C', s[C',0,0 ↦ iₐ], (C,s[C,0,0],K) :: σ,            [], eₚ)
 
@@ -390,13 +390,13 @@ the left of ⊢).
 
 Δ ⊢ cfg  →* cfg'
 Δ ⊢ cfg' →  cfg''
-————————————————–
+—————————————————
 Δ ⊢ cfg  →* cfg''
 
 *** Δ ⊢ cfg ↛
 
 ∀ cfg', ¬(Δ ⊢ cfg → cfg')
-————————————————————————–
+—————————————————————————
 Δ ⊢ cfg ↛
 
 *** Lemma (Determinism)
@@ -528,7 +528,7 @@ wfinv(φ) ::= Γ where
 extprocsin(ι.name, e) ⊆ ι.import                 – all used external procedures are imported
 ∀(_.P ∈ intprocsin(ι.name, e)). P ∈ [0, η.pnum)  – all used internal procedures are defined
 bufsin(e) ⊆ [0,η.bnum)                           – all used buffers are defined
-———————————————————–——–———————————————————————–
+———————————————————————————————————————————————
 ι; η ⊢ e well formed
 
 
@@ -537,27 +537,27 @@ bufsin(e) ⊆ [0,η.bnum)                           – all used buffers are def
 extprocsin(ι.name, E) ⊆ ι.import                 – all used external procedures are imported
 ∀(_.P ∈ intprocsin(ι.name, E)). P ∈ [0, η.pnum)  – all used internal procedures are defined
 bufsin(E) ⊆ [0,η.bnum)                           – all used buffers are defined
-———————————————————–——–———————————————————————–
+———————————————————————————————————————————————
 ι; η ⊢ E well formed
 
 *** Well-formedness of continuations: ι; η ⊢ K well formed
 
 ι; η ⊢ E well formed
 ι; η ⊢ K well formed
-———————————————–————————–
+—————————————————————————
 ι; η ⊢ E :: K well formed
 
-———————————————–—————
+—————————————————————
 ι; η ⊢ [] well formed
 
 *** Well-formedness of call stacks: ψ; Γ ⊢ σ well formed
 
-————————–————————–——–
+—————————————————————
 ψ; Γ ⊢ [] well formed
 
 ψ[C]; Γ[C] ⊢ K well formed
 ψ; Γ ⊢ σ well formed
-——————————————–———————–—————–
+—————————————————————————————
 ψ; Γ ⊢ (C,i,K)::σ well formed
 
 *** Well-formedness of states: Γ ⊢ s well formed
@@ -566,7 +566,7 @@ bufsin(E) ⊆ [0,η.bnum)                           – all used buffers are def
   s[η.name,b,i] is defined
     ⇔
   b ∈ [0,η.bnum) ∧ i ∈ [0,η.blens[b])
-————————————————————————————————————–
+—————————————————————————————————————
 Γ ⊢ s well formed
 
 *** Well-formedness of configurations: ψ; Γ ⊢ (C, s, σ, K, e) well formed
@@ -575,7 +575,7 @@ bufsin(E) ⊆ [0,η.bnum)                           – all used buffers are def
 ψ; Γ ⊢ σ well formed
 ψ[C]; Γ[C] ⊢ K well formed
 ψ[C]; Γ[C] ⊢ e well formed
-—————————————————–———————–—————————–—————————————
+—————————————————————————————————————————————————
 ψ; Γ ⊢ (C, s, σ, K, e) well formed
 
 *** Lemma I(φ) produces well-formed configuration if φ is well-formed.
@@ -604,12 +604,12 @@ where
 
 s[C,b] = [i₀, ..., iₙ]
 i ∉ {0, ..., n}
-————————————————————————————– Undef_Load
+————————————————————————————— Undef_Load
 (C, s, σ, b[□] :: K, i) undef
 
 s[C,b] = [i₀, ..., iₙ]
 i ∉ {0, ..., n}
-————————————————————————————––————– Undef_Store
+——————————————————————————————————— Undef_Store
 (C, s, σ, b[i] := □ :: K, i') undef
 
 *** Assumption (preservation)
@@ -733,7 +733,7 @@ E[C] – the list of *external* entry points of component C
 
 (ψ, mem, E) well formed
 dom(E) = comps(ψ)
-————————————————————————————–
+—————————————————————————————
 (ψ, mem, E) whole well formed
 
 ** Semantics:
@@ -811,7 +811,7 @@ reg[r] ≠ 0
 
 mem[C,pc] = i     decode i = Bnz r i'
 reg[r] = 0
-———————————————————————————————————————–———— :: S_BnzZ
+———————————————————————————————————————————— :: S_BnzZ
 ψ; E ⊢ (C,σ,mem,reg,pc) → (C,σ,mem,reg,pc+1)
 
 Note: this semantics can be used to reduce *partial* programs.
@@ -853,7 +853,7 @@ P, Q, A ::= (ψ, φ)
 
 ⊢ ψ well formed
 ∀ κ ∈ φ. interfaceof(κ) ⊆ ψ[κ.name]
-——————–——————————————–————————————–
+———————————————————————————————————
 (ψ, φ) well formed
 
 *** Context application: A[P]
@@ -864,13 +864,13 @@ P, Q, A ::= (ψ, φ)
 *** Context has shape: A ⊢ s
 
 comps(φ_A) = {C₀,...,Cₙ}
-————–—————————–—————————–—–
+———————————————————————————
 (ψ, φ_A) ⊢ (ψ, {C₀,...,Cₙ})
 
 *** Program has shape: P ⊢ₙ s
 
 comps(φ_P) = comps(ψ)∖{C₀,...,Cₙ}
-————–—————————–—————————–————————
+—————————————————————————————————
 (ψ, φ_P) ⊢ₙ (ψ, {C₀,...,Cₙ})
 
 *** Context application preserves well formedness
@@ -891,19 +891,19 @@ p, q, a ::= (ψ, mem, E)
 
 ⊢ ψ well formed
 dom(mem) = dom(E) ⊆ comps(ψ)
-————————————–——————————————–
+————————————————————————————
 (ψ, mem, E) well formed
 
 *** Context has shape: a ⊢ s
 
 dom(E) = {C₀,...,Cₙ}
-————–—————————–—————————–—–——–
+——————————————————————————————
 (ψ, mem, E) ⊢ (ψ, {C₀,...,Cₙ})
 
 *** Program has shape: p ⊢ₙ s
 
 dom(E) = comps(ψ)∖{C₀,...,Cₙ}
-————–—————————–—————————–—–——–—
+———————————————————————————————
 (ψ, mem, E) ⊢ₙ (ψ, {C₀,...,Cₙ})
 
 *** Context application: a[p]
@@ -1278,7 +1278,7 @@ other rules will apply (6 and 7).
 
 Top(PΣ) = σ         PΣ' = SetTop(PΣ, σ')
 ψ; E ⊢ (C,σ,mem,reg,pc) → (C',σ',mem',reg',pc')
-————————————————————————————————————————————————– T_CallRetTau+
+————————————————————————————————————————————————— T_CallRetTau+
                  action(C,σ,mem,reg,pc)
 ψ; E ⊢ (C,PΣ,mem,reg,pc) → (C',PΣ',mem',reg',pc')
 
@@ -1290,19 +1290,19 @@ action(C,σ,mem,reg,pc) =
 
 *** 2 - Internal context reductions
 
-———————————————————————————————————————– T_Tau-
+———————————————————————————————————————— T_Tau-
                      τ -
 ψ; E ⊢ (C,AΣ,mem,/,/) → (C,AΣ,mem,/,/)
 
 C'.P' ∈ ψ[C].import ∨ C' = C       – check interface
 C' ∉ dom(E)                        — call target in context
 Top(AΣ) = Aσ      AΣ' = SetTop(AΣ, (C,/)::Aσ)
-————————————————————–———————————————–———————– T_Call-
+————————————————————————————————————————————— T_Call-
                     C'.P'(/) -
 ψ; E ⊢ (C,AΣ,mem,/,/) → (C',AΣ',mem,/,/)
 
 (C',/)::σ = Top(AΣ)     AΣ' = SetTop(AΣ,σ)
-—————————————————————————–———————————————– T_Ret-
+—————————————————————————————————————————— T_Ret-
                     Ret / -
 ψ; E ⊢ (C,AΣ,mem,/,/) → (C',AΣ',mem,/,/)
 
@@ -1311,14 +1311,14 @@ Top(AΣ) = Aσ      AΣ' = SetTop(AΣ, (C,/)::Aσ)
 C'.P' ∈ ψ[C].import             – check interface
 C' ∈ dom(E)                     – call target in program
 Top(AΣ) = Aσ               AΣ' = SetTop(AΣ, (C,/)::Aσ)
-—————–———–———————————————–—————————–———————————–—————– T_Call?
+—————————————————————————————————————————————————————— T_Call?
                     C'.P'(reg) ?
 ψ; E ⊢ (C,AΣ,mem,/,/) → (C',[]::AΣ',mem,reg,E[C'][P'])
 
 *** 4 - Return from context code to program code
 
 Top(PΣ) = (C',pc)::σ         PΣ' = SetTop(PΣ,σ)
-—————————————————————————————————————————–———– T_Ret?
+—————————————————————————————————————————————— T_Ret?
                        Ret reg ?
 ψ; E ⊢ (C,[]::PΣ,mem,/,/) → (C',PΣ',mem,reg,pc)
 
@@ -1328,7 +1328,7 @@ mem[C,pc] = i     decode i = Call C' P'
 C'.P' ∈ ψ[C].import                – check interface
 C' ∉ dom(E)                        – call target in context
 Top(PΣ) = σ      PΣ' = SetTop(PΣ, (C,pc+1)::σ)
-—————————————————————————————————————————————– T_Call!
+—————————————————————————————————————————————— T_Call!
                        C'.P'(reg) !
 ψ; E ⊢ (C,PΣ,mem,reg,pc) → (C',[]::PΣ',mem,/,/)
 
@@ -1336,13 +1336,13 @@ Top(PΣ) = σ      PΣ' = SetTop(PΣ, (C,pc+1)::σ)
 
 mem[C,pc] = i     decode i = Return
 Top(AΣ) = (C',/)::Aσ        AΣ' = SetTop(AΣ,Aσ)
-———–——————————————————————————————————–———–———– T_Ret!
+——————————————————————————————————————————————— T_Ret!
                          Ret reg !
 ψ; E ⊢ (C,[]::AΣ,mem,reg,pc) → (C',AΣ',mem,/,/)
 
 *** 7 - Termination from context code
 
-———–———————————————————————–————— T_Exit?
+————————————————————————————————— T_Exit?
                       ✓?
 ψ; E ⊢ (C,AΣ,mem,/,/) → EXITED
 
@@ -1350,7 +1350,7 @@ Top(AΣ) = (C',/)::Aσ        AΣ' = SetTop(AΣ,Aσ)
 
                                    α
 ∀ α ≠ ✓!. ψ; E ⊢ (C,PΣ,mem,reg,pc) ↛
-—————–———————————————————————––————— T_Exit!
+———————————————————————————————————— T_Exit!
                          ✓!
 ψ; E ⊢ (C,PΣ,mem,reg,pc) → EXITED
 
@@ -1453,82 +1453,82 @@ C ∈ dom(E)
 dom(mem) = dom(E)
 E ⊢ PΣ well formed
 Pθ = (C, PΣ, mem, reg, pc)
-—————————————————————–————
+——————————————————————————
 E ⊢ Pθ well formed
 
 C ∉ dom(E)
 dom(mem) = dom(E)
 E ⊢ AΣ well formed
 Aθ = (C, AΣ, mem, /, /)
-—————————————————————–————
+——————————————————————————
 E ⊢ Aθ well formed
 
 
 PΣ = σ
 E ⊢ σ well formed
-—————————————————————–————
+——————————————————————————
 E ⊢ PΣ well formed
 
 PΣ = σ::AΣ
 Top(AΣ) = _ :: _
 E ⊢ σ well formed
 E ⊢ AΣ well formed
-—————————————————————–————
+——————————————————————————
 E ⊢ PΣ well formed
 
 AΣ = Aσ
 E ⊢ Aσ well formed
-—————————————————————–————
+——————————————————————————
 E ⊢ AΣ well formed
 
 AΣ = Aσ::PΣ
 Top(PΣ) = _ :: _
 E ⊢ Aσ well formed
 E ⊢ PΣ well formed
-—————————————————————–————
+——————————————————————————
 E ⊢ AΣ well formed
 
 
 σ = []
-————————————–————
+—————————————————
 E ⊢ σ well formed
 
 σ = (C, pc) :: σ'
 C ∈ dom(E)
 E ⊢ σ' well formed
-—————————————–————
+——————————————————
 E ⊢ σ well formed
 
 Aσ = []
-————————————–————
+—————————————————
 E ⊢ Aσ well formed
 
 Aσ = (C, /) :: Aσ'
 C ∉ dom(E)
 E ⊢ Aσ' well formed
-—————————————–————
+——————————————————
 E ⊢ Aσ well formed
 
 ** State merging
 
 *** Aσ ⊆ σ
 
-——————–
+———————
 [] ⊆ []
 
 Aσ ⊆ σ
-————–———————————————————–
+—————————————————————————
 (C, /) :: Aσ ⊆ (C, i) :: σ
 
 *** mergeable PΣ AΣ
 
 Aσ ⊆ σ
-—————————————–
+——————————————
 mergeable σ Aσ
 
 Aσ ⊆ σ
 mergeable PΣ AΣ
-—————————————————————————–
+——————————————————————————
 mergeable σ::AΣ Aσ::PΣ
 
 *** merge PΣ AΣ (assuming: mergeable PΣ AΣ)
@@ -1542,7 +1542,7 @@ merge PΣ AΣ ≜
 
 mergeable PΣ AΣ
 dom(memₚ) ∩ dom(memₐ) = ∅
-——————————————————————————————————————————————————–———
+——————————————————————————————————————————————————————
 mergeable (C, PΣ, memₚ, reg, pc) (C, AΣ, memₐ, /, /)
 
 *** merge Pθ Aθ (assuming: mergeable Pθ Aθ)
