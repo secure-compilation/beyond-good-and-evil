@@ -1029,26 +1029,9 @@ Proof.
   Case "Continuations wellformed".
   { constructor. }
   Case "Expr".
-  { constructor. 
-    SCase "extprocsin(i.name, e) ⊆ i.import".
-      destruct p; simpl.
-      SSCase "p = []".
-        compute. intros. contradiction.
-      SSCase "p = h::t".
-        (*destruct c as [[[[[name bnum] buffers] pnum] export] procs];
-        try (destruct name);
-        try (destruct bnum); 
-        try (destruct procs);
-        try (destruct buffers);
-        try (destruct pnum);
-        try (destruct export);
-        try (destruct procs);
-        try (compute; intros; contradiction).*)
-        admit.
-    SCase "∀(_.P ∈ intprocsin(ι.name, e)). P ∈ [0, η.pnum)".
-      admit.
-    SCase "bufsin(e) ⊆ [0,η.bnum)".
-      admit.
+  { destruct ((nth 0 (get_procs (nth main_cid p (0, 0, [], 0, 0, [])))));
+    try (now constructor).
+    admit. admit. admit. admit. admit.
   }
 Admitted.
 
@@ -1114,6 +1097,14 @@ Proof.
   apply H2.
 Qed.
 
+Ltac clear_except hyp := 
+  repeat match goal with [ H : _ |- _ ] =>
+           match H with
+             | hyp => fail 1
+             | _ => clear H
+           end
+         end.
+
 Theorem preservation_proof :
   preservation.
 Proof.
@@ -1121,19 +1112,25 @@ Proof.
   intros.
   inversion H1; constructor;
   (* State *)
-    try (inversion H0 as [n s'];
-    rewrite <- H8 in H2;
-    inversion H2; apply H4);
+    try (
+      inversion H0 as [N S];
+      try (rewrite <- H8 in H2);
+      try (rewrite <- H9 in H3);
+      try (inversion H2); try (inversion H3); 
+      try (apply H4); try (apply H5)
+    ). 
   (* Callstack *)
-    try (inversion H0 as [n s'];
-    rewrite <- H8 in H2;
-    inversion H2; apply H5);
+    try (
+      inversion H0 as [N S];
+      try (rewrite <- H8 in H2);
+      try (rewrite <- H19 in H9);
+      try (inversion H2); try (inversion H9); 
+      try (apply H5); try (apply H16)
+  ). 
   (* Continuations *)
-    try (inversion H0 as [n s']).
-    rewrite <- H8 in H2.
-    inversion H2. constructor.
-    rewrite <- H14 in H7. 
-    apply WF_expr_alt_EBinop in H7.
+    admit. admit. admit. admit. admit.
+    admit. admit. admit.
+
 Admitted.
 
 Theorem partial_type_safety :
