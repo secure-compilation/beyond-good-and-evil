@@ -863,6 +863,45 @@ Inductive wellformed_expr (i:interface) (n:component_invariant) :
     wellformed_expr i n e
   where "'EXPR' i n |- e 'wellformed'" := (wellformed_expr i n e).
 
+Inductive wellformed_expr_alt (i:interface) (n:component_invariant) : 
+  expr -> Prop :=
+  | WF_expr_alt_EVal : forall v,
+    wellformed_expr_alt i n (EVal v)
+  | WF_expr_alt_EBinop : forall op e1 e2,
+    wellformed_expr_alt i n e1 ->
+    wellformed_expr_alt i n e2 ->
+    wellformed_expr_alt i n (EBinop op e1 e2) 
+  | WF_expr_alt_EIfThenElse : forall e e1 e2,
+    wellformed_expr_alt i n e ->
+    wellformed_expr_alt i n e1 ->
+    wellformed_expr_alt i n e2 ->
+    wellformed_expr_alt i n (EIfThenElse e e1 e2)
+  | WF_expr_alt_ELoad : forall b e,
+    let l := (get_bnumN n) in
+    (ble_nat b l = true /\ b <> l) ->
+    wellformed_expr_alt i n e ->
+    wellformed_expr_alt i n (ELoad b e)
+  | WF_expr_alt_EStore : forall b e1 e2,
+    let l := (get_bnumN n) in
+    (ble_nat b l = true /\ b <> l) ->
+    wellformed_expr_alt i n e1 ->
+    wellformed_expr_alt i n e2 ->
+    wellformed_expr_alt i n (EStore b e1 e2)
+  | WF_expr_alt_ECall_In : forall C P e,
+    let l := (get_pnumN n) in
+    let proc_defined_in := (ble_nat P l = true /\ P <> l) in
+    (C = (get_name i) /\ proc_defined_in) ->
+    wellformed_expr_alt i n e ->
+    wellformed_expr_alt i n (ECall C P e)
+  | WF_expr_alt_ECall_Out : forall C P e,
+    let l := (get_pnumN n) in
+    let proc_defined_out := In (C,P) (get_import i) in
+     (C <> (get_name i) /\ proc_defined_out) ->
+    wellformed_expr_alt i n e ->
+    wellformed_expr_alt i n (ECall C P e)
+  | WF_expr_alt_EExit : 
+    wellformed_expr_alt i n (EExit).
+
 (* ---- Well-formedness of a flat evaluation context ---- *)
 Reserved Notation "'FLATEVALCON' i n |- E 'wellformed'" (at level 40).
 Inductive wellformed_flatevalcon (i:interface) (n:component_invariant) : 
@@ -875,6 +914,37 @@ Inductive wellformed_flatevalcon (i:interface) (n:component_invariant) :
     wellformed_flatevalcon i n E
   where "'FLATEVALCON' i n |- E 'wellformed'" := (wellformed_flatevalcon i n E).
 
+Inductive wellformed_flatevalcon_alt (i:interface) 
+  (n:component_invariant) : flatevalcon -> Prop :=
+  | WF_flatevalcon_alt_CHoleOp : forall op e2,
+    wellformed_expr_alt i n e2 ->
+    wellformed_flatevalcon_alt i n (CHoleOp op e2)
+  | WF_flatevalcon_alt_COpHole : forall op v,
+    wellformed_flatevalcon_alt i n (COpHole v op)
+  | WF_flatevalcon_alt_CIfHoleThenElse : forall e1 e2,
+    wellformed_expr_alt i n e1 ->
+    wellformed_expr_alt i n e2 ->
+    wellformed_flatevalcon_alt i n (CIfHoleThenElse e1 e2)
+  | WF_flatevalcon_alt_CHoleStore : forall b e,
+    let l := (get_bnumN n) in
+    (ble_nat b l = true /\ b <> l) -> 
+    wellformed_expr_alt i n e ->
+    wellformed_flatevalcon_alt i n (CHoleStore b e)
+  | WF_flatevalcon_alt_CStoreHole : forall b v,
+    let l := (get_bnumN n) in
+    (ble_nat b l = true /\ b <> l) -> 
+    wellformed_flatevalcon_alt i n (CStoreHole b v)
+  | WF_flatevalcon_alt_CCallHole_In : forall C P,
+    let l := (get_pnumN n) in
+    let proc_defined_in := (ble_nat P l = true /\ P <> l) in
+    (C = (get_name i) /\ proc_defined_in) ->
+    wellformed_flatevalcon_alt i n (CCallHole C P)
+  | WF_flatevalcon_alt_CCallHole_Out : forall C P,
+    let l := (get_pnumN n) in
+    let proc_defined_out := In (C,P) (get_import i) in
+     (C <> (get_name i) /\ proc_defined_out) ->
+    wellformed_flatevalcon_alt i n (CCallHole C P).
+
 (* ---- Well-formedness of a continuation ---- *)
 Reserved Notation "'CONTINUATIONS' i n |- K 'wellformed'" (at level 40).
 Inductive wellformed_continuations (i:interface) (n:component_invariant) : 
@@ -882,7 +952,7 @@ Inductive wellformed_continuations (i:interface) (n:component_invariant) :
   | WF_empty_continuations :
     wellformed_continuations i n []
   | WF_continuations : forall E K,
-    (wellformed_flatevalcon i n E) ->
+    (wellformed_flatevalcon_alt i n E) ->
     (wellformed_continuations i n K) ->
     (wellformed_continuations i n (E::K))
   where "'CONTINUATIONS' i n |- K 'wellformed'" := (wellformed_continuations i n K).
@@ -919,7 +989,7 @@ Inductive wellformed_cfg (Is:program_interfaces)
     wellformed_state G s ->
     wellformed_callstack Is G d ->
     wellformed_continuations (nth C Is (0,0,[])) (nth C G (0,0,0,[])) K ->
-    wellformed_expr (nth C Is (0,0,[])) (nth C G (0,0,0,[])) e ->
+    wellformed_expr_alt (nth C Is (0,0,[])) (nth C G (0,0,0,[])) e ->
     wellformed_cfg Is G (C, s, d, K, e)
   where "'CFG' Is G |- c 'wellformed'" := (wellformed_state Is G c).
 
@@ -943,12 +1013,16 @@ Proof.
       simpl in H2. destruct H2.
       destruct H2. contradiction.
     SCase "p = h::t".
-      (*apply (WF_state (wfinv_of_P (c :: p)) 0 0 (update_state main_cid 0 0 0 (generate_state (c :: p)))).
-      destruct c as [[[[[name bnum] buffers] pnum] export] procs];
-      try (destruct name); try (destruct bnum); try (destruct buffers);
-      try (destruct pnum); try (destruct export); try (destruct procs).
-      *)
-      admit.  
+      destruct H2. destruct H2. destruct H6.
+      apply (WF_state (wfinv_of_P (c :: p)) 0 0 (update_state main_cid 0 0 0 (generate_state (c :: p)))).
+      intros. split.
+      intro. split.
+      admit.
+      admit.
+      intro. destruct H9.
+      induction n as [[[name bnum] pnum] blens].
+      simpl (get_nameN (name, bnum, pnum, blens)).
+      admit.
   }
   Case "Callstack wellformed".
   { constructor. }
@@ -995,13 +1069,6 @@ Definition preservation : Prop :=
     (wellformed_cfg Is G cfg ->
      D ⊢ cfg ⇒ cfg' ->
      wellformed_cfg Is G cfg').
-
-Definition is_final_cfg (c: cfg): bool :=
-  match c with
-  | (_, _, _, _, EExit) => true
-  | (_, _, [], [], EVal n) => true
-  | _ => false
-  end.
 
 Theorem partial_progress_proof:
   partial_progress.
@@ -1065,6 +1132,8 @@ Proof.
     try (inversion H0 as [n s']).
     rewrite <- H8 in H2.
     inversion H2. constructor.
+    rewrite <- H14 in H7. 
+    apply WF_expr_alt_EBinop in H7.
 Admitted.
 
 Theorem partial_type_safety :
