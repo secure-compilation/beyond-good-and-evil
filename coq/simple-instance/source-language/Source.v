@@ -1109,28 +1109,70 @@ Theorem preservation_proof :
   preservation.
 Proof.
   unfold preservation.
-  intros.
-  inversion H1; constructor;
+  intros P HWP cfg cfg' HCFG Heval.
+  inversion Heval as [C| | | | | | | | | | | | |]; constructor;
+  rename H into H_Eval1; rename H0 into H_Eval2;
+  inversion HCFG as [n state cs cont expr HS HC HK HE];
+  try (
+    try (rename H into WFD);
+    try (rewrite <- WFD in H_Eval1);
+    try (rewrite <- WFD in H_Eval2);
+    try (inversion H_Eval1);
+    try (inversion H_Eval2);
+    rename H0 into DC; rename H1 into DS; rename H2 into DD;
+    rename H3 into DK; rename H4 into DE
+  );
   (* State *)
-    try (
-      inversion H0 as [N S];
-      try (rewrite <- H8 in H2);
-      try (rewrite <- H9 in H3);
-      try (inversion H2); try (inversion H3); 
-      try (apply H4); try (apply H5)
-    ). 
+  try (apply HS);
   (* Callstack *)
-    try (
-      inversion H0 as [N S];
-      try (rewrite <- H8 in H2);
-      try (rewrite <- H19 in H9);
-      try (inversion H2); try (inversion H9); 
-      try (apply H5); try (apply H16)
-  ). 
+  try (apply HC);
   (* Continuations *)
-    admit. admit. admit. admit. admit.
-    admit. admit. admit.
-
+  try (constructor);
+  try (constructor);
+  try (
+    rewrite <- DE in HE;
+    inversion HE; 
+    try (apply H4); try (apply H2);
+    try (destruct H_Eval1);
+    try (apply HK)
+  );
+  try (rewrite <- DK in HK; inversion HK; apply H4);
+  try (
+    rewrite <- DK in HK;
+    inversion HK;
+    inversion H3;
+    apply H6
+  );
+  try (
+    rewrite <- DK in HK;
+    inversion HK;
+    inversion H3;
+    apply H5
+  );
+  try (
+    destruct op; simpl;
+    try (destruct (beq_nat i1 i2));
+    try (destruct (ble_nat i1 i2));
+    try (now constructor)
+  );
+  try (apply H3);
+  try (
+    rewrite <- DE in HK;
+    inversion HK;
+    apply H2
+  );
+  try (
+    rewrite <- DE in HK;
+    inversion HK;
+    inversion H1;
+    apply H6
+  );
+  try (
+    rewrite <- DK in HK;
+    inversion HK;
+    inversion H3;
+    apply H8
+  ).
 Admitted.
 
 Theorem partial_type_safety :
@@ -1256,13 +1298,11 @@ Proof.
         try (apply multi_refl); apply final_exit.
       destruct H.
       SCase "undefined".
-          (*inversion H;
+          inversion H;
           destruct d; try (destruct c0); simpl; 
           apply negation_transfert in H0; simpl in H0;
-          apply negation_transfert in H1; simpl in H1;
-          rewrite H0; rewrite H1; simpl;
-          apply IHi'.*)
-          admit.
+          rewrite H0; simpl;
+          apply IHi'.
       SCase "evaluable".
         eapply multi_step.
         apply H.
@@ -1358,10 +1398,7 @@ Definition normal_form {X:Type} (R:relation X) (t:X) : Prop :=
   ~ exists t', R t t'.
 
 Theorem finalcfg_normalform_equivalence :
-  forall C b i s c D, final_cfg c \/ 
-  (undefined_cfg D c /\ 
-   buffer_undefined C b s = true /\
-   value_undefined C b i s = true) 
+  forall c D, (final_cfg c \/ undefined_cfg D c)
   <-> normal_form (small_step D) c.
 Proof.
   intros. split.
@@ -1375,31 +1412,13 @@ Proof.
       intro contra. destruct contra.
       inversion H1.
     SCase "undefined".
-      intro contra. destruct contra.
-      destruct H as [undef_cfg [undef_buff undef_val]].
-      inversion undef_cfg; inversion H0;
-      try (
-        rewrite <- H4 in H3;
-        inversion H3
-      );
-      try (
-        unfold not in H4;
-        rewrite <- H5 in H3;
-        inversion H3
-      );
-      try (
-        unfold buffer_undefined in H;        
-        unfold buffer_defined in H1;
-        apply negation_transfert in H;
-        apply negation_transfert in H1;
-        simpl in H; simpl in H1;
-        rewrite <- H6 in H3;
-        inversion H3;
-        rewrite H9 in H; rewrite H10 in H;
-        rewrite H12 in H;
-        rewrite H4 in H;
-        inversion H
-      ).
+      intro contra. destruct contra;
+      try (inversion H);
+      rewrite <- H3 in H0; inversion H0;
+      unfold value_undefined in H1;
+      try (rewrite H11 in H1);
+      try (rewrite H12 in H1); 
+      inversion H1.
   }
   Case "<-".
   { intro H. unfold normal_form in H.
@@ -1409,9 +1428,7 @@ Proof.
       apply smallstep_strongprogress.
     destruct H0.
     SCase "undefined".
-      right. split. apply H0.
-      inversion H0. split.
-      admit. admit. admit.
+      right. apply H0.  
     destruct H0.
     SCase "final".
       left. apply H0.
@@ -1419,4 +1436,4 @@ Proof.
       apply H in H0.
       contradiction.
   }
-Admitted.
+Qed.
