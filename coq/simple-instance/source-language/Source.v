@@ -423,7 +423,6 @@ Inductive small_step (D: context) : cfg -> cfg -> Prop :=
     (C, s, d, (CHoleLoad b)::K, e)
   (* S_Read_Pop *)
   | S_Read_Pop : forall C s d b K i,
-    (buffer_defined C b s = true) ->
     (value_defined C b i s = true) ->
     D ⊢ (C, s, d, (CHoleLoad b)::K, EVal i) ⇒
     (C, s, d, K, EVal (fetch_state C b i s))
@@ -437,7 +436,6 @@ Inductive small_step (D: context) : cfg -> cfg -> Prop :=
     (C, s, d, (CStoreHole b i)::K, e2)
   (* S_Write_Pop *)
   | S_Write_Pop : forall C s d b i K i',
-    (buffer_defined C b s = true) ->
     (value_defined C b i s = true) ->
     D ⊢ (C, s, d, (CStoreHole b i)::K, EVal i') ⇒
     (C, (update_state C b i i' s), d, K, EVal i')
@@ -446,8 +444,8 @@ Inductive small_step (D: context) : cfg -> cfg -> Prop :=
     D ⊢ (C, s, d, K, ECall C' P' e) ⇒
     (C, s, d, (CCallHole C' P')::K, e)
   (* S_Call_Pop *)
-  | S_Call_Pop : forall C' P' ep C s d K ia,
-    (fetch_context C' P' D) = ep ->     
+  | S_Call_Pop : forall C' P' C s d K ia,
+    let ep := fetch_context C' P' D in     
     D ⊢ (C, s, d, (CCallHole C' P')::K, EVal ia) ⇒
     (C', (update_state C' 0 0 ia s), (Call C (fetch_state C 0 0 s) K)::d, [], ep)
   (* S_Return *)
@@ -464,11 +462,9 @@ Notation "D ⊢ e '⇒*' e'" := (multi (small_step D) e e') (at level 40).
 
 Inductive undefined_cfg : context -> cfg -> Prop :=
   | undef_load : forall C s d b i K D, 
-    (buffer_undefined C b s = true) ->
     (value_undefined C b i s = true) ->
     undefined_cfg D (C, s, d, (CHoleLoad b)::K, EVal i)
   | undef_store  : forall C s d b K i i' D,
-    (buffer_undefined C b s = true) ->
     (value_undefined C b i s = true) ->
     undefined_cfg D (C, s, d, (CStoreHole b i)::K, EVal i').
 
@@ -478,7 +474,7 @@ Proof.
   constructor.
   unfold value_undefined.
   unfold value_defined.
-  reflexivity. reflexivity.
+  reflexivity.
 Qed.
 
 Example buff_def1 : value_undefined 0 0 4 [[];[]] = true.
@@ -523,7 +519,7 @@ Definition basic_eval_cfg (D:context) (c:cfg) : cfg :=
     (C, s, d, (CHoleLoad b) :: K, e)
   (* S_Read_Pop *)
   | (C, s, d, (CHoleLoad b) :: K, EVal i) =>
-    if andb (buffer_defined C b s) (value_defined C b i s) then
+    if (value_defined C b i s) then
       (C, s, d, K, EVal (fetch_state C b i s)) 
     else c
   (* S_Write_Push *)
@@ -534,7 +530,7 @@ Definition basic_eval_cfg (D:context) (c:cfg) : cfg :=
     (C, s, d, (CStoreHole b i1) :: K, e2)
   (* S_Write_Pop *)
   | (C, s, d, (CStoreHole b i1) :: K, EVal i2) =>
-    if andb (buffer_defined C b s) (value_defined C b i1 s) then
+    if (value_defined C b i1 s) then
       (C, update_state C b i1 i2 s, d, K, EVal i2)
     else c
   (* S_Call_Push *)
@@ -662,14 +658,13 @@ Example fact_2_eval :
 Proof.
   unfold factorial_2.
   eapply multi_step. apply S_Call_Push.
-  eapply multi_step. apply S_Call_Pop. 
-  reflexivity. 
+  eapply multi_step. apply S_Call_Pop.
   eapply multi_step.
     subcompute (fetch_context 1 0 context_fact).
     apply S_If_Push.
   eapply multi_step. apply S_BinOp_Push. 
   eapply multi_step. apply S_Read_Push.
-  eapply multi_step. apply S_Read_Pop. reflexivity. reflexivity.
+  eapply multi_step. apply S_Read_Pop. reflexivity.
   eapply multi_step.
     subcompute (EVal (fetch_state 1 0 0 (update_state 1 0 0 2 state_fact))).
     apply S_BinOp_Switch.
@@ -681,21 +676,21 @@ Proof.
   eapply multi_step. apply S_Call_Push.
   eapply multi_step. apply S_BinOp_Push.
   eapply multi_step. apply S_Read_Push.
-  eapply multi_step. apply S_Read_Pop. reflexivity. reflexivity.
+  eapply multi_step. apply S_Read_Pop. reflexivity.
   eapply multi_step. 
     subcompute (fetch_state 1 0 0 (update_state 1 0 0 2 state_fact)).
     apply S_BinOp_Switch.
   eapply multi_step. apply S_BinOp_Pop.
   eapply multi_step.
     subcompute (eval_binop (EMinus, 2, 1)). 
-    apply S_Call_Pop. reflexivity.
+    apply S_Call_Pop.
   eapply multi_step.
     subcompute ((fetch_state 1 0 0 state_fact)).
     subcompute (fetch_context 1 0 context_fact).
     apply S_If_Push.
   eapply multi_step. apply S_BinOp_Push. 
   eapply multi_step. apply S_Read_Push.
-  eapply multi_step. apply S_Read_Pop. reflexivity. reflexivity.
+  eapply multi_step. apply S_Read_Pop. reflexivity.
   eapply multi_step.
     subcompute ((fetch_state 1 0 0 (update_state 1 0 0 1 (update_state 1 0 0 2 state_fact)))).
     apply S_BinOp_Switch.
@@ -708,7 +703,7 @@ Proof.
     apply S_Return.
   eapply multi_step. apply S_BinOp_Switch.
   eapply multi_step. apply S_Read_Push.
-  eapply multi_step. apply S_Read_Pop. reflexivity. reflexivity.
+  eapply multi_step. apply S_Read_Pop. reflexivity.
   eapply multi_step.
     subcompute ((fetch_state 1 0 0
        (update_state 1 0 0 2
@@ -948,10 +943,12 @@ Proof.
       simpl in H2. destruct H2.
       destruct H2. contradiction.
     SCase "p = h::t".
-      (* destruct c as [[[[[name bnum] buffers] pnum] export] procs];
+      (*apply (WF_state (wfinv_of_P (c :: p)) 0 0 (update_state main_cid 0 0 0 (generate_state (c :: p)))).
+      destruct c as [[[[[name bnum] buffers] pnum] export] procs];
       try (destruct name); try (destruct bnum); try (destruct buffers);
-      try (destruct pnum); try (destruct export); try (destruct procs). *)
-      admit.
+      try (destruct pnum); try (destruct export); try (destruct procs).
+      *)
+      admit.  
   }
   Case "Callstack wellformed".
   { constructor. }
@@ -999,30 +996,43 @@ Definition preservation : Prop :=
      D ⊢ cfg ⇒ cfg' ->
      wellformed_cfg Is G cfg').
 
-Theorem partial_progress_proof :
+Definition is_final_cfg (c: cfg): bool :=
+  match c with
+  | (_, _, _, _, EExit) => true
+  | (_, _, [], [], EVal n) => true
+  | _ => false
+  end.
+
+Theorem partial_progress_proof:
   partial_progress.
 Proof.
   unfold partial_progress.
   intros P WP cfg' WCFG.
   induction WCFG.
   remember (C, s, d, K, e) as cfg. rewrite Heqcfg.
-  destruct d; destruct K; destruct e;
+  destruct K as [|f K0]; destruct e; destruct d as [|c0 d0];
+  try (destruct f);
+  try (destruct (value_defined C b n s) eqn:vdn);
+  try (destruct (value_defined C b n0 s) eqn:vdn0);
   (* Eliminate final cfg cases *)
-  try (left; constructor); 
-  try (destruct f); try (destruct n);
+  try (left; now constructor);
   (* Progression cases *)
-  try ( 
-    right; right; 
+  try (
+    try (destruct n);
+    right; right;
     exists (eval_cfg (procbodies P) cfg 1);
-    try (destruct c);
+    try (destruct c0);
     rewrite Heqcfg; 
-    constructor
+    simpl;
+    try (rewrite vdn);
+    try (rewrite vdn0);
+    now constructor
   );
-  try (reflexivity);
-  try (unfold not; intro contra; inversion contra);
+  try (try (destruct n); now reflexivity);
+  try (try (destruct f); try (destruct n); unfold not; intro contra; now inversion contra);  
   (* Undefined cfg cases *)
-  try (right; left).
-Admitted.
+  try (right; left; constructor; unfold value_undefined; try (rewrite vdn); try (rewrite vdn0); now reflexivity).
+Qed.
 
 Lemma wf_flatevalcon_implies_expr :
   forall i n E,
@@ -1138,7 +1148,7 @@ Proof.
   }
 Qed.
 
-Lemma boolean_transfert :
+Lemma negation_transfert :
   forall a b, negb a = b <-> a = negb b.
 Proof.
   intros.
@@ -1180,12 +1190,13 @@ Proof.
         try (apply multi_refl); apply final_exit.
       destruct H.
       SCase "undefined".
-          inversion H;
+          (*inversion H;
           destruct d; try (destruct c0); simpl; 
-          apply boolean_transfert in H0; simpl in H0;
-          apply boolean_transfert in H1; simpl in H1;
+          apply negation_transfert in H0; simpl in H0;
+          apply negation_transfert in H1; simpl in H1;
           rewrite H0; rewrite H1; simpl;
-          apply IHi'.
+          apply IHi'.*)
+          admit.
       SCase "evaluable".
         eapply multi_step.
         apply H.
@@ -1281,7 +1292,10 @@ Definition normal_form {X:Type} (R:relation X) (t:X) : Prop :=
   ~ exists t', R t t'.
 
 Theorem finalcfg_normalform_equivalence :
-  forall c D, final_cfg c \/ undefined_cfg D c
+  forall C b i s c D, final_cfg c \/ 
+  (undefined_cfg D c /\ 
+   buffer_undefined C b s = true /\
+   value_undefined C b i s = true) 
   <-> normal_form (small_step D) c.
 Proof.
   intros. split.
@@ -1296,7 +1310,30 @@ Proof.
       inversion H1.
     SCase "undefined".
       intro contra. destruct contra.
-      admit.
+      destruct H as [undef_cfg [undef_buff undef_val]].
+      inversion undef_cfg; inversion H0;
+      try (
+        rewrite <- H4 in H3;
+        inversion H3
+      );
+      try (
+        unfold not in H4;
+        rewrite <- H5 in H3;
+        inversion H3
+      );
+      try (
+        unfold buffer_undefined in H;        
+        unfold buffer_defined in H1;
+        apply negation_transfert in H;
+        apply negation_transfert in H1;
+        simpl in H; simpl in H1;
+        rewrite <- H6 in H3;
+        inversion H3;
+        rewrite H9 in H; rewrite H10 in H;
+        rewrite H12 in H;
+        rewrite H4 in H;
+        inversion H
+      ).
   }
   Case "<-".
   { intro H. unfold normal_form in H.
@@ -1306,7 +1343,9 @@ Proof.
       apply smallstep_strongprogress.
     destruct H0.
     SCase "undefined".
-      right. apply H0.
+      right. split. apply H0.
+      inversion H0. split.
+      admit. admit. admit.
     destruct H0.
     SCase "final".
       left. apply H0.
