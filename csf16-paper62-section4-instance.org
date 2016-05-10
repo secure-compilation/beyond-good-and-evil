@@ -916,7 +916,7 @@ dom(E) = dom(mem) = comps(ψₐ) = comps(ψ)∖{C₀,...,Cₙ}
 (ψₐ, memₐ, Eₐ)[(ψₚ, memₚ, Eₚ)] ::=
   (ψₐ ⊎ ψₚ, memₐ ⊎ memₚ, Eₐ ⊎ Eₚ)
 
-* Compiler (changes in partial programs not propagated yet)
+* Compiler
 
 Non-optimizing, naive compiler.
 
@@ -929,12 +929,28 @@ This compiler explicitly clears *all* registers before each cross-component call
 
 ** Procedure and expression compilations
 
-STACKBASE(C): Base address of component C's stack
-INTERNALENTRY(C,P): map from procedures to internal entry points
-                    (an address in that procedure's component)
-BUFADDR(C,b): map from buffer identifiers to addresses
+*** Compartment memory layout
 
-The memory cell at location STACKBASE(C) is used to (re)store the
+BUFADDR(κ,b): map from buffer identifiers to addresses
+INTERNALENTRY(κ,P): map from procedures to internal entry points
+                    (an address in that procedure's component)
+STACKBASE(κ): Base address of component C's stack
+
+The concrete memory layout is given below:
+
+BUFADDR(κ,0) = 0
+BUFADDR(κ,b) when b < κ.bnum = BUFADDR(κ,b-1) + κ.blens[b-1]
+
+EXTERNALENTRY(κ,0) = BUFADDR(κ, κ.bnum-1) + κ.blens[κ.bnum-1]
+EXTERNALENTRY(κ,P) when P < κ.pnum = EXTERNALENTRY(κ,P-1) + length(code)
+  where code = ((κ.name).(P-1) ↦ κ.procs[P - 1])↓
+
+INTERNALENTRY(κ,P) when P < κ.pnum = EXTERNALENTRY(κ,P) + 3
+
+STACKBASE(κ) = EXTERNALENTRY(κ,κ.pnum - 1) + length(code) + 1
+  where code = ((κ.name).(κ.pnum-1) ↦ κ.procs[κ.pnum - 1])↓
+
+The memory cell at location STACKBASE(κ) - 1 is used to (re)store the
 stack pointer when switching components.
 
 *** Macros
@@ -953,23 +969,23 @@ CLEARREG ::=
 The environment is saved on cross-compartment calls and returns and
 restored when getting back control.
 
-STOREENV(C,r) ::=              store current stack pointer value
-  Const STACKBASE(C) → r;      (register r gets overwritten in the process)
+STOREENV(κ,r) ::=              store current stack pointer value
+  Const (STACKBASE(κ) - 1) → r;      (register r gets overwritten in the process)
   Store *r ← rₛₚ
 
-RESTOREENV(C) ::=              restore stack pointer value, set rₒₙₑ
+RESTOREENV(κ) ::=              restore stack pointer value, set rₒₙₑ
   Const 1 → rₒₙₑ;
-  Const STACKBASE(C) → rₛₚ;
+  Const (STACKBASE(κ) - 1) → rₛₚ;
   Load *rₛₚ → rₛₚ
 
 **** Storing/loading call argument variable
 
-LOADARG(C → r) ::=
-  Const BUFADDR(C,(b=0)) → r;
+LOADARG(κ → r) ::=
+  Const BUFADDR(κ,0) → r;
   Load *r → r
 
-STOREARG(C ← r, r') ::=
-  Const BUFADDR(C,(b=0)) → r';
+STOREARG(κ ← r, r') ::=
+  Const BUFADDR(κ,0) → r';
   Store *r' ← r
 
 **** Operating the stack
@@ -1010,105 +1026,107 @@ code will decrement it by one (POP).
 
 **** Procedure compilation
 
-(C.P ↦ eₚ)↓ ::=
+(κ,P)↓ ::=
 
 lext — external call entry point
 lint — internal call entry point
  lext: Const 1 → rₐᵤₓ₂;
-       RESTOREENV(C);
+       RESTOREENV(κ);
        Bnz rₒₙₑ lmain;
  lint: Const 0 → rₐᵤₓ₂;
        PUSH(rᵣₐ);
-lmain: STOREARG(C ← r_com, rₐᵤₓ₁);     – store call argument in memory
-       (C,eₚ)↓;                        – compute result into r_com
+lmain: STOREARG(κ ← r_com, rₐᵤₓ₁);     – store call argument in memory
+       (κ,κ.procs[P])↓;                        – compute result into r_com
        Bnz rₐᵤₓ₂ lret;
        POP(rᵣₐ);
        Jump rᵣₐ;
-lret:  STOREENV(C,rₐᵤₓ₁);
+lret:  STOREENV(κ,rₐᵤₓ₁);
        CLEARREG;
        Return
 
 **** Expressions compilation
 
-(C,i)↓ ::=
+(κ,i)↓ ::=
   Const i → r_com
 
-(C,e₁⊗e₂)↓ when ⊗ ≠ (;) ::=
-  (C,e₁)↓;
+(κ,e₁⊗e₂)↓ when ⊗ ≠ (;) ::=
+  (κ,e₁)↓;
   PUSH(r_com);
-  (C,e₂)↓;
+  (κ,e₂)↓;
   POP(rₐᵤₓ₁);
   BinOp rₐᵤₓ₁ ⊗ r_com → r_com
 
-(C,e₁;e₂)↓ ::=                   – just an optimization
-  (C,e₁)↓;
-  (C,e₂)↓
+(κ,e₁;e₂)↓ ::=                   – just an optimization
+  (κ,e₁)↓;
+  (κ,e₂)↓
 
-(C,if e then e₁ else e₂)↓ ::=
-      (C,e)↓;
+(κ,if e then e₁ else e₂)↓ ::=
+      (κ,e)↓;
       Bnz r_com lnz;
-      (C,e₂)↓;
+      (κ,e₂)↓;
       Bnz rₒₙₑ lend;  — will always branch
- lnz: (C,e₁)↓;
+ lnz: (κ,e₁)↓;
 lend: Nop
 
-(C,b[e])↓ ::=
-  (C,e)↓;
-  Const BUFADDR(C,b) → rₐᵤₓ₁;
+(κ,b[e])↓ ::=
+  (κ,e)↓;
+  Const BUFADDR(κ,b) → rₐᵤₓ₁;
   Binop rₐᵤₓ₁ + r_com → rₐᵤₓ₁;
   Load *rₐᵤₓ₁ → r_com
 
-(C,b[e₁] := e₂)↓ ::=
-  (C,e₁)↓;
-  Const BUFADDR(C,b) → rₐᵤₓ₁;
+(κ,b[e₁] := e₂)↓ ::=
+  (κ,e₁)↓;
+  Const BUFADDR(κ,b) → rₐᵤₓ₁;
   Binop rₐᵤₓ₁ + r_com → rₐᵤₓ₁;
   PUSH(rₐᵤₓ₁);
-  (C,e₂)↓;
+  (κ,e₂)↓;
   POP(rₐᵤₓ₁);
   Store *rₐᵤₓ₁ ← r_com
 
-(C,C'.P'(e))↓ when C' ≠ C ::=
-  (C,e)↓;
+(κ,C'.P'(e))↓ when C' ≠ κ.name ::=
+  (κ,e)↓;
   PUSH(rₐᵤₓ₂);
-  LOADARG(C → rₐᵤₓ₁);
+  LOADARG(κ → rₐᵤₓ₁);
   PUSH(rₐᵤₓ₁);
-  STOREENV(C,rₐᵤₓ₁);
+  STOREENV(κ,rₐᵤₓ₁);
   CLEARREG;
   Call C' P';
-  RESTOREENV(C);
+  RESTOREENV(κ);
   POP(rₐᵤₓ₁);
-  STOREARG(C ← rₐᵤₓ₁, rₐᵤₓ₂);
+  STOREARG(κ ← rₐᵤₓ₁, rₐᵤₓ₂);
   POP(rₐᵤₓ₂)
 
-(C,C.P(e))↓ ::=
-  (C,e)↓;
+(κ,C.P(e))↓ when C = κ.name ::=                – local calls optimization
+  (κ,e)↓;
   PUSH(rₐᵤₓ₂);
-  LOADARG(C → rₐᵤₓ₁);
+  LOADARG(κ → rₐᵤₓ₁);
   PUSH(rₐᵤₓ₁);
-  Const INTERNALENTRY(C,P) → rₐᵤₓ₁;
+  Const INTERNALENTRY(κ,P) → rₐᵤₓ₁;
   Jal rₐᵤₓ₁;
   POP(rₐᵤₓ₁);
-  STOREARG(C ← rₐᵤₓ₁, rₐᵤₓ₂);
+  STOREARG(κ ← rₐᵤₓ₁, rₐᵤₓ₂);
   POP(rₐᵤₓ₂)
 
-(C,exit)↓ ::=
+(κ,exit)↓ ::=
   Halt
 
+** Partial programs and contexts compilation
+
+φ↓ ::= (ψ₁ ⊎ ... ⊎ ψₙ, mem₁ ⊎ ... ⊎ memₙ, E₁ ⊎ ... ⊎ Eₙ)
+  where φ = {κ₁, ..., κₙ}
+        (ψᵢ, memᵢ, Eᵢ) = κᵢ↓
+
+κ↓ = (ψ, mem, E)
+  where ψ = {interfaceof(κ)}
+        mem[κ.name] = κ.bufs[0] ++ ... ++ κ.bufs[κ.bnum - 1]
+                   ++ (κ,0)↓ ++ ... ++ (κ,κ.pnum - 1)↓
+                   ++ [STACKBASE(̨κ)]
+                   ++ [0, ...]
+        E[̨(κ.name).0] = EXTERNALENTRY(κ,0)
+        ...
+        E[̨(κ.name).(κ.pnum-1)] = EXTERNALENTRY(κ,κ.pnum-1)
+
 ** Properties
-
-*** Lemma: Separate compilation for whole programs
-
-∀ A P s. A well formed ∧ A fully defined ∧ A ⊢ s ⇒
-         P well formed ∧ P fully defined ∧ P ⊢ₙ s ⇒
-  (A[P])↓ ~L A↓[P↓]
-
-*** Assumption (Whole programs compiler correctness)
-
-∀ φ. φ whole well formed ∧ φ defined ⇒
-     (φ↓ terminates ⇔ φ terminates)
-
-∀ φ. φ whole well formed ∧ φ defined ⇒
-     (φ↓ diverges ⇔ φ diverges)
 
 φ terminates ≜
   let Δ = procbodies(φ) in
@@ -1119,23 +1137,32 @@ lend: Nop
   ∀ cfg. Δ ⊢ I(φ) →* cfg ⇒
          ∃ cfg'. Δ ⊢ cfg → cfg'
 
-p terminates ≜
-  let (ψ,mem,E) = p in
+(ψ,mem,E) terminates ≜
   ∃ ρ. ψ; E ⊢ I(mem,E[main][0]) → ρ  ∧  ψ; E ⊢ ρ ↛
 
-p diverges ≜
-  let (ψ,mem,E) = p in
+(ψ,mem,E) diverges ≜
   ∀ ρ. ψ; E ⊢ I(mem,E[main][0]) →* ρ ⇒
        ∃ ρ'. ψ; E ⊢ ρ → ρ'
 
-*** Assumption (Shape preservation)
+*** Assumption (Whole programs compiler correctness)
 
-∀ A s. A well formed ∧ A ⊢ s ⇒
-  A↓ well formed ∧ A↓ ⊢ s
+∀ φ. φ whole well formed ∧ φ defined ⇒
+     (φ↓ terminates ⇔ φ terminates)
 
-∀ P s. P well formed ∧ P ⊢ₙ s ⇒
-  P↓ well formed ∧ P↓ ⊢ₙ s
+∀ φ. φ whole well formed ∧ φ defined ⇒
+     (φ↓ diverges ⇔ φ diverges)
 
+*** Lemma: Shape preservation
+
+∀ s P. P ∈• s ⇒ P↓ ∈• s
+
+∀ s A. A ∈∘ s ⇒ A↓ ∈∘ s
+
+*** Lemma: Separate compilation for whole programs
+
+∀ s A P. A well formed ∧ A fully defined ∧ A ⊢ s ⇒
+         P well formed ∧ P fully defined ∧ P ⊢ₙ s ⇒
+  (A[P])↓ ~L A↓[P↓]
 
 * Proofs using trace semantics (changes in trace notation & partial programs not propagated yet)
 
