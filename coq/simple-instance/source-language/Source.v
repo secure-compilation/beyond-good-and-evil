@@ -925,6 +925,10 @@ Inductive wellformed_flatevalcon_alt (i:interface)
     wellformed_expr_alt i n e1 ->
     wellformed_expr_alt i n e2 ->
     wellformed_flatevalcon_alt i n (CIfHoleThenElse e1 e2)
+  | WF_flatevalcon_alt_CHoleLoad : forall b,
+    let l := (get_bnumN n) in
+    (ble_nat b l = true /\ b <> l) -> 
+    wellformed_flatevalcon_alt i n (CHoleLoad b)
   | WF_flatevalcon_alt_CHoleStore : forall b e,
     let l := (get_bnumN n) in
     (ble_nat b l = true /\ b <> l) -> 
