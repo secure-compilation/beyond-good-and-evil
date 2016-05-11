@@ -1097,6 +1097,12 @@ Proof.
   apply H2.
 Qed.
 
+Lemma length_closed_updatestate :
+  forall C b i i' s, let s' := (update_state C b i i' s) in
+  (length (nth b (nth C s []) []) = length (nth b (nth C s' []) [])).
+Proof.
+Admitted.
+
 Lemma valuedefined_closed_updatestate :
   forall s C b i i' C0 b0 i0,
     value_defined C0 b0 i0 s = true ->
@@ -1127,7 +1133,8 @@ Theorem preservation_proof :
   preservation.
 Proof.
   unfold preservation.
-  intros P HWP cfg cfg' HCFG Heval.  inversion Heval as [C| | | | | | | | | | | | |]; constructor;
+  intros P HWP cfg cfg' HCFG Heval.  
+  inversion Heval as [C| | | | | | | | | | | | |]; constructor;
   rename H into H_Eval1; rename H0 into H_Eval2;
   inversion HCFG as [n state cs cont expr HS HC HK HE];
   try (
@@ -1212,15 +1219,13 @@ Proof.
   rewrite HD in H7.
   inversion H7.
   (* State with update *)
-  intros n0 Hmember buff index l l' Hbound.
-  rewrite <- DD; rewrite <- DK.
-  assert (forall s C b i i' C0 b0 i0,
-    value_defined C b i s = true ->
-    value_defined C0 b0 i0 (update_state C b i i' s) = true).
-  admit.
-  apply (valuedefined_closed_updatestate s C b i s) in DC.
-  unfold l in Hbound; unfold l' in Hbound.
-  unfold value_defined.
+  intros.
+  rewrite <- WFD in HCFG.
+  inversion HCFG.
+  inversion H7.
+  specialize (H12 n0 H b0 i0).
+  apply (valuedefined_closed_updatestate).
+  apply H12. apply H0.
   (* Expr Call *)
   destruct H2.
   unfold proc_defined_out in H5.
