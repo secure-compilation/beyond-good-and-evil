@@ -1097,20 +1097,37 @@ Proof.
   apply H2.
 Qed.
 
-Ltac clear_except hyp := 
-  repeat match goal with [ H : _ |- _ ] =>
-           match H with
-             | hyp => fail 1
-             | _ => clear H
-           end
-         end.
+Lemma valuedefined_closed_updatestate :
+  forall s C b i i' C0 b0 i0,
+    value_defined C0 b0 i0 s = true ->
+    value_defined C0 b0 i0 (update_state C b i i' s) = true.
+Proof.
+  intros s C b i i' C0 b0 i0 Hs.
+  set (s' := (update_state C b i i' s)).
+  assert (length (nth b0 (nth C0 s []) []) = length (nth b0 (nth C0 s' []) [])) as H.
+  { admit. }
+  unfold value_defined in *.
+  now rewrite<- H.
+Admitted.
+
+Lemma wellformedstate_closed_updatestate :
+  forall G s C b i i',
+  wellformed_state G s ->
+  wellformed_state G (update_state C b i i' s).
+Proof.
+  intros G s C b i i' H.
+  inversion H as [s0 Hs Hseqs0].
+  constructor.
+  intros.
+  apply valuedefined_closed_updatestate.
+  now apply Hs.
+Qed.
 
 Theorem preservation_proof :
   preservation.
 Proof.
   unfold preservation.
-  intros P HWP cfg cfg' HCFG Heval.
-  inversion Heval as [C| | | | | | | | | | | | |]; constructor;
+  intros P HWP cfg cfg' HCFG Heval.  inversion Heval as [C| | | | | | | | | | | | |]; constructor;
   rename H into H_Eval1; rename H0 into H_Eval2;
   inversion HCFG as [n state cs cont expr HS HC HK HE];
   try (
@@ -1184,7 +1201,7 @@ Proof.
     rewrite <- DD in HC;
     inversion HC;
     apply H6
-  ).
+  ).  
   destruct (ble_nat b (get_bnumN (nth n (wfinv_of_P P) (0, 0, 0, []))) &&
     negb (b =? get_bnumN (nth n (wfinv_of_P P) (0, 0, 0, [])))) eqn:HD.
   reflexivity.
@@ -1195,8 +1212,26 @@ Proof.
   rewrite HD in H7.
   inversion H7.
   (* State with update *)
-  intros.
-  
+  intros n0 Hmember buff index l l' Hbound.
+  rewrite <- DD; rewrite <- DK.
+  assert (forall s C b i i' C0 b0 i0,
+    value_defined C b i s = true ->
+    value_defined C0 b0 i0 (update_state C b i i' s) = true).
+  admit.
+  apply (valuedefined_closed_updatestate s C b i s) in DC.
+  unfold l in Hbound; unfold l' in Hbound.
+  unfold value_defined.
+  (* Expr Call *)
+  destruct H2.
+  unfold proc_defined_out in H5.
+  admit.
+  (* State with update *)
+  admit.
+  (* Expr ep wellformed *)
+  unfold ep.  
+  admit.
+  (* State with update *)
+  admit.
   (* Empty continuation *)
   rewrite <- DD in HC.
   inversion HC.
