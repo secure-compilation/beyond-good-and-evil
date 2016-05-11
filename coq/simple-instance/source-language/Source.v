@@ -977,11 +977,15 @@ Inductive wellformed_callstack (Is:program_interfaces)
 Reserved Notation "'STATE' G |- s 'wellformed'" (at level 40).
 Inductive wellformed_state (G:partial_program_invariant) : 
   state -> Prop :=
-  | WF_state : forall b i s,
+  | WF_state : forall s,
     (forall n, (In n G) ->
-     ((value_defined (get_nameN n) b i s = true) <->
-    (In b (generate_intlist 0 (get_bnumN n)) /\ 
-     In i (generate_intlist 0 (nth b (get_blens n) 0))))) ->
+     (forall b i,
+      let l := get_bnumN n in
+      let l' := (nth b (get_blens n) 0) in 
+      (andb (ble_nat b l) (negb (beq_nat b l)) = true) /\
+      (andb (ble_nat i l') (negb (beq_nat i l')) = true) 
+        ->
+      (value_defined (get_nameN n) b i s = true))) ->
     wellformed_state G s
   where "'STATE' G |- s 'wellformed'" := (wellformed_state G s).
 
@@ -1018,13 +1022,6 @@ Proof.
       destruct H2. contradiction.
     SCase "p = h::t".
       destruct H2. destruct H2. destruct H6.
-      apply (WF_state (wfinv_of_P (c :: p)) 0 0 (update_state main_cid 0 0 0 (generate_state (c :: p)))).
-      intros. split.
-      intro. split.
-      admit. admit.
-      intro. destruct H9.
-      induction n as [[[name bnum] pnum] blens].
-      simpl (get_nameN (name, bnum, pnum, blens)).
       admit.
   }
   Case "Callstack wellformed".
@@ -1198,13 +1195,8 @@ Proof.
   rewrite HD in H7.
   inversion H7.
   (* State with update *)
-  apply (WF_state (wfinv_of_P P) b i (update_state n b i i' state)).
-  intros. split.
-  intro. split.
-  rewrite <- H5 in HK.
-  inversion HK.
-  inversion H3.
-  admit. admit. admit. admit. admit. admit. admit.
+  intros.
+  
   (* Empty continuation *)
   rewrite <- DD in HC.
   inversion HC.
