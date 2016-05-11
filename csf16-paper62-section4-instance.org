@@ -859,7 +859,7 @@ P, Q, A ::= φ
 
 (no syntactic distinction between partial and whole programs)
 
-*** Program has shape: P ⊢• s
+*** Program has shape: P ∈• s
 
 ψ ⊢ φ well formed
 comps(φ) = {C₀,...,Cₙ}
@@ -889,13 +889,6 @@ dom(φ) = comps(ψ)∖{C₀,...,Cₙ}
 p, q, a ::= (ψ, mem, E)
 
 (no syntactic distinction between partial and whole programs)
-
-*** Well formedness
-
-⊢ ψ well formed
-dom(mem) = dom(E) ⊆ comps(ψ)
-————————————————————————————
-(ψ, mem, E) well formed
 
 *** Program has shape: p ∈• s
 
@@ -1154,9 +1147,9 @@ lend: Nop
 
 *** Lemma: Shape preservation
 
-∀ s P. P ∈• s ⇒ P↓ ∈• s
+∀ s P. s well formed ∧ P ∈• s ⇒ P↓ ∈• s
 
-∀ s A. A ∈∘ s ⇒ A↓ ∈∘ s
+∀ s A. s well formed ∧ A ∈∘ s ⇒ A↓ ∈∘ s
 
 *** Lemma: Separate compilation for whole programs
 
@@ -1164,17 +1157,17 @@ lend: Nop
          P well formed ∧ P fully defined ∧ P ⊢ₙ s ⇒
   (A[P])↓ ~L A↓[P↓]
 
-* Proofs using trace semantics (changes in trace notation & partial programs not propagated yet)
+* Proofs using trace semantics
 
 ** Labeled reduction for partial programs
 
 We define a labeled reduction of the form:
 
-           α
-  ψ; E ⊢ θ → θ'
+            α
+  ψ; E ⊢• θ → θ'
 
 E — external entry points for the *program components* only
-ψ – interfaces for *all components* (both program and context)
+ψ – interfaces for *all components* (both player and opponent)
 both defined as in the low-level semantics
 
 AAA: I am a little bit confused by the type of E. Is it a set of
@@ -1305,10 +1298,10 @@ when calling or returning to the context (which is not in E), but then
 other rules will apply (6 and 7).
 
 Top(PΣ) = σ         PΣ' = SetTop(PΣ, σ')
-ψ; E ⊢ (C,σ,mem,reg,pc) → (C',σ',mem',reg',pc')
+ψ; E ⊢• (C,σ,mem,reg,pc) → (C',σ',mem',reg',pc')
 ————————————————————————————————————————————————— T_CallRetTau+
                  action(C,σ,mem,reg,pc)
-ψ; E ⊢ (C,PΣ,mem,reg,pc) → (C',PΣ',mem',reg',pc')
+ψ; E ⊢• (C,PΣ,mem,reg,pc) → (C',PΣ',mem',reg',pc')
 
 action(C,σ,mem,reg,pc) =
   match decode(mem[C,pc]) with
@@ -1319,36 +1312,36 @@ action(C,σ,mem,reg,pc) =
 *** 2 - Internal context reductions
 
 ———————————————————————————————————————— T_Tau-
-                     τ -
-ψ; E ⊢ (C,AΣ,mem,/,/) → (C,AΣ,mem,/,/)
+                      τ -
+ψ; E ⊢• (C,AΣ,mem,/,/) → (C,AΣ,mem,/,/)
 
 C'.P' ∈ ψ[C].import ∨ C' = C       – check interface
 C' ∉ dom(E)                        — call target in context
 Top(AΣ) = Aσ      AΣ' = SetTop(AΣ, (C,/)::Aσ)
 ————————————————————————————————————————————— T_Call-
                     C'.P'(/) -
-ψ; E ⊢ (C,AΣ,mem,/,/) → (C',AΣ',mem,/,/)
+ψ; E ⊢• (C,AΣ,mem,/,/) → (C',AΣ',mem,/,/)
 
 (C',/)::σ = Top(AΣ)     AΣ' = SetTop(AΣ,σ)
 —————————————————————————————————————————— T_Ret-
-                    Ret / -
-ψ; E ⊢ (C,AΣ,mem,/,/) → (C',AΣ',mem,/,/)
+                   Ret / -
+ψ; E ⊢• (C,AΣ,mem,/,/) → (C',AΣ',mem,/,/)
 
 *** 3 - Call from context code to program code
 
 C'.P' ∈ ψ[C].import             – check interface
 C' ∈ dom(E)                     – call target in program
 Top(AΣ) = Aσ               AΣ' = SetTop(AΣ, (C,/)::Aσ)
-—————————————————————————————————————————————————————— T_Call?
-                    C'.P'(reg) ?
-ψ; E ⊢ (C,AΣ,mem,/,/) → (C',[]::AΣ',mem,reg,E[C'][P'])
+——————————————————————————————————————————————————————— T_Call?
+                     C'.P'(reg) ?
+ψ; E ⊢• (C,AΣ,mem,/,/) → (C',[]::AΣ',mem,reg,E[C'][P'])
 
 *** 4 - Return from context code to program code
 
 Top(PΣ) = (C',pc)::σ         PΣ' = SetTop(PΣ,σ)
-—————————————————————————————————————————————— T_Ret?
+———————————————————————————————————————————————— T_Ret?
                        Ret reg ?
-ψ; E ⊢ (C,[]::PΣ,mem,/,/) → (C',PΣ',mem,reg,pc)
+ψ; E ⊢• (C,[]::PΣ,mem,/,/) → (C',PΣ',mem,reg,pc)
 
 *** 5 - Call from program code to context code
 
@@ -1356,73 +1349,111 @@ mem[C,pc] = i     decode i = Call C' P'
 C'.P' ∈ ψ[C].import                – check interface
 C' ∉ dom(E)                        – call target in context
 Top(PΣ) = σ      PΣ' = SetTop(PΣ, (C,pc+1)::σ)
-—————————————————————————————————————————————— T_Call!
-                       C'.P'(reg) !
-ψ; E ⊢ (C,PΣ,mem,reg,pc) → (C',[]::PΣ',mem,/,/)
+———————————————————————————————————————————————— T_Call!
+                        C'.P'(reg) !
+ψ; E ⊢• (C,PΣ,mem,reg,pc) → (C',[]::PΣ',mem,/,/)
 
 *** 6 - Return from program code to context code
 
 mem[C,pc] = i     decode i = Return
 Top(AΣ) = (C',/)::Aσ        AΣ' = SetTop(AΣ,Aσ)
-——————————————————————————————————————————————— T_Ret!
+———————————————————————————————————————————————— T_Ret!
                          Ret reg !
-ψ; E ⊢ (C,[]::AΣ,mem,reg,pc) → (C',AΣ',mem,/,/)
+ψ; E ⊢• (C,[]::AΣ,mem,reg,pc) → (C',AΣ',mem,/,/)
 
 *** 7 - Termination from context code
 
-————————————————————————————————— T_Exit?
-                      ✓?
-ψ; E ⊢ (C,AΣ,mem,/,/) → EXITED
+——————————————————————————————— T_Exit?
+                       ✓?
+ψ; E ⊢• (C,AΣ,mem,/,/) → EXITED
 
 *** 8 - Termination from program code
 
-                                   α
-∀ α ≠ ✓!. ψ; E ⊢ (C,PΣ,mem,reg,pc) ↛
-———————————————————————————————————— T_Exit!
+                                    α
+∀ α ≠ ✓!. ψ; E ⊢• (C,PΣ,mem,reg,pc) ↛
+————————————————————————————————————— T_Exit!
                          ✓!
-ψ; E ⊢ (C,PΣ,mem,reg,pc) → EXITED
+ψ; E ⊢• (C,PΣ,mem,reg,pc) → EXITED
 
 ** Traces
+
+*** Initial trace states
+
+Initial states have the same definition for partial program players and context players:
+
+I(ψ,mem,E) – initial state
+I(ψ,mem,E) when main ∈ dom(E) ≜
+  (C, [], mem, reg₀, E[main][0])   – player starts computation
+I(ψ,mem,E) when main ∉ dom(E) ≜
+  (C, [], mem, /, /)               – opponent starts computation
+
+*** Inference rules for partial programs
 
 t ≜ a word over alphabet Eα (as defined above).
 
 ε is the empty word.
 
-———————————— T_Refl
-         ε
-ψ; E ⊢ θ ⇒ θ
+————————————— T_Refl
+          ε
+ψ; E ⊢• θ ⇒ θ
 
-         Iα
-ψ; E ⊢ θ → θ'
-————————————— T_Internal
-         ε
-ψ; E ⊢ θ ⇒ θ'
+          Iα
+ψ; E ⊢• θ → θ'
+—————————————— T_Internal
+          ε
+ψ; E ⊢• θ ⇒ θ'
 
-         Eα
-ψ; E ⊢ θ → θ'
-————————————— T_Cross
-         Eα
-ψ; E ⊢ θ ⇒ θ'
+          Eα
+ψ; E ⊢• θ → θ'
+—————————————— T_Cross
+          Eα
+ψ; E ⊢• θ ⇒ θ'
 
-          t
-ψ; E ⊢ θ  ⇒ θ'
-          u
-ψ; E ⊢ θ' ⇒ θ''
-——————————————— T_Trans
-         t.u
-ψ; E ⊢ θ  ⇒ θ''
+           t
+ψ; E ⊢• θ  ⇒ θ'
+           u
+ψ; E ⊢• θ' ⇒ θ''
+———————————————— T_Trans
+          t.u
+ψ; E ⊢• θ  ⇒ θ''
 
-** Traces of a program
+*** Trace dualization
 
-I(p) – initial state
-I(ψ,memₚ,Eₚ) when main ∈ dom(Eₚ) ≜
-  (C, [], mem, reg₀, Eₚ[main][0])   – program starts computation
-I(ψ,memₚ,Eₚ) when main ∉ dom(Eₚ) ≜
-  (C, [], mem, /, /)                – context starts computation
+Intuition: permute context and program in all actions.
 
-Traces(p) – the set of traces that a program (or context) has
-                                           t
-Traces(ψ,memₚ,Eₚ) = {t | ∃θ.  ψ; Eₚ ⊢ I(p) ⇒ θ}
+(γ ?)⁻¹ ≜ γ !
+(γ !)⁻¹ ≜ γ ?
+
+ε⁻¹     ≜ ε
+Eα :: t ≜ Eα⁻¹ :: t⁻¹
+
+*** Inference rule for contexts
+
+Due to the symmetry between programs and contexts, we can define
+context traces *via* program traces. This amounts to using the exact
+same rules as the one for programs, while permuting the roles of
+the program and the context: we exchange "?" for "!" and "!" for "?".
+
+           t⁻¹
+  ψ; E ⊢• θ ⇒ θ'
+  ——————————————
+            t
+  ψ; E ⊢∘ θ ⇒ θ'
+
+*** Trace sets
+
+Traces_•s(p) – the set of traces that a program has
+                                       t
+Traces_•s(p) = {t | ∃θ.  ψ; Eₚ ⊢• I(p) ⇒ θ}
+  where p = (ψₚ,memₚ,Eₚ)
+        s = (ψ,{C₀,...,Cₙ})
+
+Traces_∘s(a) – the set of traces that a context has
+                                       t
+Traces_∘s(a) = {t | ∃θ.  ψ; Eₐ ⊢∘ I(a) ⇒ θ}
+  where a = (ψₐ,memₐ,Eₐ)
+        s = (ψ,{C₀,...,Cₙ})
+
 
 ** Traces with internal actions
 
@@ -1433,17 +1464,6 @@ erase(T) – erase internal actions in a generalized trace to get a trace t
 erase(ε)       ≜ ε
 erase(Iα :: t) ≜ erase(t)
 erase(Eα :: t) ≜ Eα :: erase(t)
-
-** Trace dualization
-
-Intuition: permute context and program in all actions.
-
-(γ ?)⁻¹ ≜ γ !
-(γ !)⁻¹ ≜ γ ?
-
-ε⁻¹     ≜ ε
-Eα :: t ≜ Eα⁻¹ :: t⁻¹
-
 
 (ia -)⁻¹ ≜ ia +
 (ia +)⁻¹ ≜ ia -
@@ -1462,18 +1482,18 @@ Intuition: the same trace, where the *context* cleans all his
 ζ(Ret reg)  ≜ Ret reg[r←0,r≠r_com]
 ζ(✓)        ≜ ✓
 
-ζ(Eα) – clean registers in *context* actions only
-ζ(γ !) ≜ γ !
-ζ(γ ?) ≜ ζ(γ) ?
+ζ∘(Eα) – clean registers in *context* actions only
+ζ∘(γ !) ≜ γ !
+ζ∘(γ ?) ≜ ζ(γ) ?
 
-ζ(t) — clean registers in context actions of a trace
-ζ(ε)       ≜ ε
-ζ(Eα :: t) ≜ ζ(Eα) :: ζ(t)
+ζ∘(t) — clean registers in context actions of a trace
+ζ∘(ε)       ≜ ε
+ζ∘(Eα :: t) ≜ ζ(Eα) :: ζ(t)
 
-ζ(t) — internal actions don't mention register values anyway
-ζ(ε)       ≜ ε
-ζ(Eα :: T) ≜ ζ(Eα) :: ζ(T)
-ζ(Iα :: t) ≜ Iα :: ζ(t)
+ζ∘(T) — internal actions don't mention register values anyway
+ζ∘(ε)       ≜ ε
+ζ∘(Eα :: T) ≜ ζ(Eα) :: ζ∘(T)
+ζ∘(Iα :: T) ≜ Iα :: ζ∘(T)
 
 ** State wellformedness
 
@@ -1580,8 +1600,7 @@ merge Pθ Aθ ≜
     (C, PΣ, memₚ, reg, pc), (_, AΣ, memₐ, /, /) →
       (C, merge PΣ AΣ, memₚ ⊎ memₐ, reg, pc)
 
-** Properties
-
+** Properties (changes not propagated yet)
 *** Traces alternate between context and program actions
 
 ∀ p t u v γ₀ γ₁ v. t ∈ Traces(p) ⇒
@@ -1644,7 +1663,7 @@ to buffers). Except for r_com, compiled programs only read the content
 of registers *after* writing to them. As a consequence, any sequence
 of reductions followed under t can be followed under ζ(t).
 
-** Main lemmas
+** Main lemmas (changes not propagated yet)
 
 *** Internal trace recovery
 
@@ -2608,7 +2627,7 @@ Intuition about algorithm correctness:
       (3) (∀ γ γ'. t.γ!.γ'? ∈ Traces(A↓) ⇒
             ζ(γ) = ζ(γ₀) ∧ γ' = ✓).
 
-** Theorems
+** Theorems (changes not propagated yet)
 *** 1st Theorem (the boring direction of structured full abstraction)
 
 ∀ s P Q. P well formed ∧ P fully defined ∧ P ⊢ₙ s ⇒
