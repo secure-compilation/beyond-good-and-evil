@@ -1021,8 +1021,7 @@ Proof.
       apply (WF_state (wfinv_of_P (c :: p)) 0 0 (update_state main_cid 0 0 0 (generate_state (c :: p)))).
       intros. split.
       intro. split.
-      admit.
-      admit.
+      admit. admit.
       intro. destruct H9.
       induction n as [[[name bnum] pnum] blens].
       simpl (get_nameN (name, bnum, pnum, blens)).
@@ -1033,7 +1032,7 @@ Proof.
   Case "Continuations wellformed".
   { constructor. }
   Case "Expr".
-  { destruct ((nth 0 (get_procs (nth main_cid p (0, 0, [], 0, 0, [])))));
+  { destruct ((nth 0 (get_procs (nth main_cid p (0, 0, [], 0, 0, []))))) eqn:HD;
     try (now constructor).
     admit. admit. admit. admit. admit.
   }
@@ -1159,7 +1158,7 @@ Proof.
     try (destruct (ble_nat i1 i2));
     try (now constructor)
   );
-  try (apply H3);
+  try (now apply H3);
   try (
     rewrite <- DE in HK;
     inversion HK;
@@ -1182,7 +1181,34 @@ Proof.
     inversion HK;
     inversion H5;
     apply H2
+  );
+  try (apply HC);
+  try (
+    rewrite <- DD in HC;
+    inversion HC;
+    apply H6
   ).
+  destruct (ble_nat b (get_bnumN (nth n (wfinv_of_P P) (0, 0, 0, []))) &&
+    negb (b =? get_bnumN (nth n (wfinv_of_P P) (0, 0, 0, [])))) eqn:HD.
+  reflexivity.
+  rewrite <- DK in HK.
+  inversion HK.
+  inversion H3.
+  unfold l in H7.
+  rewrite HD in H7.
+  inversion H7.
+  (* State with update *)
+  apply (WF_state (wfinv_of_P P) b i (update_state n b i i' state)).
+  intros. split.
+  intro. split.
+  rewrite <- H5 in HK.
+  inversion HK.
+  inversion H3.
+  admit. admit. admit. admit. admit. admit. admit.
+  (* Empty continuation *)
+  rewrite <- DD in HC.
+  inversion HC.
+  apply H3.
 Admitted.
 
 Theorem partial_type_safety :
@@ -1211,12 +1237,19 @@ Proof.
   try (left; constructor);
   try (destruct k);
   try (destruct call);
-  try (destruct n);
-  try (right; right; constructor);
+  try (try (destruct n); right; right; constructor);
   try (intro contra; inversion contra);
-  try reflexivity;
-  try (right; left; constructor).
-Admitted.
+  try reflexivity; simpl;
+  try (destruct (value_defined C b n s) eqn:HD1);
+  try (destruct (value_defined C b n0 s) eqn:HD2);
+  try (try (destruct n); right; right; constructor);
+  try (apply HD1); try (apply HD2);
+  try (
+    right; left; constructor; 
+    unfold value_undefined; 
+    try (rewrite HD1); try (rewrite HD2); now reflexivity
+  ).
+Qed.
 
 Lemma final_becomes_final :
   forall D n c,
