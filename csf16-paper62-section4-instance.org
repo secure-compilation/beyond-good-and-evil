@@ -1488,11 +1488,11 @@ Intuition: the same trace, where the *context* cleans all his
 
 ζ∘(t) — clean registers in context actions of a trace
 ζ∘(ε)       ≜ ε
-ζ∘(Eα :: t) ≜ ζ(Eα) :: ζ(t)
+ζ∘(Eα :: t) ≜ ζ∘(Eα) :: ζ∘(t)
 
 ζ∘(T) — internal actions don't mention register values anyway
 ζ∘(ε)       ≜ ε
-ζ∘(Eα :: T) ≜ ζ(Eα) :: ζ∘(T)
+ζ∘(Eα :: T) ≜ ζ∘(Eα) :: ζ∘(T)
 ζ∘(Iα :: T) ≜ Iα :: ζ∘(T)
 
 ** State wellformedness
