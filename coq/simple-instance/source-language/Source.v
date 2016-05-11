@@ -878,18 +878,18 @@ Inductive wellformed_expr_alt (i:interface) (n:component_invariant) :
     wellformed_expr_alt i n (EIfThenElse e e1 e2)
   | WF_expr_alt_ELoad : forall b e,
     let l := (get_bnumN n) in
-    (ble_nat b l = true /\ b <> l) ->
+    andb (ble_nat b l) (negb (beq_nat b l)) = true ->
     wellformed_expr_alt i n e ->
     wellformed_expr_alt i n (ELoad b e)
   | WF_expr_alt_EStore : forall b e1 e2,
     let l := (get_bnumN n) in
-    (ble_nat b l = true /\ b <> l) ->
+    andb (ble_nat b l) (negb (beq_nat b l)) = true ->
     wellformed_expr_alt i n e1 ->
     wellformed_expr_alt i n e2 ->
     wellformed_expr_alt i n (EStore b e1 e2)
   | WF_expr_alt_ECall_In : forall C P e,
     let l := (get_pnumN n) in
-    let proc_defined_in := (ble_nat P l = true /\ P <> l) in
+    let proc_defined_in := andb (ble_nat P l) (negb (beq_nat P l)) = true in
     (C = (get_name i) /\ proc_defined_in) ->
     wellformed_expr_alt i n e ->
     wellformed_expr_alt i n (ECall C P e)
@@ -927,20 +927,20 @@ Inductive wellformed_flatevalcon_alt (i:interface)
     wellformed_flatevalcon_alt i n (CIfHoleThenElse e1 e2)
   | WF_flatevalcon_alt_CHoleLoad : forall b,
     let l := (get_bnumN n) in
-    (ble_nat b l = true /\ b <> l) -> 
+    andb (ble_nat b l) (negb (beq_nat b l)) = true -> 
     wellformed_flatevalcon_alt i n (CHoleLoad b)
   | WF_flatevalcon_alt_CHoleStore : forall b e,
     let l := (get_bnumN n) in
-    (ble_nat b l = true /\ b <> l) -> 
+    andb (ble_nat b l) (negb (beq_nat b l)) = true -> 
     wellformed_expr_alt i n e ->
     wellformed_flatevalcon_alt i n (CHoleStore b e)
   | WF_flatevalcon_alt_CStoreHole : forall b v,
     let l := (get_bnumN n) in
-    (ble_nat b l = true /\ b <> l) -> 
+    andb (ble_nat b l) (negb (beq_nat b l)) = true -> 
     wellformed_flatevalcon_alt i n (CStoreHole b v)
   | WF_flatevalcon_alt_CCallHole_In : forall C P,
     let l := (get_pnumN n) in
-    let proc_defined_in := (ble_nat P l = true /\ P <> l) in
+    let proc_defined_in := andb (ble_nat P l) (negb (beq_nat P l)) = true in
     (C = (get_name i) /\ proc_defined_in) ->
     wellformed_flatevalcon_alt i n (CCallHole C P)
   | WF_flatevalcon_alt_CCallHole_Out : forall C P,
@@ -1176,6 +1176,12 @@ Proof.
     inversion HK;
     inversion H3;
     apply H8
+  );
+  try (
+    rewrite <- H5 in HK;
+    inversion HK;
+    inversion H5;
+    apply H2
   ).
 Admitted.
 
