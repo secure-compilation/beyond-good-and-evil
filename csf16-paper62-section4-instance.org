@@ -561,10 +561,10 @@ bufsin(E) ⊆ [0,η.bnum)                           – all used buffers are def
 
 *** Well-formedness of states: Γ ⊢ s well formed
 
-∀ η ∈ Γ,
-  s[η.name,b,i] is defined
-    ⇔
+∀ η ∈ Γ, b, i,
   b ∈ [0,η.bnum) ∧ i ∈ [0,η.blens[b])
+    ⇒
+  s[η.name,b,i] is defined
 —————————————————————————————————————
 Γ ⊢ s well formed
 
