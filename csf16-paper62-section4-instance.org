@@ -1495,6 +1495,19 @@ Intuition: the same trace, where the *context* cleans all his
 ζ∘(Eα :: T) ≜ ζ∘(Eα) :: ζ∘(T)
 ζ∘(Iα :: T) ≜ Iα :: ζ∘(T)
 
+ζ•(Eα) – clean registers in *program* actions only
+ζ•(γ !) ≜ ζ(γ) !
+ζ•(γ ?) ≜ γ ?
+
+ζ•(t) — clean registers in program actions of a trace
+ζ•(ε)       ≜ ε
+ζ•(Eα :: t) ≜ ζ•(Eα) :: ζ•(t)
+
+ζ•(T)
+ζ•(ε)       ≜ ε
+ζ•(Eα :: T) ≜ ζ•(Eα) :: ζ•(T)
+ζ•(Iα :: T) ≜ Iα :: ζ•(T)
+
 ** State wellformedness
 
 C ∈ dom(E)
@@ -1601,67 +1614,85 @@ merge Pθ Aθ ≜
       (C, merge PΣ AΣ, memₚ ⊎ memₐ, reg, pc)
 
 ** Properties (changes not propagated yet)
+
+For all properties below, the second variant (about the context)
+follows from the first variant (about the program).
+
 *** Traces alternate between context and program actions
 
-∀ p t u v γ₀ γ₁ v. t ∈ Traces(p) ⇒
+∀ s t u v γ₀ γ₁ p.
+  s well formed ∧ p ∈• s ∧ t ∈ Traces_∘s(p) ⇒
+  (t = u.γ₀?.Eα.v ⇒ ∃ γ₁. Eα = γ₁!)
+  ∧ (t = u.γ₀!.Eα.v ⇒ ∃ γ₁. Eα = γ₁?)
+
+∀ s t u v γ₀ γ₁ a.
+  s well formed ∧ a ∈∘ s ∧ t ∈ Traces_•s(a) ⇒
   (t = u.γ₀?.Eα.v ⇒ ∃ γ₁. Eα = γ₁!)
   ∧ (t = u.γ₀!.Eα.v ⇒ ∃ γ₁. Eα = γ₁?)
 
 *** Trace sets are prefix-closed
 
-∀ t u. t.u ∈ Traces(p) ⇒ t ∈ Traces(p)
+∀ s t u p. s well formed ∧ p ∈• s ∧ t.u ∈ Traces_∘s(p) ⇒ t ∈ Traces_∘s(p)
 
-*** Opponents can take any action after non-terminating player actions
+∀ s t u a. s well formed ∧ a ∈∘ s ∧ t.u ∈ Traces_•s(a) ⇒ t ∈ Traces_•s(a)
 
-∀ s a p t u γ γ'.
-  a well formed ∧ a ⊢ s ⇒
-  p well formed ∧ p ⊢ₙ s ⇒
-  γ ≠ ✓ ⇒
-    (t.γ! ∈ Traces(p) ∧ (t.γ!.γ'?)⁻¹ ∈ Traces(a) ⇒
-      t.γ!.γ'? ∈ Traces(p))
-    ∧
-    ((t.γ?)⁻¹ ∈ Traces(a) ∧ t.γ?.γ'! ∈ Traces(p) ⇒
-      (t.γ?.γ'!)⁻¹ ∈ Traces(a))
+*** The opponent can take any action after non-terminating player actions (Trace extensibility)
 
-Intuition: when the program gives control back to the context,
-i.e. when the program performs an external action that is not
-termination, the context can take any action that it can perform.
-The same property holds when interverting players.
+∀ s a p t u γ.
+  s well formed ⇒
+  a well formed ∧ a ∈∘ s ⇒
+  p well formed ∧ p ∈• s ⇒
+  t ∈ Traces_∘s(p) ∧ t.γ? ∈ Traces_•s(a) ⇒
+    t.γ? ∈ Traces_∘s(p)
 
-AAA: One of the sides of the conjunction follows from the other, right?
-YJ: Yes. Actually they are exactly the same when we unfold
-⁻¹. Probably shouldn't keep both, but things will be clearer with the
-new notation.
+∀ s a p t u γ.
+  s well formed ⇒
+  a well formed ∧ a ∈∘ s ⇒
+  p well formed ∧ p ∈• s ⇒
+  t ∈ Traces_•s(a) ∧ t.γ! ∈ Traces_∘s(p) ⇒
+    t.γ! ∈ Traces_•s(a)
 
-*** Compiled, fully-defined programs only yield canonical traces
+*** Compiled, fully-defined players only yield canonical traces
 
-∀ t P. P well formed ∧ P fully defined ⇒
-  t ∈ Traces(P↓) ⇒ t⁻¹ = ζ(t⁻¹)
+∀ s P t.
+  s well formed ∧ P ∈• s ⇒
+  P fully defined wrt. contexts of shape ∘s ⇒
+  t ∈ Traces_∘s(P↓) ⇒
+    t = ζ•(t)
 
-(the same goes for fully-defined attackers)
+∀ s A t.
+  s well formed ∧ A ∈∘ s ⇒
+  A fully defined wrt. programs of shape •s ⇒
+  t ∈ Traces_•s(A↓) ⇒
+    t = ζ∘(t)
 
 Intuition:
 
-The code of fully defined programs never changes (Stores are limited
-to buffers). Except for r_com, compiled programs always clean their
+The code of fully defined players never changes (Stores are limited
+to buffers). Except for r_com, compiled players always clean their
 registers before performing a call or a return. As a consequence, in
-their traces, except for r_com, all registers hold value 0 upon at !
-actions. This can be characterized by saying that the dual trace is
-canonical.
+their traces, except for r_com, all registers hold value 0 upon
+communication originating from the player.
 
-*** Canonicalization is invisible to fully defined programs
+*** Canonicalization is invisible to fully defined players
 
-∀ t P. P well formed ∧ P fully defined ⇒
-  t ∈ Traces(P↓) ⇔ ζ(t) ∈ Traces(P↓)
+∀ s P t.
+  s well formed ∧ P ∈• s ⇒
+  P fully defined wrt. contexts of shape ∘s ⇒
+  t ∈ Traces_∘s(P↓) ⇔ ζ∘(t) ∈ Traces_∘s(P↓)
 
-(the same goes for fully-defined attackers)
+∀ s A t.
+  s well formed ∧ A ∈∘ s ⇒
+  A fully defined wrt. programs of shape •s ⇒
+  t ∈ Traces_•s(A↓) ⇔ ζ•(t) ∈ Traces_•s(A↓)
 
 Intuition:
 
-The code of fully defined programs never changes (Stores are limited
-to buffers). Except for r_com, compiled programs only read the content
+The code of fully defined players never changes (Stores are limited
+to buffers). Except for r_com, compiled players only read the content
 of registers *after* writing to them. As a consequence, any sequence
-of reductions followed under t can be followed under ζ(t).
+of reductions followed under t can be followed under the canonicalized
+variant of t.
 
 ** Main lemmas (changes not propagated yet)
 
