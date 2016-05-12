@@ -1613,7 +1613,7 @@ merge Pθ Aθ ≜
     (C, PΣ, memₚ, reg, pc), (_, AΣ, memₐ, /, /) →
       (C, merge PΣ AΣ, memₚ ⊎ memₐ, reg, pc)
 
-** Properties (changes not propagated yet)
+** Properties
 
 For all properties below, the second variant (about the context)
 follows from the first variant (about the program).
@@ -2658,18 +2658,19 @@ Intuition about algorithm correctness:
       (3) (∀ γ γ'. t.γ!.γ'? ∈ Traces(A↓) ⇒
             ζ(γ) = ζ(γ₀) ∧ γ' = ✓).
 
-** Theorems (changes not propagated yet)
+** Theorems
 *** 1st Theorem (the boring direction of structured full abstraction)
 
-∀ s P Q. P well formed ∧ P fully defined ∧ P ⊢ₙ s ⇒
-         Q well formed ∧ Q fully defined ∧ Q ⊢ₙ s ⇒
-  (∃ A. A well formed ∧ A fully defined ∧ A ⊢ s ∧ A[P] ≁H A[Q]) ⇒
+∀ s P Q. s well formed ⇒
+         P ∈• s ∧ P fully defined wrt. contexts of shape ∘s ⇒
+         Q ∈• s ∧ Q fully defined wrt. contexts of shape ∘s ⇒
+  (∃ A. A ∈∘ s ∧ A fully defined wrt. programs of shape •s ∧ A[P] ≁H A[Q]) ⇒
     ∃ a. a well formed ∧ a ⊢ s ∧ a[P↓] ≁L a[Q↓]
 
 Proof:
 
 Let s P Q. Assume a high-level context A such that
-  A well formed ∧ A fully defined ∧ A ⊢ s ∧ A[P] ≁H A[Q].
+  A ∈∘ s ∧ A fully defined wrt. programs of shape •s ∧ A[P] ≁H A[Q].
 Note that A[P] and A[Q] are both defined due to full-definedness
 conditions on A, P and Q. From the last condition on A we know that
 either
@@ -2679,108 +2680,34 @@ or
 We *assume (1)* without loss of generality ((2) is symmetric).
 
 Take a = A↓. From *shape preservation* we get that
-  A↓ well formed ∧ A↓ ⊢ s.
+  A↓ ∈∘ s.
 Moreover from *whole program compiler correctness* it follows that
   (A[P])↓ terminates ∧ (A[Q])↓ diverges.
 Applying *separate compilation* we get that
   A↓[P↓] terminates ∧ A↓[Q↓] diverges,
 hence, because the low-level language is deterministic,
-  A↓[P↓] ≁L a[Q↓].
+  A↓[P↓] ≁L A↓[Q↓].
 QED.
 
 *** 2nd Theorem (the interesting direction of structured full abstraction)
 
-∀ s P Q. P well formed ∧ P fully defined ∧ P ⊢ₙ s ⇒
-         Q well formed ∧ Q fully defined ∧ Q ⊢ₙ s ⇒
+∀ s P Q. s well formed ⇒
+         P ∈• s ∧ P fully defined wrt. contexts of shape ∘s ⇒
+         Q ∈• s ∧ Q fully defined wrt. contexts of shape ∘s ⇒
   (∃ a. a well formed ∧ a ⊢ s ∧ a[P↓] ≁L a[Q↓]) ⇒
-    ∃ A. A well formed ∧ A fully defined ∧ A ⊢ s ∧ A[P] ≁H A[Q]
+    (∃ A. A ∈∘ s ∧ A fully defined wrt. programs of shape •s ∧ A[P] ≁H A[Q])
 
-Proof:
-
-Suppose that a[P↓] terminates and a[Q↓] diverges.
-Apply trace decomposition to a,P↓ to get a trace tᵢ that ends with a
-termination marker ✓. Select the longest prefix tₚ of tᵢ such that
-tₚ ∈ Traces(Q↓). Because trace sets are prefix-closed, we know that
-tₚ ∈ Traces(P↓) and tₚ⁻¹ ∈ Traces(a).
-
-tₚ is a strict prefix of tᵢ since otherwise we could apply trace
-composition to a and Q↓ and get that a[Q↓] terminates.
-There thus exists Eα such that (∃tₛ. tᵢ = tₚ.Eα.tₛ).
-Eα cannot be a context action.
-Subproof:
-  Suppose it were. Then the preceding action must be a program action
-  that's not termination. However, because contexts can perform any
-  action after a non-terminating program action, (tₚ.Eα) ∈ Traces(Q↓).
-  This violates the fact that tₚ is the longest prefix of tᵢ in
-  Traces(Q↓).
-So Eα is a program action, i.e. there exists γ₀ such that Eα = γ₀!.
-
-Let t_c be the canonicalization of trace tₚ, i.e. t_c = ζ(tₚ).
-
-Since canonicalization is invisible to fully defined programs,
-  t_c.γ₀! = ζ(tₚ.γ₀!) ∈ Traces(P↓).
-Applying definability to t_c,γ₀ we get a high-level fully-defined
-attacker A such that
-  (1) t_c⁻¹ ∈ Traces(A↓) ∧
-  (2) γ₀ ≠ ✓ ⇒ (t_c.γ₀!.✓?)⁻¹ ∈ Traces(A↓) ∧
-  (3) (∀ γ γ'. t_c.γ!.γ'? ∈ Traces(A↓) ⇒
-         ζ(γ) = ζ(γ₀)).
-
-P↓ has trace t_c.γ₀! hence:
- * either γ₀ = ✓, in this case A↓[P↓] terminates by applying trace
-   composition from (1) plus the fact that the program can take any
-   action after A↓ has given back control;
- * or γ₀ lends back control to the context, then P↓ has trace
-   t_c.γ₀!.✓? since the context can take any action, so
-   using (2) and trace composition we can deduce that A↓[P↓]
-   terminates.
-In both cases, A↓[P↓] terminates.
-
-Since canonicalization is invisible to fully defined programs,
-  (a) t_c ∈ Traces(Q↓)  ∧
-  (b) (t_c.✓! = ζ(tₚ.✓!) ∈ Traces(Q↓) ⇒
-         tₚ.✓! ∈ Traces(Q↓))
-  (c) (t_c.γ₀! = ζ(tₚ.γ₀!) ∈ Traces(Q↓) ⇒
-         tₚ.γ₀! ∈ Traces(Q↓)).
-After following trace t_c, Q↓ cannot perform a terminating action,
-because otherwise, (b) would allow us to apply traces composition to
-a,Q↓ and get that a[Q↓] terminates.
-After following trace t_c, Q↓ cannot perform action γ₀ either,
-because otherwise, (c) would violate the fact that tₚ is the longest
-prefix of tᵢ in Traces(Q↓).
-
-So Q↓ only has two options.
- * The first option is to perform no external action by going into
-   an infinite sequence of internal transitions. In this case we can
-   apply trace composition to get that $\comp{A}[\comp{Q}]$ diverges.
-
- * The first option is to go into an infinite sequence of internal
-   transitions, in this case A↓[Q↓] obviously diverges.
- * The second option is to give control back to the context using
-   *another action than γ₀*, call it γ, which is *not a terminating
-   action*.
-   Because fully-defined programs only yield canonical traces,
-     γ = ζ(γ) ∧ γ₀ = ζ(γ₀)
-   (remember that γ₀ was an action of P↓).
-   So (3) now tells us that if the context were to produce an action,
-   then we would have γ = γ₀. So the context doesn't produce any
-   action, which means that he goes into an infinite sequence of local
-   transitions.
-   We can apply trace composition to get that A↓[Q↓] diverges.
-In both cases, A↓[Q↓] diverges.
-QED.
+Proof: detailed in the paper at the very end of section 4.
 
 *** Corollary for non-compiled partial programs
 
-∀ s p q.
-  p well formed ∧ p ⊢ₙ s ⇒
-  q well formed ∧ q ⊢ₙ s ⇒
-  (∃P. P well formed ∧ P fully defined ∧ P ⊢ₙ s ∧
-       ∀a, a well formed ∧ a ⊢ s ⇒ a[p] ~L a[P↓]) ⇒
-  (∃Q. Q well formed ∧ Q fully defined ∧ Q ⊢ₙ s ∧
-       ∀a, a well formed ∧ a ⊢ s ⇒ a[q] ~L a[Q↓]) ⇒
-  (∃a. a well formed ∧ a ⊢ s ∧ a[p] ≁L a[q]) ⇒
-    ∃ A. A well formed ∧ A fully defined ∧ A ⊢ s ∧
+∀ s p q. s well formed ∧ p ∈• s ∧ q ∈• s ⇒
+  (∃P. P ∈• s ∧ P fully defined wrt. contexts of shape ∘s ∧
+       ∀a, a ∈∘ s ⇒ a[p] ~L a[P↓]) ⇒
+  (∃Q. Q ∈• s ∧ Q fully defined wrt. contexts of shape ∘s ∧
+       ∀a, a ∈∘ s ⇒ a[q] ~L a[Q↓]) ⇒
+  (∃a. a ∈∘ s ∧ a[p] ≁L a[q]) ⇒
+    ∃ A. A ∈∘ s ∧ A fully defined wrt. programs of shape •s ∧
          A↓[p] ≁L A↓[q]
 
 Intuition:
@@ -2794,7 +2721,7 @@ Proof:
   By transitivity, it holds that
     a[P↓] ≁L a[Q↓],
   hence we can directly apply the 2nd theorem to get that
-    ∃ A. A well formed ∧ A fully defined ∧ A ⊢ s ∧ A[P] ≁H A[Q].
+    ∃ A. A ∈∘ s ∧ A fully defined wrt. programs of shape •s ∧ A[P] ≁H A[Q].
   Assume such an A, then we can prove that
     A↓[P↓] ≁L A↓[Q↓]
   (proved in theorem 1).
