@@ -741,6 +741,49 @@ Fixpoint generate_intlist (min:nat) (max:nat) : list nat :=
                (generate_intlist min n') ++ [n']
   end.
 
+(* ---- Well-formedness invariants ---- *)
+
+Definition component_invariant : Type :=
+  let name := nat in
+  let pnum := nat in
+  let bnum := nat in
+  let blens := list nat in
+  (name * pnum * bnum * blens).
+
+Definition get_nameN (n:component_invariant) : nat :=
+  match n with
+  | (name, _, _, _) => name
+  end.
+
+Definition get_pnumN (n:component_invariant) : nat :=
+  match n with
+  | (_, pnum, _, _) => pnum
+  end.
+
+Definition get_bnumN (n:component_invariant) : nat :=
+  match n with
+  | (_, _, bnum, _) => bnum
+  end.
+
+Definition get_blens (n:component_invariant) : list nat :=
+  match n with
+  | (_, _, _, blens) => blens
+  end.
+
+Definition partial_program_invariant : Type :=
+  list component_invariant.
+
+Definition wfinv_of_C (C:component) : component_invariant :=
+  match C with
+  | (name, bnum, buffers, pnum, _, _) =>
+    let blens := (map (@length nat) buffers) in
+    (name, pnum, bnum, blens)
+  end.
+
+Definition wfinv_of_P (P:program) : partial_program_invariant :=
+  map wfinv_of_C P.
+
+
 (* ---- Well-formedness of an interface ---- *)
 Reserved Notation "'INTERFACE' Is |- i 'wellformed'" (at level 40).
 Inductive wellformed_interface (Is : program_interfaces) : 
@@ -787,82 +830,6 @@ Inductive wellformed_component (Is:program_interfaces) : component -> Prop :=
     COMPONENT Is |- k wellformed
   where "'COMPONENT' Is |- k 'wellformed'" := (wellformed_component Is k).
 
-(* ---- Well-formedness of a partial program ---- *)
-Reserved Notation "'PARTIAL_PROGRAM' Is |- p 'wellformed'" (at level 40).
-Inductive wellformed_partial_program (Is:program_interfaces) : program -> Prop :=
-  | WF_partial_program : forall p,
-    (forall k, In k p -> wellformed_component Is k) ->
-    PARTIAL_PROGRAM Is |- p wellformed
-  where "'PARTIAL_PROGRAM' Is |- p 'wellformed'" := (wellformed_partial_program Is p).
-
-(* ---- Well-formedness of a whole program ---- *)
-Reserved Notation "'WHOLE_PROGRAM' |- p 'wellformed'" (at level 40).
-Inductive wellformed_whole_program : program -> Prop :=
-  | WF_whole_program : forall p,
-    INTERFACES |- (interfaceof_P p) wellformed ->
-    PARTIAL_PROGRAM (interfaceof_P p) |- p wellformed -> 
-    WHOLE_PROGRAM |- p wellformed
-  where "'WHOLE_PROGRAM' |- p 'wellformed'" := (wellformed_whole_program p).
-
-
-(* _____________________________________ 
-       WELL-FORMEDNESS : CFG SCOPE
-   _____________________________________ *)
-
-(* ---- Well-formedness invariants ---- *)
-
-Definition component_invariant : Type :=
-  let name := nat in
-  let pnum := nat in
-  let bnum := nat in
-  let blens := list nat in
-  (name * pnum * bnum * blens).
-
-Definition get_nameN (n:component_invariant) : nat :=
-  match n with
-  | (name, _, _, _) => name
-  end.
-
-Definition get_pnumN (n:component_invariant) : nat :=
-  match n with
-  | (_, pnum, _, _) => pnum
-  end.
-
-Definition get_bnumN (n:component_invariant) : nat :=
-  match n with
-  | (_, _, bnum, _) => bnum
-  end.
-
-Definition get_blens (n:component_invariant) : list nat :=
-  match n with
-  | (_, _, _, blens) => blens
-  end.
-
-Definition partial_program_invariant : Type :=
-  list component_invariant.
-
-Definition wfinv_of_C (C:component) : component_invariant :=
-  match C with
-  | (name, bnum, buffers, pnum, _, _) =>
-    let blens := (map (@length nat) buffers) in
-    (name, pnum, bnum, blens)
-  end.
-
-Definition wfinv_of_P (P:program) : partial_program_invariant :=
-  map wfinv_of_C P.
-
-(* ---- Well-formedness of an expression ---- *)
-Reserved Notation "'EXPR' i n |- e 'wellformed'" (at level 40).
-Inductive wellformed_expr (i:interface) (n:component_invariant) : 
-  expr -> Prop :=
-  | WF_expr : forall e,
-    incl (extprocsin (get_name i) e) (get_import i) ->
-    (forall C P, In (C,P) (intprocsin (get_name i) e) -> 
-      In P (generate_intlist 0 (get_pnumN n))) -> 
-    incl (bufsin e) (generate_intlist 0 (get_bnumN n)) ->    
-    wellformed_expr i n e
-  where "'EXPR' i n |- e 'wellformed'" := (wellformed_expr i n e).
-
 Inductive wellformed_expr_alt (i:interface) (n:component_invariant) : 
   expr -> Prop :=
   | WF_expr_alt_EVal : forall v,
@@ -887,20 +854,60 @@ Inductive wellformed_expr_alt (i:interface) (n:component_invariant) :
     wellformed_expr_alt i n e1 ->
     wellformed_expr_alt i n e2 ->
     wellformed_expr_alt i n (EStore b e1 e2)
-  | WF_expr_alt_ECall_In : forall C P e,
-    let l := (get_pnumN n) in
+  | WF_expr_alt_ECall : forall C P e,
+    (let l := (get_pnumN n) in
     let proc_defined_in := andb (ble_nat P l) (negb (beq_nat P l)) = true in
-    (C = (get_name i) /\ proc_defined_in) ->
-    wellformed_expr_alt i n e ->
-    wellformed_expr_alt i n (ECall C P e)
-  | WF_expr_alt_ECall_Out : forall C P e,
-    let l := (get_pnumN n) in
+    (C = (get_name i) /\ proc_defined_in) \/
     let proc_defined_out := In (C,P) (get_import i) in
-     (C <> (get_name i) /\ proc_defined_out) ->
+     (C <> (get_name i) /\ proc_defined_out)) ->
     wellformed_expr_alt i n e ->
     wellformed_expr_alt i n (ECall C P e)
   | WF_expr_alt_EExit : 
     wellformed_expr_alt i n (EExit).
+
+Inductive wellformed_component_alt (Is:program_interfaces) : component -> Prop :=
+  | WF_component_alt : forall k,
+    (forall P, (ble_nat 0 P && ble_nat P (get_pnum k) = true) -> 
+      let i := (nth (get_nameC k) Is (0,0,[])) in
+      let n := wfinv_of_C k in 
+      (wellformed_expr_alt i n (nth P (get_procs k) EExit)) ->
+    (ble_nat (get_exportC k) (get_pnum k) = true) -> 
+    (ble_nat 1 (get_bnum k) = true /\ ble_nat 1 (length (nth 0 (get_buffers k) [])) = true) ->    
+    wellformed_component_alt Is k).
+
+(* ---- Well-formedness of a partial program ---- *)
+Reserved Notation "'PARTIAL_PROGRAM' Is |- p 'wellformed'" (at level 40).
+Inductive wellformed_partial_program (Is:program_interfaces) : program -> Prop :=
+  | WF_partial_program : forall p,
+    (forall k, In k p -> wellformed_component_alt Is k) ->
+    PARTIAL_PROGRAM Is |- p wellformed
+  where "'PARTIAL_PROGRAM' Is |- p 'wellformed'" := (wellformed_partial_program Is p).
+
+(* ---- Well-formedness of a whole program ---- *)
+Reserved Notation "'WHOLE_PROGRAM' |- p 'wellformed'" (at level 40).
+Inductive wellformed_whole_program : program -> Prop :=
+  | WF_whole_program : forall p,
+    INTERFACES |- (interfaceof_P p) wellformed ->
+    PARTIAL_PROGRAM (interfaceof_P p) |- p wellformed -> 
+    WHOLE_PROGRAM |- p wellformed
+  where "'WHOLE_PROGRAM' |- p 'wellformed'" := (wellformed_whole_program p).
+
+
+(* _____________________________________ 
+       WELL-FORMEDNESS : CFG SCOPE
+   _____________________________________ *)
+
+(* ---- Well-formedness of an expression ---- *)
+Reserved Notation "'EXPR' i n |- e 'wellformed'" (at level 40).
+Inductive wellformed_expr (i:interface) (n:component_invariant) : 
+  expr -> Prop :=
+  | WF_expr : forall e,
+    incl (extprocsin (get_name i) e) (get_import i) ->
+    (forall C P, In (C,P) (intprocsin (get_name i) e) -> 
+      In P (generate_intlist 0 (get_pnumN n))) -> 
+    incl (bufsin e) (generate_intlist 0 (get_bnumN n)) ->    
+    wellformed_expr i n e
+  where "'EXPR' i n |- e 'wellformed'" := (wellformed_expr i n e).
 
 (* ---- Well-formedness of a flat evaluation context ---- *)
 Reserved Notation "'FLATEVALCON' i n |- E 'wellformed'" (at level 40).
@@ -1016,22 +1023,17 @@ Proof.
   inversion HI. inversion HPP.
   unfold initial_cfg_of. constructor.
   Case "State wellformed".
-  { destruct p.
-    SCase "p = []".
-      simpl in H2. destruct H2.
-      destruct H2. contradiction.
-    SCase "p = h::t".
-      destruct H2. destruct H2. destruct H6.
-      admit.
+  { constructor. intros.
+    destruct H7.
+    admit.
   }
   Case "Callstack wellformed".
   { constructor. }
   Case "Continuations wellformed".
   { constructor. }
   Case "Expr".
-  { destruct ((nth 0 (get_procs (nth main_cid p (0, 0, [], 0, 0, []))))) eqn:HD;
-    try (now constructor).
-    admit. admit. admit. admit. admit.
+  { destruct H2; destruct H2; destruct H6.
+    admit.
   }
 Admitted.
 
@@ -1221,7 +1223,7 @@ Theorem preservation_proof :
 Proof.
   unfold preservation.
   intros P HWP cfg cfg' HCFG Heval.  
-  inversion Heval as [C| | | | | | | | | | | | |]; constructor;
+  inversion Heval as [C| | | | | | | | | | | | |]; constructor; 
   rename H into H_Eval1; rename H0 into H_Eval2;
   inversion HCFG as [n state cs cont expr HS HC HK HE];
   try (
@@ -1314,16 +1316,31 @@ Proof.
   apply (valuedefined_closed_updatestate).
   apply H12. apply H0.
   (* Expr Call *)
-  destruct H2.
-  unfold proc_defined_out in H5.
+  destruct H2. apply H2.
   admit.
   (* State with update *)
-  admit.
+  intros.
+  rewrite <- WFD in HCFG.
+  inversion HCFG.
+  inversion H7.
+  specialize (H12 n0 H0 b i).
+  rewrite <- DS.
+  apply (valuedefined_closed_updatestate).
+  apply H12. apply H2.
   (* Expr ep wellformed *)
-  unfold ep.  
+  unfold ep.
+  inversion HWP. inversion H2.
+  inversion H0. unfold fetch_context.
   admit.
   (* State with update *)
-  admit.
+  intros.
+  rewrite <- WFD in HCFG.
+  inversion HCFG.
+  inversion H7.
+  specialize (H12 n0 H0 b i0).
+  rewrite <- DS.
+  apply (valuedefined_closed_updatestate).
+  apply H12. apply H2.
   (* Empty continuation *)
   rewrite <- DD in HC.
   inversion HC.
