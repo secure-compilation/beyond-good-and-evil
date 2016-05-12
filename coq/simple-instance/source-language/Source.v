@@ -945,15 +945,12 @@ Inductive wellformed_flatevalcon_alt (i:interface)
     let l := (get_bnumN n) in
     andb (ble_nat b l) (negb (beq_nat b l)) = true -> 
     wellformed_flatevalcon_alt i n (CStoreHole b v)
-  | WF_flatevalcon_alt_CCallHole_In : forall C P,
-    let l := (get_pnumN n) in
+  | WF_flatevalcon_alt_CCallHole : forall C P,
+    (let l := (get_pnumN n) in
     let proc_defined_in := andb (ble_nat P l) (negb (beq_nat P l)) = true in
-    (C = (get_name i) /\ proc_defined_in) ->
-    wellformed_flatevalcon_alt i n (CCallHole C P)
-  | WF_flatevalcon_alt_CCallHole_Out : forall C P,
-    let l := (get_pnumN n) in
+    (C = (get_name i) /\ proc_defined_in) \/
     let proc_defined_out := In (C,P) (get_import i) in
-     (C <> (get_name i) /\ proc_defined_out) ->
+     (C <> (get_name i) /\ proc_defined_out)) ->
     wellformed_flatevalcon_alt i n (CCallHole C P).
 
 (* ---- Well-formedness of a continuation ---- *)
@@ -1223,7 +1220,7 @@ Theorem preservation_proof :
 Proof.
   unfold preservation.
   intros P HWP cfg cfg' HCFG Heval.  
-  inversion Heval as [C| | | | | | | | | | | | |]; constructor; 
+  inversion Heval as [C| | | | | | | | | | | | |]; constructor;
   rename H into H_Eval1; rename H0 into H_Eval2;
   inversion HCFG as [n state cs cont expr HS HC HK HE];
   try (
@@ -1315,9 +1312,6 @@ Proof.
   specialize (H12 n0 H b0 i0).
   apply (valuedefined_closed_updatestate).
   apply H12. apply H0.
-  (* Expr Call *)
-  destruct H2. apply H2.
-  admit.
   (* State with update *)
   intros.
   rewrite <- WFD in HCFG.
