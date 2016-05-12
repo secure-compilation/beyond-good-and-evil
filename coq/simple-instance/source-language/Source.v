@@ -1097,11 +1097,98 @@ Proof.
   apply H2.
 Qed.
 
-Lemma length_closed_updatestate :
-  forall C b i i' s, let s' := (update_state C b i i' s) in
-  (length (nth b (nth C s []) []) = length (nth b (nth C s' []) [])).
+Lemma updatevalue_doesnt_change_length :
+  forall i i' b,
+  length (update_value i i' b) = length b.
 Proof.
-Admitted.
+  intros.
+  generalize dependent i; generalize dependent i'.
+  induction b.
+  { destruct i; destruct i'; reflexivity. }
+  { destruct i; destruct i'; try (reflexivity);
+    simpl. apply f_equal. apply IHb.
+    apply f_equal. apply IHb. }
+Qed. 
+
+Lemma update_move_value :
+  forall s i i' a, 
+  S (length (update_value i i' s)) =
+length (update_value i i' (a :: s)).
+Proof.
+  intros.
+  generalize dependent i; generalize dependent i'.
+  induction s.
+  { intros. rewrite updatevalue_doesnt_change_length.
+    rewrite updatevalue_doesnt_change_length.
+    simpl. reflexivity. }
+  { intros. rewrite updatevalue_doesnt_change_length.
+    rewrite updatevalue_doesnt_change_length. 
+    simpl. reflexivity. }
+Qed.
+
+Lemma length_closed_updatevalue :
+  forall s i i', 
+  length s = length (update_value i i' s).
+Proof.
+  intros.
+  induction s.
+  { destruct i; destruct i'; reflexivity. }
+  { simpl. rewrite IHs. rewrite <- update_move_value.
+    reflexivity. }
+Qed.
+
+Lemma length_closed_updatebuffer :
+  forall b0 b C0 i i',
+  length (nth b0 C0 []) =
+  length (nth b0 (update_buffer b i i' C0) []).
+Proof.
+  intros.
+  generalize dependent b0;
+  generalize dependent b;
+  generalize dependent i;
+  generalize dependent i'.
+  induction C0.
+  { intros. 
+    destruct b0; destruct b; destruct i; destruct i';
+    try (reflexivity). }
+  { intros.
+    destruct b0; destruct b; destruct i; destruct i';
+    destruct a; simpl; try (reflexivity); try (apply IHC0);
+    apply f_equal; apply length_closed_updatevalue. }
+Qed.
+
+Lemma length_closed_updatestate :
+  forall C b i i' s C0 b0, let s' := (update_state C b i i' s) in
+  (length (nth b0 (nth C0 s []) []) = length (nth b0 (nth C0 s' []) [])).
+Proof.
+  intros. unfold s'.
+  generalize dependent b.
+  generalize dependent C.
+  generalize dependent C0.
+  generalize dependent b0.
+  unfold update_state.
+  unfold update_component.
+  induction s;
+  destruct b; destruct C; 
+  destruct b0; destruct C0;
+  try (reflexivity).
+  destruct a.
+  { reflexivity. }
+  { apply length_closed_updatevalue. }
+  destruct a.
+  { reflexivity. }
+  { reflexivity. }
+  simpl. apply (IHs 0 C0 C 0).
+  simpl. apply (IHs (S b0) C0 C 0).
+  destruct a.
+  { reflexivity. }
+  { reflexivity. }
+  destruct a.
+  { reflexivity. }
+  { simpl. apply (length_closed_updatebuffer b0 b a i i'). }
+  simpl. apply (IHs 0 C0 C (S b)).
+  simpl. apply (IHs (S b0) C0 C (S b)).
+Qed.
 
 Lemma valuedefined_closed_updatestate :
   forall s C b i i' C0 b0 i0,
@@ -1111,10 +1198,10 @@ Proof.
   intros s C b i i' C0 b0 i0 Hs.
   set (s' := (update_state C b i i' s)).
   assert (length (nth b0 (nth C0 s []) []) = length (nth b0 (nth C0 s' []) [])) as H.
-  { admit. }
+  { unfold s'. apply (length_closed_updatestate C b i i'). }
   unfold value_defined in *.
   now rewrite<- H.
-Admitted.
+Qed.
 
 Lemma wellformedstate_closed_updatestate :
   forall G s C b i i',
