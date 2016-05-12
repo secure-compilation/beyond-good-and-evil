@@ -1009,6 +1009,25 @@ Inductive wellformed_cfg (Is:program_interfaces)
         PROOF : PARTIAL TYPE SAFETY
    _____________________________________ *)
 
+Lemma correct_program_contains_main :
+  forall P, wellformed_whole_program P ->
+  In (nth main_cid P (0, 0, [], 0, 0, [])) P.
+Proof.
+Admitted.
+
+Lemma name_program_extracted :
+  forall P, wellformed_whole_program P -> 
+  (get_nameC (nth main_cid P (0, 0, [], 0, 0, []))) = main_cid.
+Proof.
+Admitted.
+
+Lemma program_invariant_correspondance :
+  forall P, wellformed_whole_program P ->
+  (nth main_cid (wfinv_of_P P) (0, 0, 0, [])) = 
+  (wfinv_of_C (nth main_cid P (0, 0, [], 0, 0, []))).
+Proof.
+Admitted.
+
 Lemma initial_program_safety :
   forall P, wellformed_whole_program P ->
   let Is := interfaceof_P P in
@@ -1031,17 +1050,13 @@ Proof.
   Case "Expr".
   { destruct H2; destruct H2; destruct H6.
     specialize (H4 (nth main_cid p (0,0,[],0,0,[]))).
-    assert (In (nth main_cid p (0, 0, [], 0, 0, [])) p).
-      admit.
-    apply H4 in H8. inversion H8.
-    specialize (H9 0). simpl in H9.
-    assert ((get_nameC (nth main_cid p (0, 0, [], 0, 0, []))) = main_cid).
-      admit.
-    rewrite H13 in H9.
-    assert ((nth main_cid (wfinv_of_P p) (0, 0, 0, [])) = (wfinv_of_C (nth main_cid p (0, 0, [], 0, 0, [])))).
-      admit.
-    rewrite <- H14 in H9.
-    apply H9.
+    pose (correct_program_contains_main) as lemma.
+    apply H4 in lemma. inversion lemma.
+    specialize (H8 0). simpl in H8.
+    rewrite name_program_extracted in H8.
+    rewrite <- program_invariant_correspondance in H8.
+    apply H8.
+    apply HWP. apply HWP. apply HWP.
   }
 Admitted.
 
