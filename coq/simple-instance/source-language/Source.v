@@ -1016,15 +1016,15 @@ Proof.
 Admitted.
 
 Lemma name_program_extracted :
-  forall P, wellformed_whole_program P -> 
-  (get_nameC (nth main_cid P (0, 0, [], 0, 0, []))) = main_cid.
+  forall P C, wellformed_whole_program P -> 
+  (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C.
 Proof.
 Admitted.
 
 Lemma program_invariant_correspondance :
-  forall P, wellformed_whole_program P ->
-  (nth main_cid (wfinv_of_P P) (0, 0, 0, [])) = 
-  (wfinv_of_C (nth main_cid P (0, 0, [], 0, 0, []))).
+  forall P C, wellformed_whole_program P ->
+  (nth C (wfinv_of_P P) (0, 0, 0, [])) = 
+  (wfinv_of_C (nth C P (0, 0, [], 0, 0, []))).
 Proof.
 Admitted.
 
@@ -1348,10 +1348,25 @@ Proof.
   apply (valuedefined_closed_updatestate).
   apply H12. apply H2.
   (* Expr ep wellformed *)
-  unfold ep.
-  inversion HWP. inversion H2.
-  inversion H0. unfold fetch_context.
-  admit.
+  unfold ep. inversion HWP. inversion H0.
+  destruct H6; destruct H6; destruct H8.
+  inversion H2.
+  specialize (H10 (nth C' P (0,0,[],0,0,[]))).
+  assert (In (nth C' P (0, 0, [], 0, 0, [])) P).
+    admit.
+  apply H10 in H12. inversion H12.
+  simpl in H13.
+  rewrite <- program_invariant_correspondance in H13.
+  assert ((nth P' (get_procs (nth C' P (0, 0, [], 0, 0, []))) exit)
+   = (fetch_context C' P' (procbodies P))).
+    admit.
+  rewrite <- H17. specialize (H13 P').
+  assert ((nth (get_nameC (nth C' P (0, 0, [], 0, 0, []))) 
+           (interfaceof_P P) (0, 0, []))
+    = (nth C' (interfaceof_P P) (0, 0, []))).
+    admit.
+  rewrite <- H18.
+  apply H13. apply HWP.
   (* State with update *)
   intros.
   rewrite <- WFD in HCFG.
