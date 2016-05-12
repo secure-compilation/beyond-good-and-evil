@@ -867,13 +867,13 @@ Inductive wellformed_expr_alt (i:interface) (n:component_invariant) :
 
 Inductive wellformed_component_alt (Is:program_interfaces) : component -> Prop :=
   | WF_component_alt : forall k,
-    (forall P, (ble_nat 0 P && ble_nat P (get_pnum k) = true) -> 
+    (forall P, 
       let i := (nth (get_nameC k) Is (0,0,[])) in
       let n := wfinv_of_C k in 
-      (wellformed_expr_alt i n (nth P (get_procs k) EExit)) ->
+      (wellformed_expr_alt i n (nth P (get_procs k) EExit))) ->
     (ble_nat (get_exportC k) (get_pnum k) = true) -> 
     (ble_nat 1 (get_bnum k) = true /\ ble_nat 1 (length (nth 0 (get_buffers k) [])) = true) ->    
-    wellformed_component_alt Is k).
+    wellformed_component_alt Is k.
 
 (* ---- Well-formedness of a partial program ---- *)
 Reserved Notation "'PARTIAL_PROGRAM' Is |- p 'wellformed'" (at level 40).
@@ -1030,7 +1030,18 @@ Proof.
   { constructor. }
   Case "Expr".
   { destruct H2; destruct H2; destruct H6.
-    admit.
+    specialize (H4 (nth main_cid p (0,0,[],0,0,[]))).
+    assert (In (nth main_cid p (0, 0, [], 0, 0, [])) p).
+      admit.
+    apply H4 in H8. inversion H8.
+    specialize (H9 0). simpl in H9.
+    assert ((get_nameC (nth main_cid p (0, 0, [], 0, 0, []))) = main_cid).
+      admit.
+    rewrite H13 in H9.
+    assert ((nth main_cid (wfinv_of_P p) (0, 0, 0, [])) = (wfinv_of_C (nth main_cid p (0, 0, [], 0, 0, [])))).
+      admit.
+    rewrite <- H14 in H9.
+    apply H9.
   }
 Admitted.
 
