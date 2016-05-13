@@ -1016,7 +1016,7 @@ Lemma interface_component_id_correspondance :
    In k P /\ get_nameC k = C).
 Proof.
   intros.
-  split; destruct H0. admit. admit.
+  admit.
 Admitted.
 
 Lemma correct_program_contains_main :
@@ -1037,7 +1037,8 @@ Proof.
 Qed.
 
 Lemma name_program_extracted :
-  forall P C, wellformed_whole_program P -> 
+  forall P C k, wellformed_whole_program P ->
+  (In k P /\ get_nameC k = C) ->
   (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C.
 Proof.
   intros.
@@ -1063,17 +1064,6 @@ Proof.
   apply lemma.
 Qed.
 
-Lemma getblens_is_lengthbuffer :
-  forall P n b, 
-  (nth b (get_blens n) 0) = 
-    (length
-       (nth b
-          (nth (get_nameN n)
-             (update_state main_cid 0 0 0 (generate_state P))
-             []) [])).
-Proof.
-Admitted.
-
 Lemma initial_program_safety :
   forall P, wellformed_whole_program P ->
   let Is := interfaceof_P P in
@@ -1088,7 +1078,13 @@ Proof.
   { constructor. intros.
     destruct H7. unfold l in H7; unfold l' in H8.
     unfold value_defined.
-    rewrite <- getblens_is_lengthbuffer.
+    assert ((nth b (get_blens n) 0) = 
+    (length
+       (nth b
+          (nth (get_nameN n)
+             (update_state main_cid 0 0 0 (generate_state p))
+             []) []))) as getblens_is_lengthbuffer. admit.
+    rewrite <- (getblens_is_lengthbuffer).
     apply andb_true in H8. destruct H8.
     rewrite H8; rewrite H9.
     reflexivity.
@@ -1103,10 +1099,17 @@ Proof.
     pose (correct_program_contains_main) as lemma.
     apply H4 in lemma. inversion lemma.
     specialize (H8 0). simpl in H8.
-    rewrite name_program_extracted in H8.
+    pose (interface_component_id_correspondance p HWP main_cid x k) as lemma'.
+    assert (In x (interfaceof_P p) /\ get_name x = main_cid).
+    SCase "Proof of assertion".
+      split. apply H2. apply H6.
+    apply lemma' in H12. destruct H12.
+    assert (In k p /\ get_nameC k = main_cid). 
+    split. apply H12. apply H13.
+    rewrite (name_program_extracted p main_cid k HWP H14) in H8.
     rewrite <- program_invariant_correspondance in H8.
     apply H8.
-    apply HWP. apply HWP. apply HWP.
+    apply HWP. apply HWP.
   }
 Admitted.
 
@@ -1314,8 +1317,17 @@ Lemma shortpath_interface_access :
            (interfaceof_P P) (0, 0, []))
     = (nth C (interfaceof_P P) (0, 0, [])).
 Proof.
-  intros.
-  rewrite name_program_extracted.
+  intros. inversion H. inversion H0.
+  destruct H5. destruct H5. destruct H7.
+  destruct H1.
+  pose (correct_program_contains_main P H) as lemma.
+  pose (name_program_extracted P C (nth main_cid P (0, 0, [], 0, 0, [])) H) as lemma'.
+  pose (interface_component_id_correspondance P H C x (nth main_cid P (0, 0, [], 0, 0, []))).  
+  assert (In x (interfaceof_P P) /\ get_name x = C).
+  
+  apply lemma' in lemma.
+  destruct lemma'. split.
+
   reflexivity. apply H.
 Qed.
 
