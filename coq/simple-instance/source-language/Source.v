@@ -1019,6 +1019,17 @@ Lemma name_program_extracted :
   forall P C, wellformed_whole_program P -> 
   (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C.
 Proof.
+  intros.
+  generalize dependent C.
+  induction P.
+  Case "P = []".
+  { destruct C. simpl. reflexivity.
+    simpl. inversion H. inversion H0.
+    destruct H5. destruct H5.
+    simpl in H5. contradiction.
+  }
+  Case "P = h::t".
+  { admit. }
 Admitted.
 
 Lemma program_invariant_correspondance :
@@ -1257,19 +1268,32 @@ Proof.
 Qed.
 
 Lemma procbody_correspondance :
-  forall C P p,
+  forall p C P, wellformed_whole_program P ->
   (nth p (get_procs (nth C P (0, 0, [], 0, 0, []))) exit)
     = (fetch_context C p (procbodies P)).
 Proof.
-Admitted.
+  intros. unfold fetch_context. unfold procbodies.
+  assert ((get_procs (nth C P (0, 0, [], 0, 0, []))) =
+    (nth C (map get_procs P) [])) as HA.
+  Case "Proof of assertion".
+  { pose (map_nth get_procs P (0, 0, [], 0, 0, []) C) as lemma;
+    symmetry in lemma. simpl in lemma.
+    apply lemma.
+  }
+  rewrite HA; reflexivity.
+Qed.
 
 Lemma shortpath_interface_access :
   forall C P,
+  wellformed_whole_program P ->
   (nth (get_nameC (nth C P (0, 0, [], 0, 0, []))) 
            (interfaceof_P P) (0, 0, []))
     = (nth C (interfaceof_P P) (0, 0, [])).
 Proof.
-Admitted.
+  intros.
+  rewrite name_program_extracted.
+  reflexivity. apply H.
+Qed.
 
 Theorem preservation_proof :
   preservation.
@@ -1389,15 +1413,15 @@ Proof.
   rewrite <- program_invariant_correspondance in H13.
   rewrite <- procbody_correspondance. specialize (H13 P').
   rewrite <- shortpath_interface_access.
-  apply H13. apply HWP.
+  apply H13. apply HWP. apply HWP. apply HWP.
   (* State with update *)
   intros.
   rewrite <- WFD in HCFG.
   inversion HCFG.
   inversion H7.
   specialize (H12 n0 H0 b i0).
-  rewrite <- DS.
   apply (valuedefined_closed_updatestate).
+  rewrite <- DS.
   apply H12. apply H2.
   (* Empty continuation *)
   rewrite <- DD in HC.
