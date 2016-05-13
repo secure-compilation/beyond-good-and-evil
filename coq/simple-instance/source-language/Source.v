@@ -1009,11 +1009,32 @@ Inductive wellformed_cfg (Is:program_interfaces)
         PROOF : PARTIAL TYPE SAFETY
    _____________________________________ *)
 
+Lemma interface_component_id_correspondance :
+  forall P, wellformed_whole_program P ->
+  forall C i k,
+  (In i (interfaceof_P P) /\ get_name i = C -> 
+   In k P /\ get_nameC k = C).
+Proof.
+  intros.
+  split; destruct H0. admit. admit.
+Admitted.
+
 Lemma correct_program_contains_main :
   forall P, wellformed_whole_program P ->
   In (nth main_cid P (0, 0, [], 0, 0, [])) P.
 Proof.
-Admitted.
+  intros P HWP. inversion HWP.
+  inversion H.
+  destruct H4; destruct H4; destruct H6.
+  pose (interface_component_id_correspondance P HWP) as lemma.
+  specialize (lemma main_cid x (nth main_cid P (0, 0, [], 0, 0, []))).
+  assert (In x (interfaceof_P P) /\ get_name x = main_cid).
+  Case "Proof of assertion".
+  { split. apply H4. apply H6. }
+  apply lemma in H8.
+  destruct H8.
+  apply H8.
+Qed.
 
 Lemma name_program_extracted :
   forall P C, wellformed_whole_program P -> 
@@ -1037,7 +1058,10 @@ Lemma program_invariant_correspondance :
   (nth C (wfinv_of_P P) (0, 0, 0, [])) = 
   (wfinv_of_C (nth C P (0, 0, [], 0, 0, []))).
 Proof.
-Admitted.
+  intros. unfold wfinv_of_P.
+  pose (map_nth wfinv_of_C P (0, 0, [], 0, 0, []) C) as lemma.
+  apply lemma.
+Qed.
 
 Lemma getblens_is_lengthbuffer :
   forall P n b, 
@@ -1407,7 +1431,16 @@ Proof.
   inversion H2.
   specialize (H10 (nth C' P (0,0,[],0,0,[]))).
   assert (In (nth C' P (0, 0, [], 0, 0, [])) P).
-    admit.
+  Case "Proof of assertion".
+    rewrite <- DK in HK. inversion HK.
+    inversion H14. simpl in H17.
+    destruct H17.
+    SCase "Call in".
+    { destruct H17; apply andb_true in H19; destruct H19.
+      admit. 
+    }
+    SCase "Call out".
+    { admit. }
   apply H10 in H12. inversion H12.
   simpl in H13.
   rewrite <- program_invariant_correspondance in H13.
