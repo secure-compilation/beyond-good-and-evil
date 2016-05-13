@@ -1028,6 +1028,17 @@ Lemma program_invariant_correspondance :
 Proof.
 Admitted.
 
+Lemma getblens_is_lengthbuffer :
+  forall P n b, 
+  (nth b (get_blens n) 0) = 
+    (length
+       (nth b
+          (nth (get_nameN n)
+             (update_state main_cid 0 0 0 (generate_state P))
+             []) [])).
+Proof.
+Admitted.
+
 Lemma initial_program_safety :
   forall P, wellformed_whole_program P ->
   let Is := interfaceof_P P in
@@ -1040,8 +1051,12 @@ Proof.
   unfold initial_cfg_of. constructor.
   Case "State wellformed".
   { constructor. intros.
-    destruct H7.
-    admit.
+    destruct H7. unfold l in H7; unfold l' in H8.
+    unfold value_defined.
+    rewrite <- getblens_is_lengthbuffer.
+    apply andb_true in H8. destruct H8.
+    rewrite H8; rewrite H9.
+    reflexivity.
   }
   Case "Callstack wellformed".
   { constructor. }
@@ -1241,6 +1256,21 @@ Proof.
   now apply Hs.
 Qed.
 
+Lemma procbody_correspondance :
+  forall C P p,
+  (nth p (get_procs (nth C P (0, 0, [], 0, 0, []))) exit)
+    = (fetch_context C p (procbodies P)).
+Proof.
+Admitted.
+
+Lemma shortpath_interface_access :
+  forall C P,
+  (nth (get_nameC (nth C P (0, 0, [], 0, 0, []))) 
+           (interfaceof_P P) (0, 0, []))
+    = (nth C (interfaceof_P P) (0, 0, [])).
+Proof.
+Admitted.
+
 Theorem preservation_proof :
   preservation.
 Proof.
@@ -1357,15 +1387,8 @@ Proof.
   apply H10 in H12. inversion H12.
   simpl in H13.
   rewrite <- program_invariant_correspondance in H13.
-  assert ((nth P' (get_procs (nth C' P (0, 0, [], 0, 0, []))) exit)
-   = (fetch_context C' P' (procbodies P))).
-    admit.
-  rewrite <- H17. specialize (H13 P').
-  assert ((nth (get_nameC (nth C' P (0, 0, [], 0, 0, []))) 
-           (interfaceof_P P) (0, 0, []))
-    = (nth C' (interfaceof_P P) (0, 0, []))).
-    admit.
-  rewrite <- H18.
+  rewrite <- procbody_correspondance. specialize (H13 P').
+  rewrite <- shortpath_interface_access.
   apply H13. apply HWP.
   (* State with update *)
   intros.
