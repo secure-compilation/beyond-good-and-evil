@@ -830,6 +830,7 @@ Inductive wellformed_component (Is:program_interfaces) : component -> Prop :=
     COMPONENT Is |- k wellformed
   where "'COMPONENT' Is |- k 'wellformed'" := (wellformed_component Is k).
 
+(* ---- Well-formedness : alternative definitions ---- *)
 Inductive wellformed_expr_alt (i:interface) (n:component_invariant) : 
   expr -> Prop :=
   | WF_expr_alt_EVal : forall v,
@@ -1009,13 +1010,48 @@ Inductive wellformed_cfg (Is:program_interfaces)
         PROOF : PARTIAL TYPE SAFETY
    _____________________________________ *)
 
+Definition get_name_interfaceof_C (k:component) :=
+  get_name (interfaceof_C k).
+
+Lemma interfacename_is_componentname :
+  forall i C,
+  exists x, (interfaceof_C x = i /\ get_name i = C) -> 
+  get_nameC x = C.
+Proof.
+Admitted.
+
+Lemma component_interface_id_correspondance :
+  forall P, wellformed_whole_program P ->
+  forall C i,
+  (exists k, In k P /\ get_nameC k = C) -> 
+  (In i (interfaceof_P P) /\ get_name i = C).
+Proof.
+Admitted.
+
 Lemma interface_component_id_correspondance :
   forall P, wellformed_whole_program P ->
-  forall C i k,
+  forall C i,
   (In i (interfaceof_P P) /\ get_name i = C -> 
-   In k P /\ get_nameC k = C).
+   exists k, In k P /\ get_nameC k = C).
 Proof.
   intros.
+  destruct H0 as [Hin Hname].
+  unfold interfaceof_P in Hin.
+  pose (in_map_iff interfaceof_C P i) as lemma.
+  destruct lemma.
+  apply H0 in Hin.
+  destruct Hin.
+  exists x. destruct H2.
+  split. apply H3.
+  rewrite <- Hname.
+  pose (in_map_iff get_name_interfaceof_C P C) as lemma'.
+  destruct lemma'.
+  pose (interfacename_is_componentname i C) as lemma''.
+  assert (exists x : component, interfaceof_C x = i /\ get_name i = C) as HA.
+  Case "Proof of assertion".
+  { exists x. split. apply H2. apply Hname. }
+  destruct lemma''. destruct HA.
+  inversion H. inversion H8.
 Admitted.
 
 Lemma correct_program_contains_main :
@@ -1026,23 +1062,21 @@ Proof.
   inversion H.
   destruct H4; destruct H4; destruct H6.
   pose (interface_component_id_correspondance P HWP) as lemma.
-  specialize (lemma main_cid x (nth main_cid P (0, 0, [], 0, 0, []))).
+  specialize (lemma main_cid x).
   assert (In x (interfaceof_P P) /\ get_name x = main_cid).
   Case "Proof of assertion".
   { split. apply H4. apply H6. }
   apply lemma in H8.
   destruct H8.
-  apply H8.
-Qed.
+Admitted.
 
-Lemma name_program_extracted :
-  forall k P C, wellformed_whole_program P ->
-  (In k P /\ get_nameC k = C) ->
+Lemma identifier_component_correspondance :
+  forall i P C, wellformed_whole_program P ->
+  (In i (interfaceof_P P) /\ get_name i = C) ->
   (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C.
 Proof.
-  intros.
-  generalize dependent C.
-  induction P.
+  intros i P C HWP H. inversion HWP.
+  destruct H. unfold interfaceof_P in *.
 Admitted.
 
 Lemma program_invariant_correspondance :
@@ -1086,27 +1120,19 @@ Proof.
   { constructor. }
   Case "Expr".
   { destruct H2; destruct H2; destruct H6.
+    rewrite program_invariant_correspondance.
     specialize (H4 (nth main_cid p (0,0,[],0,0,[]))).
     pose (correct_program_contains_main) as lemma.
     apply H4 in lemma. inversion lemma.
     specialize (H8 0). simpl in H8.
-    pose (interface_component_id_correspondance p HWP main_cid x k) as lemma'.
-    assert (In x (interfaceof_P p) /\ get_name x = main_cid).
-    SCase "Proof of assertion".
-      split. apply H2. apply H6.
-    apply lemma' in H12. destruct H12.
-    assert (In k p /\ get_nameC k = main_cid). 
-    split. apply H12. apply H13.
-    pose (name_program_extracted k p main_cid HWP) as lemma''.
-    destruct lemma''.
-    rewrite (name_program_extracted k p main_cid HWP) in H8.
-    rewrite <- program_invariant_correspondance in H8.
-    apply H14. apply HWP.
-    apply H14. rewrite (name_program_extracted k p main_cid HWP).
-    rewrite (name_program_extracted k p main_cid HWP) in H8.
-    rewrite <- program_invariant_correspondance in H8.
-    apply H8. apply HWP.
-    apply H14. apply H14. apply HWP.
+    pose (identifier_component_correspondance x p main_cid HWP) as lemma'.
+    rewrite lemma' in H8. apply H8.
+    split.
+    SCase "Left".
+    { apply H2. }
+    SCase "Right".
+    { apply H6. }
+    apply HWP. apply HWP.
   }
 Admitted.
 
@@ -1319,10 +1345,15 @@ Proof.
   intros P HWP C Hin Hname. inversion HWP. inversion H.
   destruct H4. destruct H4. destruct H6.
   inversion H0.
-  pose (name_program_extracted (nth C P (0, 0, [], 0, 0, [])) P C HWP) as lemma'.
+  pose (identifier_component_correspondance 
+    (nth C (interfaceof_P P) (0, 0, [])) P C HWP) as lemma'.
   rewrite lemma'. reflexivity.
+  apply component_interface_id_correspondance.
+  apply HWP.
+  exists (nth C P (0, 0, [], 0, 0, [])).
   split.
-  apply Hin. apply Hname.
+  { apply Hin. }
+  { apply Hname. }
 Qed.
 
 Theorem preservation_proof :
@@ -1447,14 +1478,7 @@ Proof.
     }
     SCase "Call out".
     { admit. }
-  apply H10 in H12. inversion H12.
-  simpl in H13.
-  rewrite <- program_invariant_correspondance in H13.
-  rewrite <- procbody_correspondance. specialize (H13 P').
-  rewrite <- shortpath_interface_access.
-  apply H13. apply HWP.
-  admit. admit.
-  apply HWP. apply HWP.
+  admit.
   (* State with update *)
   intros.
   rewrite <- WFD in HCFG.
