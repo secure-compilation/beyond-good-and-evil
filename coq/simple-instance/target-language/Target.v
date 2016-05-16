@@ -11,6 +11,9 @@ to an entry point address *)
 Definition entry_point : Type := address.
 Definition entry_points : Type := list (list entry_point).
 
+Definition dom_entry_points (E:entry_points) : list component_id :=
+  generate_intlist 0 (length E).    
+
 Definition fetch_entry_points 
   (C:component_id) (P:procedure_id) (E:entry_points)
   : entry_point :=
@@ -61,18 +64,24 @@ Theorem decode_encode :
   forall (i:instr), decode (encode i) = Some i.
 Admitted.
 
-Definition procedure : Type :=
-  list instr.
-
-(* _____________________________________ 
-                SEMANTICS
-   _____________________________________ *)
-
 Inductive protected_call : Type := 
   | PCall : component_id -> address -> protected_call.
 
 Definition protected_callstack : Type := 
   list protected_call.
+
+Definition code : Type :=
+  list instr.
+
+Definition component_memory : Type :=
+  (code * protected_callstack * buffer).
+
+Definition program : Type :=
+  (program_interfaces * memory * entry_points).
+
+(* _____________________________________ 
+                SEMANTICS
+   _____________________________________ *)
 
 Definition state : Type := 
   (component_id * 
@@ -98,39 +107,39 @@ Fixpoint update_mem (C:component_id) (mem:global_memory)
             end
   end.
 
-Reserved Notation "I ;; E |- s '⇒' s'" (at level 40).
-Inductive step (I:program_interfaces) (E:entry_points) : 
+Reserved Notation "Is ;; E |- s '⇒' s'" (at level 40).
+Inductive step (Is:program_interfaces) (E:entry_points) : 
   state -> state -> Prop :=
   (* S_Nop *)
   | S_Nop : forall mem C pc i d reg, 
     (fetch_mem C mem pc = i) -> 
     (decode i = Some Nop) -> 
-    I;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+1)
+    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+1)
   (* S_Const *)
   | S_Const : forall mem C pc i r i' d reg reg',
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Const i' r)) ->
     (update_reg r i' reg = reg') ->
-    I;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
+    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
   (* S_Mov *)
   | S_Mov : forall mem C pc i r1 r2 reg reg' d,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Mov r1 r2)) ->
     (update_reg r2 (fetch_reg r1 reg) reg = reg') ->
-    I;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
+    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
   (* S_BinOp *)
   | S_BinOp : forall mem C pc i r1 r2 r3 reg reg' d op,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (BinOp op r1 r2 r3)) ->
     (update_reg r3 (eval_binop (op, (fetch_reg r1 reg), (fetch_reg r2 reg))) reg = reg') ->
-    I;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
+    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
   (* S_Load *)
   | S_Load : forall mem C pc i r1 r2 reg reg' d i1,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Load r1 r2)) ->
     (fetch_reg r1 reg = i1) ->
     (update_reg r2 (fetch_mem C mem i1) reg = reg') ->
-    I;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
+    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
   (* S_Store *)
   | S_Store : forall mem C pc i r1 r2 reg d i1 i2 mem',
     (fetch_mem C mem pc = i) ->
@@ -138,46 +147,68 @@ Inductive step (I:program_interfaces) (E:entry_points) :
     (fetch_reg r1 reg = i1) ->
     (fetch_reg r2 reg = i2) ->
     (update_mem C mem i1 i2 = mem') ->
-    I;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem',reg,pc+1)
+    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem',reg,pc+1)
   (* S_Jal *)
   | S_Jal : forall mem C pc i i' r reg reg' d rra,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Jal r)) ->
     (fetch_reg r reg = i') ->
     (update_reg rra (pc+1) reg = reg') ->
-    I;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',i')
+    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',i')
   (* S_Call *)
   | S_Call : forall mem C pc i reg d d' C' P',
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Call C' P')) ->
-    (In (C',P') (get_import (nth C I (0,0,[]))) \/ C' = C) ->
+    (In (C',P') (get_import (nth C Is (0,0,[]))) \/ C' = C) ->
     (d' = (PCall C (pc+1))::d) ->
-    I;;E |- (C,d,mem,reg,pc) ⇒ (C',d',mem,reg,fetch_entry_points C' P' E)
+    Is;;E |- (C,d,mem,reg,pc) ⇒ (C',d',mem,reg,fetch_entry_points C' P' E)
   (* S_Jump *)
   | S_Jump : forall mem C pc i i' r reg d,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Jump r)) ->
     (fetch_reg r reg = i') ->
-    I;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,i')
+    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,i')
   (* S_Return *)
   | S_Return : forall mem C pc i i' d' reg d C',
     (fetch_mem C mem pc = i) ->
     (decode i = Some Return) ->
     (d' = (PCall C' i')::d) ->
-    I;;E |- (C,d,mem,reg,pc) ⇒ (C',d',mem,reg,i')
+    Is;;E |- (C,d,mem,reg,pc) ⇒ (C',d',mem,reg,i')
   (* S_BnzNZ *)
   | S_BnzNZ : forall mem C pc i i' r reg d,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Bnz r i')) ->
     ~(fetch_reg r reg = 0) ->
-    I;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+1)
+    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+1)
   (* S_BnzZ *)
   | S_BnzZ : forall mem C pc i i' r reg d,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Bnz r i')) ->
     (fetch_reg r reg = 0) ->
-    I;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+1)
-  where "I ;; E |- s '⇒' s'" := (step I E s s').
+    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+1)
+  where "Is ;; E |- s '⇒' s'" := (step Is E s s').
 
-  
+(* _____________________________________ 
+             WELL-FORMEDNESS
+   _____________________________________ *)  
 
+(* Not complete *)
+Inductive wellformed_lv_program : program -> Prop :=
+  | WF_lv_program : forall P, wellformed_lv_program P.
+
+Inductive wellformed_whole_lv_program : program -> Prop :=
+  | WF_whole_lv_program : forall Is mem E,
+    wellformed_lv_program (Is, mem, E) ->
+    (dom_entry_points E = compsInterface Is) ->
+    wellformed_whole_lv_program (Is, mem, E).
+
+(* _____________________________________ 
+          PROOF : DETERMINISM
+   _____________________________________ *)  
+
+Theorem statemachine_determinism :
+  forall Is E cfg cfg1 cfg2,
+  (Is;;E |- cfg ⇒ cfg1) /\ (Is;;E |- cfg ⇒ cfg2) ->
+  cfg1 = cfg2.
+Proof.
+Admitted.
