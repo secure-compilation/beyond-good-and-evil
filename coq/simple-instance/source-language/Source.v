@@ -1699,9 +1699,9 @@ Proof.
   rewrite <- H0'. rewrite <- H1'. reflexivity.
 Qed.
 
-(* ---- Strong progress ---- *)
+(* ---- partial_progress_context ---- *)
 
-Theorem smallstep_strongprogress :
+Theorem partial_progress_context :
   forall c D, 
   undefined_cfg D c \/ final_cfg c \/ exists c', D ⊢ c ⇒ c'.
 Proof.
@@ -1751,7 +1751,7 @@ Proof.
     unfold not in H.
     assert (undefined_cfg D c \/ final_cfg c \/ 
            (exists c' : cfg, D ⊢ c ⇒ c')).
-      apply smallstep_strongprogress.
+      apply partial_progress_context.
     destruct H0.
     SCase "undefined".
       right. apply H0.  
