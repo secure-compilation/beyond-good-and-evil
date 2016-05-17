@@ -77,7 +77,7 @@ Definition component_memory : Type :=
   (code * protected_callstack * buffer).
 
 Definition program : Type :=
-  (program_interfaces * memory * entry_points).
+  (program_interfaces * global_memory * entry_points).
 
 (* _____________________________________ 
                 SEMANTICS
@@ -206,7 +206,7 @@ Inductive wellformed_whole_lv_program : program -> Prop :=
           PROOF : DETERMINISM
    _____________________________________ *)  
 
-Theorem statemachine_determinism :
+Theorem abstractmachine_determinism :
   forall Is E cfg cfg1 cfg2,
   (Is;;E |- cfg ⇒ cfg1) /\ (Is;;E |- cfg ⇒ cfg2) ->
   cfg1 = cfg2.
