@@ -1010,23 +1010,32 @@ Inductive wellformed_cfg (Is:program_interfaces)
         PROOF : PARTIAL TYPE SAFETY
    _____________________________________ *)
 
-Definition get_name_interfaceof_C (k:component) :=
-  get_name (interfaceof_C k).
 
 Lemma interfacename_is_componentname :
-  forall i C,
-  exists x, (interfaceof_C x = i /\ get_name i = C) -> 
-  get_nameC x = C.
+  forall k,
+  get_nameC k = get_name (interfaceof_C k).
 Proof.
+  intros.
+  destruct k as [[[[k1 k2] k3] k4] k5].
+  destruct k1; destruct k2; destruct k3;
+  destruct k4; destruct k5; simpl; reflexivity.
+Qed.
+
+Lemma identifier_component_correspondance :
+  forall k P C, wellformed_whole_program P ->
+  (In k P /\ get_nameC k = C) ->
+  (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C.
+Proof.
+  intros. destruct H0.
 Admitted.
 
-Lemma component_interface_id_correspondance :
+(*Lemma component_interface_id_correspondance :
   forall P, wellformed_whole_program P ->
-  forall C i,
-  (exists k, In k P /\ get_nameC k = C) -> 
+  forall C i k,
+  (In k P /\ get_nameC k = C /\ i = interfaceof_C k) ->
   (In i (interfaceof_P P) /\ get_name i = C).
 Proof.
-Admitted.
+Admitted.*)
 
 Lemma interface_component_id_correspondance :
   forall P, wellformed_whole_program P ->
@@ -1044,15 +1053,9 @@ Proof.
   exists x. destruct H2.
   split. apply H3.
   rewrite <- Hname.
-  pose (in_map_iff get_name_interfaceof_C P C) as lemma'.
-  destruct lemma'.
-  pose (interfacename_is_componentname i C) as lemma''.
-  assert (exists x : component, interfaceof_C x = i /\ get_name i = C) as HA.
-  Case "Proof of assertion".
-  { exists x. split. apply H2. apply Hname. }
-  destruct lemma''. destruct HA.
-  inversion H. inversion H8.
-Admitted.
+  rewrite <- H2.
+  apply interfacename_is_componentname.
+Qed.
 
 Lemma correct_program_contains_main :
   forall P, wellformed_whole_program P ->
@@ -1070,14 +1073,17 @@ Proof.
   destruct H8.
 Admitted.
 
-Lemma identifier_component_correspondance :
+Lemma interface_identifier_component_correspondance :
   forall i P C, wellformed_whole_program P ->
   (In i (interfaceof_P P) /\ get_name i = C) ->
   (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C.
 Proof.
-  intros i P C HWP H. inversion HWP.
-  destruct H. unfold interfaceof_P in *.
-Admitted.
+  intros i P C HWP H.
+  apply (interface_component_id_correspondance P HWP) in H.
+  destruct H.
+  apply identifier_component_correspondance in H.
+  apply H. apply HWP.
+Qed.
 
 Lemma program_invariant_correspondance :
   forall P C, wellformed_whole_program P ->
@@ -1108,7 +1114,9 @@ Proof.
        (nth b
           (nth (get_nameN n)
              (update_state main_cid 0 0 0 (generate_state p))
-             []) []))) as getblens_is_lengthbuffer. admit.
+             []) []))) as getblens_is_lengthbuffer.
+    SCase "Proof of assertion".
+    { admit. } 
     rewrite <- (getblens_is_lengthbuffer).
     apply andb_true in H8. destruct H8.
     rewrite H8; rewrite H9.
@@ -1125,7 +1133,7 @@ Proof.
     pose (correct_program_contains_main) as lemma.
     apply H4 in lemma. inversion lemma.
     specialize (H8 0). simpl in H8.
-    pose (identifier_component_correspondance x p main_cid HWP) as lemma'.
+    pose (interface_identifier_component_correspondance x p main_cid HWP) as lemma'.
     rewrite lemma' in H8. apply H8.
     split.
     SCase "Left".
@@ -1331,29 +1339,6 @@ Proof.
     apply lemma.
   }
   rewrite HA; reflexivity.
-Qed.
-
-Lemma shortpath_interface_access :
-  forall P, wellformed_whole_program P ->
-  forall C,
-  In (nth C P (0, 0, [], 0, 0, [])) P ->
-  get_nameC (nth C P (0, 0, [], 0, 0, [])) = C ->
-  (nth (get_nameC (nth C P (0, 0, [], 0, 0, []))) 
-           (interfaceof_P P) (0, 0, []))
-    = (nth C (interfaceof_P P) (0, 0, [])).
-Proof.
-  intros P HWP C Hin Hname. inversion HWP. inversion H.
-  destruct H4. destruct H4. destruct H6.
-  inversion H0.
-  pose (identifier_component_correspondance 
-    (nth C (interfaceof_P P) (0, 0, [])) P C HWP) as lemma'.
-  rewrite lemma'. reflexivity.
-  apply component_interface_id_correspondance.
-  apply HWP.
-  exists (nth C P (0, 0, [], 0, 0, [])).
-  split.
-  { apply Hin. }
-  { apply Hname. }
 Qed.
 
 Theorem preservation_proof :
