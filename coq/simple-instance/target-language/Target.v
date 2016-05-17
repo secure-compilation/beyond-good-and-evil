@@ -107,6 +107,12 @@ Fixpoint update_mem (C:component_id) (mem:global_memory)
             end
   end.
 
+Definition call_exists (Is:program_interfaces)
+  (C:component_id) (P:procedure_id) : Prop :=
+  let l := length Is in
+  let import := get_import (nth C Is (0,0,[])) in
+  (ble_nat C l) && negb (beq_nat C l) = true /\ (In (C,P) import).
+
 Reserved Notation "Is ;; E |- s '⇒' s'" (at level 40).
 Inductive step (Is:program_interfaces) (E:entry_points) : 
   state -> state -> Prop :=
@@ -158,6 +164,7 @@ Inductive step (Is:program_interfaces) (E:entry_points) :
   (* S_Call *)
   | S_Call : forall mem C pc i reg d d' C' P',
     (fetch_mem C mem pc = i) ->
+    call_exists Is C' P' ->
     (decode i = Some (Call C' P')) ->
     (In (C',P') (get_import (nth C Is (0,0,[]))) \/ C' = C) ->
     (d' = (PCall C (pc+1))::d) ->
@@ -187,6 +194,24 @@ Inductive step (Is:program_interfaces) (E:entry_points) :
     (fetch_reg r reg = 0) ->
     Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+1)
   where "Is ;; E |- s '⇒' s'" := (step Is E s s').
+
+Inductive stuck_state : program_interfaces -> cfg -> Prop :=
+  (* S_DecodingError *)
+  | S_DecodingError : forall Is i C d mem reg pc, 
+    (decode i = None) -> stuck_state Is (C,d,mem,reg,pc)
+  (* S_MemFail ??? *)
+  (* S_CallFail *)
+  | S_CallFail : forall Is i C C' P' d mem reg pc,
+    (decode i = Some (Call C' P')) ->
+    ~(call_exists Is C' P') ->
+    stuck_state Is (C,d,mem,reg,pc)
+  (* S_EmptyCallStack *)
+  | S_EmptyCallStack : forall Is C mem reg pc,
+    stuck_state Is (C,[],mem,reg,pc)
+  (* S_Halt *)
+  | S_Halt : forall Is i C d mem reg pc,
+    (decode i = Some Halt) ->
+    stuck_state Is (C,d,mem,reg,pc).
 
 (* _____________________________________ 
              WELL-FORMEDNESS
