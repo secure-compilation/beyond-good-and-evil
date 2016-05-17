@@ -1021,21 +1021,20 @@ Proof.
   destruct k4; destruct k5; simpl; reflexivity.
 Qed.
 
-Lemma identifier_component_correspondance :
+Lemma component_index_correspondance_eq :
   forall k P C, wellformed_whole_program P ->
   (In k P /\ get_nameC k = C) ->
   (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C.
 Proof.
-  intros. destruct H0.
+  intros.
 Admitted.
 
-(*Lemma component_interface_id_correspondance :
-  forall P, wellformed_whole_program P ->
-  forall C i k,
-  (In k P /\ get_nameC k = C /\ i = interfaceof_C k) ->
-  (In i (interfaceof_P P) /\ get_name i = C).
+Lemma component_index_correspondance_in :
+  forall C P,
+  (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C ->
+  In (nth C P (0, 0, [], 0, 0, [])) P.
 Proof.
-Admitted.*)
+Admitted.
 
 Lemma interface_component_id_correspondance :
   forall P, wellformed_whole_program P ->
@@ -1071,9 +1070,12 @@ Proof.
   { split. apply H4. apply H6. }
   apply lemma in H8.
   destruct H8.
-Admitted.
+  apply component_index_correspondance_eq in H8.
+  apply component_index_correspondance_in in H8.
+  apply H8. apply HWP.
+Qed.
 
-Lemma interface_identifier_component_correspondance :
+Lemma interface_component_index_correspondance_eq :
   forall i P C, wellformed_whole_program P ->
   (In i (interfaceof_P P) /\ get_name i = C) ->
   (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C.
@@ -1081,7 +1083,7 @@ Proof.
   intros i P C HWP H.
   apply (interface_component_id_correspondance P HWP) in H.
   destruct H.
-  apply identifier_component_correspondance in H.
+  apply component_index_correspondance_eq in H.
   apply H. apply HWP.
 Qed.
 
@@ -1116,7 +1118,21 @@ Proof.
              (update_state main_cid 0 0 0 (generate_state p))
              []) []))) as getblens_is_lengthbuffer.
     SCase "Proof of assertion".
-    { admit. } 
+    { destruct n as [[[name bnum] pnum] blens] eqn:HD.
+      simpl in H7; simpl in H8.
+      simpl (get_blens (name, bnum, pnum, blens)).
+      simpl (get_nameN (name, bnum, pnum, blens)).
+      assert (length
+        (nth b
+          (nth name (update_state main_cid 0 0 0 (generate_state p))
+            []) []) = length
+        (nth b
+          (nth name (generate_state p)
+            []) [])) as Hassert.
+      admit.
+      rewrite Hassert.
+      admit.
+    } 
     rewrite <- (getblens_is_lengthbuffer).
     apply andb_true in H8. destruct H8.
     rewrite H8; rewrite H9.
@@ -1133,7 +1149,7 @@ Proof.
     pose (correct_program_contains_main) as lemma.
     apply H4 in lemma. inversion lemma.
     specialize (H8 0). simpl in H8.
-    pose (interface_identifier_component_correspondance x p main_cid HWP) as lemma'.
+    pose (interface_component_index_correspondance_eq x p main_cid HWP) as lemma'.
     rewrite lemma' in H8. apply H8.
     split.
     SCase "Left".
@@ -1452,9 +1468,9 @@ Proof.
   destruct H6; destruct H6; destruct H8.
   inversion H2.
   specialize (H10 (nth C' P (0,0,[],0,0,[]))).
-  assert (In (nth C' P (0, 0, [], 0, 0, [])) P).
+  assert (In (nth C' P (0, 0, [], 0, 0, [])) P) as Hassert.
   Case "Proof of assertion".
-    rewrite <- DK in HK. inversion HK.
+  { rewrite <- DK in HK. inversion HK.
     inversion H14. simpl in H17.
     destruct H17.
     SCase "Call in".
@@ -1463,7 +1479,25 @@ Proof.
     }
     SCase "Call out".
     { admit. }
-  admit.
+  }
+  assert (Hassert2 := Hassert).
+  apply H10 in Hassert.
+  inversion Hassert.
+  simpl in H12. specialize (H12 P').
+  rewrite program_invariant_correspondance.
+  assert ((get_nameC (nth C' P (0, 0, [], 0, 0, []))) = C') as Hassert'.
+  Case "Proof of assertion".  
+  { admit. }
+  rewrite Hassert' in H12. 
+  unfold procbodies. unfold fetch_context.
+  assert (get_procs (nth C' P (0, 0, [], 0, 0, []))
+    = nth C' (map get_procs P) []) as Hassert''.
+  Case "Proof of assertion".
+  { unfold procbodies. unfold fetch_context.
+    pose (map_nth get_procs P (0, 0, [], 0, 0, []) C') as lemma.
+    simpl in lemma. symmetry in lemma. apply lemma.
+  }
+  rewrite <- Hassert''. apply H12. apply HWP.
   (* State with update *)
   intros.
   rewrite <- WFD in HCFG.
