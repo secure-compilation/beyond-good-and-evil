@@ -1029,6 +1029,14 @@ Proof.
   intros.
 Admitted.
 
+Lemma component_index_correspondance_eq' :
+  forall C P,
+  wellformed_whole_program P ->
+  In (nth C P (0, 0, [], 0, 0, [])) P ->
+  (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C.
+Proof.
+Admitted.
+
 Lemma component_index_correspondance_in :
   forall C P,
   (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C ->
@@ -1125,11 +1133,13 @@ Proof.
       assert (length
         (nth b
           (nth name (update_state main_cid 0 0 0 (generate_state p))
-            []) []) = length
+            []) []) = 
+              length
         (nth b
           (nth name (generate_state p)
             []) [])) as Hassert.
-      admit.
+      SSCase "Proof of assertion".
+      { admit. }
       rewrite Hassert.
       admit.
     } 
@@ -1475,7 +1485,7 @@ Proof.
     destruct H17.
     SCase "Call in".
     { destruct H17; apply andb_true in H19; destruct H19.
-      admit. 
+      admit.
     }
     SCase "Call out".
     { admit. }
@@ -1486,8 +1496,8 @@ Proof.
   simpl in H12. specialize (H12 P').
   rewrite program_invariant_correspondance.
   assert ((get_nameC (nth C' P (0, 0, [], 0, 0, []))) = C') as Hassert'.
-  Case "Proof of assertion".  
-  { admit. }
+  Case "Proof of assertion".
+  { apply (component_index_correspondance_eq' C' P HWP Hassert2). }
   rewrite Hassert' in H12. 
   unfold procbodies. unfold fetch_context.
   assert (get_procs (nth C' P (0, 0, [], 0, 0, []))
