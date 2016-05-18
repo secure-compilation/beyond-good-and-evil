@@ -2,7 +2,7 @@ Require Export Source.
 Require Export Target.
 
 (* _____________________________________ 
-       COMPARTMENT MEMORY LAYOUT
+        COMPARTMENT MEMORY LAYOUT
    _____________________________________ *)
 
 Fixpoint BUFADDR (k:component) (b:buffer_id) : address :=
@@ -17,9 +17,31 @@ Fixpoint BUFADDR (k:component) (b:buffer_id) : address :=
       0 (*???*)
   end.
 
+(* _____________________________________ 
+      COMPARTMENT MEMORY LAYOUT (2)
+   _____________________________________ *)
+
+Fixpoint EXTERNALENTRY (k:component) (P:procedure_id) :
+  address :=
+  match P with
+  | 0 => 
+    let bnum := (get_bnum k) in
+    let l := length (nth (pred bnum) (get_buffers k) []) in 
+    (BUFADDR k (pred bnum)) + l
+  | S P' => 
+    let code := admit in code (* UNCOMPLETED *)
+  end.
+
+Definition INTERNALENTRY (k:component) (P:procedure_id) : 
+  address := 
+  (EXTERNALENTRY k P) + 3.
+
 (* Temporary definition *)
-Definition STACKBASE (k:component) :=
-  0.
+Definition STACKBASE (k:component) : address :=
+  let code := @nil nat in
+  (EXTERNALENTRY k (pred (get_pnum k))) +
+  length code + 1.
+(* where code = ((κ.name).(κ.pnum-1) ↦ κ.procs[κ.pnum - 1])↓*)
 
 (* _____________________________________ 
                 MACROS
@@ -33,50 +55,85 @@ Definition r_sp : register :=
   admit.
 Definition r_one : register :=
   admit.
+Definition r_aux1 : register :=
+  admit.
+Definition r_aux2 : register :=
+  admit.
+Definition r_ra : register :=
+  admit.
+Definition r_com : register :=
+  admit.
 
 Definition STOREENV (k:component) (r:register) :=
   [Const (pred (STACKBASE k)) r;
    Store r r_sp].
 
-Definition RESTOREENV (k:component) (r:register) :=
+Definition RESTOREENV (k:component) :=
   [Const 1 r_one;
    Const (pred (STACKBASE k)) r_sp;
    Load r_sp r_sp].
 
+Definition LOADARG (k:component) (r:register) :=
+  [Const (BUFADDR k 0) r; 
+   Load r r].
+
+Definition STOREARG (k:component) (r r':register) :=
+  [Const (BUFADDR k 0) r';
+   Store r' r].
+
+Definition PUSH (r:register) :=
+  [BinOp Add r_sp r_one r_sp;
+  Store r_sp r].
+
+Definition POP (r:register) :=
+  [Load r_sp r;
+   BinOp Minus r_sp r_one r_sp].
+
 (* _____________________________________ 
-         EXPRESSION COMPILATION
+          PROCEDURE COMPILATION
    _____________________________________ *)
 
-(*
---------------------------------------
-The concrete memory layout is given below:
-
-BUFADDR(κ,0) = 0
-BUFADDR(κ,b) when b < κ.bnum = BUFADDR(κ,b-1) + κ.blens[b-1]
-
-EXTERNALENTRY(κ,0) = BUFADDR(κ, κ.bnum-1) + κ.blens[κ.bnum-1]
-EXTERNALENTRY(κ,P) when P < κ.pnum = EXTERNALENTRY(κ,P-1) + length(code)
-  where code = ((κ.name).(P-1) ↦ κ.procs[P - 1])↓
-
-INTERNALENTRY(κ,P) when P < κ.pnum = EXTERNALENTRY(κ,P) + 3
-
-STACKBASE(κ) = EXTERNALENTRY(κ,κ.pnum - 1) + length(code) + 1
-  where code = ((κ.name).(κ.pnum-1) ↦ κ.procs[κ.pnum - 1])↓
-
-The memory cell at location STACKBASE(κ) - 1 is used to (re)store the
-stack pointer when switching components.
-*)
-
-Fixpoint EXTERNALENTRY (k:component) (P:procedure_id) :=
-  match P with
-  | 0 => 
-    let bnum := (get_bnum k) in
-    let l := length (nth (pred bnum) (get_buffers k) []) in 
-    (BUFADDR k (pred bnum)) + l
-  | S P' => 
-    let code := admit in code (* UNCOMPLETED *)
+Definition compile_proc (k:component) (e:expr) : instr :=
+  match e with
+  (* EVal *)
+  | EVal i => Const i r_com
+  (* EBinop *)
+  | EBinop op e1 e2 =>
+    match op with
+    | EAdd => Add
+    | EMinus => Minus
+    | EMul => Mul
+    | ELeq => Leq 
+    | EEq => Eq
+    | ESeq => Nop
+    end 
+  | _ => Halt
   end.
 
-Definition INTERNALENTRY (k:component) (P:procedure_id) : 
-  address := 
-  (EXTERNALENTRY k P) + 3.
+Notation "'COMPILE EXPR' ( k , e )↓ " := 
+  (compile_expr k e) (at level 0).
+(* _____________________________________ 
+          PROCEDURE COMPILATION
+   _____________________________________ *)
+
+Definition compile_proc (k:component) (P:procedure) : code :=
+  (* lext *)  
+  [Const 1 r_aux2] ++ 
+  (RESTOREENV k) ++
+  [Bnz r_one 3] ++
+  (* lint *)
+  [Const 0 r_aux2] ++ 
+  (PUSH r_ra) ++
+  (* lmain *) 
+  (STOREARG k r_com r_aux1) ++
+  (compile_expr k (nth k (get_procs P) [])) ++
+  [Bnz r_aux2 3] ++
+  (POP r_ra) ++
+  [Jump r_ra] ++
+  (* lret *)
+  (STOREENV k r_aux1) ++
+  (CLEARREG) ++
+  [Return].
+Notation "'COMPILE PROC' ( k , P )↓ " := 
+  (compile_proc k P) (at level 0).
+
