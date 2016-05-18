@@ -927,9 +927,9 @@ STACKBASE(κ): Base address of component C's stack
 The concrete memory layout is given below:
 
 BUFADDR(κ,0) = 0
-BUFADDR(κ,b) when b < κ.bnum = BUFADDR(κ,b-1) + κ.blens[b-1]
+BUFADDR(κ,b) when b < κ.bnum = BUFADDR(κ,b-1) + length κ.bufs[b-1]
 
-EXTERNALENTRY(κ,0) = BUFADDR(κ, κ.bnum-1) + κ.blens[κ.bnum-1]
+EXTERNALENTRY(κ,0) = BUFADDR(κ, κ.bnum-1) + length κ.bufs[κ.bnum-1]
 EXTERNALENTRY(κ,P) when P < κ.pnum = EXTERNALENTRY(κ,P-1) + length(code)
   where code = ((κ.name).(P-1) ↦ κ.procs[P - 1])↓
 
