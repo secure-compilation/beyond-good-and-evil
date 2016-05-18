@@ -214,20 +214,6 @@ Inductive stuck_state : program_interfaces -> cfg -> Prop :=
     stuck_state Is (C,d,mem,reg,pc).
 
 (* _____________________________________ 
-             WELL-FORMEDNESS
-   _____________________________________ *)  
-
-(* Not complete *)
-Inductive wellformed_lv_program : program -> Prop :=
-  | WF_lv_program : forall P, wellformed_lv_program P.
-
-Inductive wellformed_whole_lv_program : program -> Prop :=
-  | WF_whole_lv_program : forall Is mem E,
-    wellformed_lv_program (Is, mem, E) ->
-    (dom_entry_points E = compsInterface Is) ->
-    wellformed_whole_lv_program (Is, mem, E).
-
-(* _____________________________________ 
           PROOF : DETERMINISM
    _____________________________________ *)  
 

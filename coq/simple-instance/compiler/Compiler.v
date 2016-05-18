@@ -10,16 +10,38 @@ Fixpoint BUFADDR (k:component) (b:buffer_id) : address :=
   | 0 => 0
   | S b' =>
     let bnum := (get_bnum k) in
-    let blens := map (@length nat) (get_buffers k) in 
+    let l := length (nth b' (get_buffers k) []) in 
     if ble_nat b' bnum then
-      (BUFADDR k b') + ((nth b') blens 0)
+      (BUFADDR k b') + l
     else
       0 (*???*)
   end.
 
+(* Temporary definition *)
+Definition STACKBASE (k:component) :=
+  0.
+
 (* _____________________________________ 
                 MACROS
    _____________________________________ *)
+
+Definition CLEARREG (regs:registers) : code :=
+  map (fun r => Const 0 r) regs.
+
+(* Temporary definition *)
+Definition r_sp : register :=
+  admit.
+Definition r_one : register :=
+  admit.
+
+Definition STOREENV (k:component) (r:register) :=
+  [Const (pred (STACKBASE k)) r;
+   Store r r_sp].
+
+Definition RESTOREENV (k:component) (r:register) :=
+  [Const 1 r_one;
+   Const (pred (STACKBASE k)) r_sp;
+   Load r_sp r_sp].
 
 (* _____________________________________ 
          EXPRESSION COMPILATION
@@ -49,8 +71,8 @@ Fixpoint EXTERNALENTRY (k:component) (P:procedure_id) :=
   match P with
   | 0 => 
     let bnum := (get_bnum k) in
-    let blens := map (@length nat) (get_buffers k) in 
-    (BUFADDR k (pred bnum)) + (nth (pred bnum) blens 0)
+    let l := length (nth (pred bnum) (get_buffers k) []) in 
+    (BUFADDR k (pred bnum)) + l
   | S P' => 
     let code := admit in code (* UNCOMPLETED *)
   end.
