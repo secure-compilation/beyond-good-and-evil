@@ -4,6 +4,24 @@ Require Export Source.
                   SYNTAX  
    _____________________________________ *)
 
+Inductive reg_name : Set :=
+| RSp
+(* ... *).
+
+Definition reg_name_nat (r: reg_name) :=
+  match r with
+  | RSp => 0
+  (* ... *)
+  end.
+
+Print nth.
+
+Definition reg_file := list nat.
+
+Notation "reg [ r ]" :=
+  (nth (reg_name_nat r) reg 0)
+  (at level 80, right associativity).
+
 Definition address : Type := nat.
 
 (* For each component we have several procedures corresponding
@@ -22,7 +40,9 @@ Definition fetch_entry_points
 Inductive binop : Type :=
   | Add
   | Minus
-  | Mul.
+  | Mul
+  | Eq
+  | Leq.
 
 Inductive instr : Type :=
   | Nop : instr
@@ -43,6 +63,8 @@ Definition eval_binop (e : binop * nat * nat) : nat :=
   | (Add, a, b) => a+b
   | (Minus, a, b) => a-b
   | (Mul, a, b) => a*b
+  | (Eq, a, b) => if beq_nat a b then 1 else 0
+  | (Leq, a, b) => if ble_nat a b then 1 else 0 
   end.
 
 Definition register : Type := nat.
@@ -186,7 +208,7 @@ Inductive step (Is:program_interfaces) (E:entry_points) :
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Bnz r i')) ->
     ~(fetch_reg r reg = 0) ->
-    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+1)
+    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+i')
   (* S_BnzZ *)
   | S_BnzZ : forall mem C pc i i' r reg d,
     (fetch_mem C mem pc = i) ->
@@ -199,7 +221,6 @@ Inductive stuck_state : program_interfaces -> cfg -> Prop :=
   (* S_DecodingError *)
   | S_DecodingError : forall Is i C d mem reg pc, 
     (decode i = None) -> stuck_state Is (C,d,mem,reg,pc)
-  (* S_MemFail ??? *)
   (* S_CallFail *)
   | S_CallFail : forall Is i C C' P' d mem reg pc,
     (decode i = Some (Call C' P')) ->
