@@ -927,9 +927,9 @@ STACKBASE(κ): Base address of component C's stack
 The concrete memory layout is given below:
 
 BUFADDR(κ,0) = 0
-BUFADDR(κ,b) when b < κ.bnum = BUFADDR(κ,b-1) + length κ.bufs[b-1]
+BUFADDR(κ,b) when b < κ.bnum = BUFADDR(κ,b-1) + length(κ.bufs[b-1])
 
-EXTERNALENTRY(κ,0) = BUFADDR(κ, κ.bnum-1) + length κ.bufs[κ.bnum-1]
+EXTERNALENTRY(κ,0) = BUFADDR(κ, κ.bnum-1) + length(κ.bufs[κ.bnum-1])
 EXTERNALENTRY(κ,P) when P < κ.pnum = EXTERNALENTRY(κ,P-1) + length(code)
   where code = ((κ.name).(P-1) ↦ κ.procs[P - 1])↓
 
@@ -987,9 +987,6 @@ POP(r) ::=                     remove top value on the stack and put it into reg
   BinOp rₛₚ - rₒₙₑ → rₛₚ
 
 *** Compiler
-
-This compiler variant uses less stack & less registers & a smaller set
-of stack macros (just PUSH and POP).
 
 **** Invariants
 
