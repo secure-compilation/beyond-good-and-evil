@@ -53,33 +53,33 @@ Definition component : Type :=
   let procedures := list procedure in
   (name * bnum * buffers * pnum * export * procedures).
 
-Definition get_nameC (C:component) : component_id :=
-  match C with
+Definition get_nameC (k:component) : component_id :=
+  match k with
   | (name, _, _, _, _, _) => name
   end.
 
-Definition get_bnum (C:component) : nat :=
-  match C with
+Definition get_bnum (k:component) : nat :=
+  match k with
   | (_, bnum, _, _, _, _) => bnum
   end.
 
-Definition get_buffers (C:component) : list buffer :=
-  match C with
+Definition get_buffers (k:component) : list buffer :=
+  match k with
   | (_, _, buffers, _, _, _) => buffers
   end.
 
-Definition get_pnum (C:component) : nat :=
-  match C with
+Definition get_pnum (k:component) : nat :=
+  match k with
   | (_, _, _, pnum, _, _) => pnum
   end.
 
-Definition get_exportC (C:component) : nat :=
-  match C with
+Definition get_exportC (k:component) : nat :=
+  match k with
   | (_, _, _, _, export, _) => export
   end.
 
-Definition get_procs (C:component) : list procedure :=
-  match C with
+Definition get_procs (k:component) : list procedure :=
+  match k with
   | (_, _, _, _, _, procs) => procs
   end.
 
@@ -155,22 +155,22 @@ Definition intprocsin (C:component_id) (e:expr) :
   let ext := extprocsin C e in
   list_minus_imports (procsin e) ext.
 
-Definition intprocsins_of_C (C:component) :
+Definition intprocsins_of_C (k:component) :
   list proc_call :=
-  concat (map (intprocsin (get_nameC C)) (get_procs C)).
+  concat (map (intprocsin (get_nameC k)) (get_procs k)).
 
-Fixpoint generate_import (C : component_id)
+Fixpoint generate_import (k : component_id)
   (procedures : list expr) :
   (list proc_call) :=
   match procedures with
   | [] => []
-  | e::PS => (extprocsin C e) ++ (generate_import C PS)  
+  | e::PS => (extprocsin k e) ++ (generate_import k PS)  
   end.
 
-Definition interfaceof_C (C : component) : interface :=
-  match C with
+Definition interfaceof_C (k : component) : interface :=
+  match k with
   | (name, bnum, buffers, pnum, export, procedures) => 
-    (name, export, generate_import (get_nameC C) (get_procs C))
+    (name, export, generate_import (get_nameC k) (get_procs k))
   end.
 
 Definition interfaceof_P (p : program) : program_interfaces :=
@@ -187,8 +187,8 @@ Fixpoint bufsin (e:expr) : list buffer_id :=
   | EIfThenElse e e1 e2 => (bufsin e) ++ (bufsin e1) ++ (bufsin e2) 
   end.
 
-Definition bufsin_in_C (C:component) : list buffer_id :=
-  match C with
+Definition bufsin_in_C (k:component) : list buffer_id :=
+  match k with
   | (_, _, _, _, procs) => concat (map bufsin procs) 
   end.
 
@@ -773,8 +773,8 @@ Definition get_blens (n:component_invariant) : list nat :=
 Definition partial_program_invariant : Type :=
   list component_invariant.
 
-Definition wfinv_of_C (C:component) : component_invariant :=
-  match C with
+Definition wfinv_of_C (k:component) : component_invariant :=
+  match k with
   | (name, bnum, buffers, pnum, _, _) =>
     let blens := (map (@length nat) buffers) in
     (name, pnum, bnum, blens)
