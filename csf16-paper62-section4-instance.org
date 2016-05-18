@@ -931,12 +931,12 @@ BUFADDR(κ,b) when b < κ.bnum = BUFADDR(κ,b-1) + length(κ.bufs[b-1])
 
 EXTERNALENTRY(κ,0) = BUFADDR(κ, κ.bnum-1) + length(κ.bufs[κ.bnum-1])
 EXTERNALENTRY(κ,P) when P < κ.pnum = EXTERNALENTRY(κ,P-1) + length(code)
-  where code = ((κ.name).(P-1) ↦ κ.procs[P - 1])↓
+  where code = (κ, P - 1)↓
 
 INTERNALENTRY(κ,P) when P < κ.pnum = EXTERNALENTRY(κ,P) + 3
 
 STACKBASE(κ) = EXTERNALENTRY(κ,κ.pnum - 1) + length(code) + 1
-  where code = ((κ.name).(κ.pnum-1) ↦ κ.procs[κ.pnum - 1])↓
+  where code = (κ, κ.pnum-1)↓
 
 The memory cell at location STACKBASE(κ) - 1 is used to (re)store the
 stack pointer when switching components.
@@ -1011,10 +1011,11 @@ code will decrement it by one (POP).
 
 **** Procedure compilation
 
-(κ,P)↓ ::=
-
 lext — external call entry point
 lint — internal call entry point
+
+(κ,P)↓ ::=
+
  lext: Const 1 → rₐᵤₓ₂;
        RESTOREENV(κ);
        Bnz rₒₙₑ lmain;
