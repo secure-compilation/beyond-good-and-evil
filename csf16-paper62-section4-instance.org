@@ -676,7 +676,7 @@ we obtain a notion of fully defined component.
 
 Starting point: RISC register machine from Oakland 2015
 - the instructions from the basic machine with two additions:
-  Call iC iP and Return
+  Call C P and Return
 
 *Separate memories*
 - Each isolated component has its own infinite memory and memory
@@ -729,11 +729,6 @@ p ::= (ψ, mem, E)  – low-level program
 
 E[C] – the list of *external* entry points of component C
        (internal calls are done via Jal and not monitored)
-
-(ψ, mem, E) well formed
-dom(E) = comps(ψ)
-—————————————————————————————
-(ψ, mem, E) whole well formed
 
 ** Semantics:
 
