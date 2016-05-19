@@ -4,24 +4,6 @@ Require Export Source.
                   SYNTAX  
    _____________________________________ *)
 
-Inductive reg_name : Set :=
-| RSp
-(* ... *).
-
-Definition reg_name_nat (r: reg_name) :=
-  match r with
-  | RSp => 0
-  (* ... *)
-  end.
-
-Print nth.
-
-Definition reg_file := list nat.
-
-Notation "reg [ r ]" :=
-  (nth (reg_name_nat r) reg 0)
-  (at level 80, right associativity).
-
 Definition address : Type := nat.
 
 (* For each component we have several procedures corresponding
