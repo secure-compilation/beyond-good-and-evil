@@ -874,7 +874,7 @@ Inductive wellformed_component_alt (Is:program_interfaces) : component -> Prop :
     (forall P, 
       let i := (nth (get_nameC k) Is (0,0,[])) in
       let n := wfinv_of_C k in
-      (component_defined (get_nameC k) interface Is = true) /\ 
+      (component_defined (get_nameC k) interface Is = true) /\
       (wellformed_expr_alt i n (nth P (get_procs k) EExit))) ->
     (ble_nat (get_exportC k) (get_pnum k) = true) -> 
     (ble_nat 1 (get_bnum k) = true /\ ble_nat 1 (length (nth 0 (get_buffers k) [])) = true) ->    
@@ -884,7 +884,10 @@ Inductive wellformed_component_alt (Is:program_interfaces) : component -> Prop :
 Reserved Notation "'PARTIAL_PROGRAM' Is |- p 'wellformed'" (at level 40).
 Inductive wellformed_partial_program (Is:program_interfaces) : program -> Prop :=
   | WF_partial_program : forall p,
-    (forall k, In k p -> wellformed_component_alt Is k) ->
+    (forall C k, In k p -> wellformed_component_alt Is k /\
+      ((In k p) /\ (get_nameC k = C) -> 
+        (get_nameC (nth C p (0, 0, [], 0, 0, []))) = C)
+    ) ->
     PARTIAL_PROGRAM Is |- p wellformed
   where "'PARTIAL_PROGRAM' Is |- p 'wellformed'" := (wellformed_partial_program Is p).
 
@@ -1032,6 +1035,10 @@ Lemma interface_index_correspondance_eq :
   forall C,
   get_name (nth C (interfaceof_P P) (0, 0, [])) = C.
 Proof.
+  intros. unfold interfaceof_P.
+  pose (map_nth interfaceof_C P (0, 0, [], 0, 0, []) C) as lemma.
+  simpl in lemma. rewrite lemma.
+  rewrite <- interfacename_is_componentname.
 Admitted.
 
 Lemma component_index_correspondance_eq :
@@ -1039,8 +1046,12 @@ Lemma component_index_correspondance_eq :
   (In k P /\ get_nameC k = C) ->
   (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C.
 Proof.
-  intros.
-Admitted.
+  intros. inversion H.
+  inversion H2. specialize (H4 C k).
+  destruct H4. assert (H0' := H0).
+  destruct H0'. apply H4.
+  apply H6 in H0. apply H0.
+Qed.
 
 Lemma component_index_correspondance_eq' :
   forall C P,
@@ -1058,10 +1069,38 @@ Lemma component_index_correspondance_in :
 Proof.
 Admitted.
 
+Lemma negation_transfert :
+  forall a b, negb a = b <-> a = negb b.
+Proof.
+  intros.
+  split.
+  Case "->".
+    intro.
+    destruct a; destruct b;
+    try (inversion H);
+    try (reflexivity).
+  Case "<-".
+    intro.
+    destruct a; destruct b;
+    try (inversion H);
+    try (reflexivity).
+Qed.
+
 Lemma blenat_implies_leq :
   forall n m, (ble_nat n m) && negb (beq_nat n m) = true -> (n < m).
 Proof.
-Admitted.
+  intro n. induction n as [|n'].
+  Case "n = 0".
+  { intros. destruct m. inversion H. apply neq_0_lt.
+    unfold not. intro. inversion H0.
+  }
+  Case "n = S n'".
+  { intros. destruct m. inversion H. apply lt_n_S.
+    apply IHn'. apply andb_true in H. destruct H.
+    simpl in H. rewrite H. apply negation_transfert in H0.
+    simpl in H0. rewrite H0. reflexivity.
+  }
+Qed. 
 
 Lemma interface_component_id_correspondance :
   forall P, wellformed_whole_program P ->
@@ -1755,23 +1794,6 @@ Proof.
     try (simpl; reflexivity);
     try (constructor).
   }
-Qed.
-
-Lemma negation_transfert :
-  forall a b, negb a = b <-> a = negb b.
-Proof.
-  intros.
-  split.
-  Case "->".
-    intro.
-    destruct a; destruct b;
-    try (inversion H);
-    try (reflexivity).
-  Case "<-".
-    intro.
-    destruct a; destruct b;
-    try (inversion H);
-    try (reflexivity).
 Qed.
 
 Theorem evalcfg_implies_smallstep :
