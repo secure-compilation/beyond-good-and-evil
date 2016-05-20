@@ -175,7 +175,7 @@ Fixpoint compile_expr (k:component) (e:expr) : code :=
     [Halt]
   end.
 
-Notation "'COMPILE EXPR' ( k , e )↓ " := 
+Notation "'COMPILE_EXPR' ( k , e )↓ " := 
   (compile_expr k e) (at level 0).
 
 
@@ -204,6 +204,6 @@ Definition compile_proc (k:component) (P:procedure_id) : code :=
   (CLEARREG) ++
   [Return].
 
-Notation "'COMPILE PROC' ( k , P )↓ " := 
+Notation "'COMPILE_PROC' ( k , P )↓ " := 
   (compile_proc k P) (at level 0).
 
