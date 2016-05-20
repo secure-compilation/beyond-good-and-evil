@@ -19,18 +19,38 @@ Definition fetch_entry_points
   : entry_point :=
   nth P (nth C E []) 0.
 
-Inductive binop : Type :=
-  | Add
-  | Minus
-  | Mul
-  | Eq
-  | Leq.
+Definition register : Type := nat.
+
+Definition nb_regs : nat := 7.
+Definition r_pc : register :=
+  0.
+Definition r_one : register :=
+  1.
+Definition r_com : register :=
+  2.
+Definition r_aux1 : register :=
+  3.
+Definition r_aux2 : register :=
+  4.
+Definition r_ra : register :=
+  5.
+Definition r_sp : register :=
+  6.
+
+Definition registers : Type := list register.
+
+Inductive LLbinop : Set :=
+  | Add :  LLbinop
+  | Minus : LLbinop
+  | Mul : LLbinop
+  | Eq : LLbinop
+  | Leq : LLbinop.
 
 Inductive instr : Type :=
   | Nop : instr
   | Const : nat -> address -> instr
   | Mov : address -> address -> instr
-  | BinOp : binop -> address -> address -> address -> instr
+  | BinOp : LLbinop -> address -> address -> address -> instr
   | Load : address -> address -> instr
   | Store : address -> address -> instr
   | Jal : address -> instr
@@ -40,7 +60,7 @@ Inductive instr : Type :=
   | Bnz : address -> nat -> instr
   | Halt : instr.
 
-Definition eval_binop (e : binop * nat * nat) : nat :=
+Definition LLeval_binop (e : LLbinop * nat * nat) : nat :=
   match e with
   | (Add, a, b) => a+b
   | (Minus, a, b) => a-b
@@ -49,26 +69,7 @@ Definition eval_binop (e : binop * nat * nat) : nat :=
   | (Leq, a, b) => if ble_nat a b then 1 else 0 
   end.
 
-Definition register : Type := nat.
-Definition registers : Type := list register. 
-
-Definition r_pc : register :=
-  0.
-Definition r_sp : register :=
-  1.
-Definition r_one : register :=
-  2.
-Definition r_aux1 : register :=
-  3.
-Definition r_aux2 : register :=
-  4.
-Definition r_ra : register :=
-  5.
-Definition r_com : register :=
-  6.
-
-(* Each component has it's own memory *)
-Definition memory : Type := list nat. 
+Definition memory : Type := list address.
 Definition global_memory : Type := list memory.
 
 Definition fetch_mem (C:component_id) (mem:global_memory) 
@@ -156,7 +157,7 @@ Inductive step (Is:program_interfaces) (E:entry_points) :
   | S_BinOp : forall mem C pc i r1 r2 r3 reg reg' d op,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (BinOp op r1 r2 r3)) ->
-    (update_reg r3 (eval_binop (op, (fetch_reg r1 reg), (fetch_reg r2 reg))) reg = reg') ->
+    (update_reg r3 (LLeval_binop (op, (fetch_reg r1 reg), (fetch_reg r2 reg))) reg = reg') ->
     Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
   (* S_Load *)
   | S_Load : forall mem C pc i r1 r2 reg reg' d i1,
