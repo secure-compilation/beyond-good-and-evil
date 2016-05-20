@@ -323,8 +323,8 @@ Definition component_defined (C:component_id)
     false.
 
 Definition procedure_defined (C:component_id) 
-  (P:procedure_id) (X:Type) (D:list (list X)) : bool :=
-  let l := (length (nth C D [])) in
+  (P:procedure_id) (X:Type) (D:list X) : bool :=
+  let l := (length D) in
   if (andb (ble_nat P l) (negb (beq_nat P l))) then
     true
   else
@@ -354,7 +354,7 @@ Definition component_undefined (C:component_id)
   negb (component_defined C X D).
 
 Definition procedure_undefined (C:component_id) 
-  (P:procedure_id) (X:Type) (D:list (list X)) : bool :=
+  (P:procedure_id) (X:Type) (D:list X) : bool :=
   negb (procedure_defined C P X D).
 
 Definition buffer_undefined (C:component_id) 
@@ -875,7 +875,8 @@ Inductive wellformed_component_alt (Is:program_interfaces) : component -> Prop :
       let i := (nth (get_nameC k) Is (0,0,[])) in
       let n := wfinv_of_C k in
       (component_defined (get_nameC k) interface Is = true) /\
-      (wellformed_expr_alt i n (nth P (get_procs k) EExit))) ->
+      (procedure_defined (get_nameC k) P procedure (get_procs k) = true ->
+       (wellformed_expr_alt i n (nth P (get_procs k) EExit)))) ->
     (ble_nat (get_exportC k) (get_pnum k) = true) -> 
     (ble_nat 1 (get_bnum k) = true /\ ble_nat 1 (length (nth 0 (get_buffers k) [])) = true) ->    
     wellformed_component_alt Is k.
@@ -886,6 +887,9 @@ Inductive wellformed_partial_program (Is:program_interfaces) : program -> Prop :
   | WF_partial_program : forall p,
     (forall C k, In k p -> wellformed_component_alt Is k /\
       ((In k p) /\ (get_nameC k = C) -> 
+        (get_nameC (nth C p (0, 0, [], 0, 0, []))) = C)
+      /\
+      (In (nth C p (0, 0, [], 0, 0, [])) p -> 
         (get_nameC (nth C p (0, 0, [], 0, 0, []))) = C)
     ) ->
     PARTIAL_PROGRAM Is |- p wellformed
@@ -1030,43 +1034,61 @@ Proof.
   destruct k4; destruct k5; simpl; reflexivity.
 Qed.
 
-Lemma interface_index_correspondance_eq :
-  forall P, wellformed_whole_program P ->
-  forall C,
-  get_name (nth C (interfaceof_P P) (0, 0, [])) = C.
-Proof.
-  intros. unfold interfaceof_P.
-  pose (map_nth interfaceof_C P (0, 0, [], 0, 0, []) C) as lemma.
-  simpl in lemma. rewrite lemma.
-  rewrite <- interfacename_is_componentname.
-Admitted.
-
-Lemma component_index_correspondance_eq :
-  forall k P C, wellformed_whole_program P ->
-  (In k P /\ get_nameC k = C) ->
-  (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C.
-Proof.
-  intros. inversion H.
-  inversion H2. specialize (H4 C k).
-  destruct H4. assert (H0' := H0).
-  destruct H0'. apply H4.
-  apply H6 in H0. apply H0.
-Qed.
-
 Lemma component_index_correspondance_eq' :
   forall C P,
   wellformed_whole_program P ->
   In (nth C P (0, 0, [], 0, 0, [])) P ->
   (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C.
 Proof.
-Admitted.
+  intros C P HWP H. inversion HWP.
+  inversion H1. specialize (H3 C (nth C P (0, 0, [], 0, 0, []))).
+  destruct H3. apply H. inversion H3. destruct H5.
+  apply H10. apply H.
+Qed.
 
-Lemma component_index_correspondance_in :
+Lemma interface_component_id_correspondance :
+  forall P, wellformed_whole_program P ->
+  forall C i,
+  (In i (interfaceof_P P) /\ get_name i = C -> 
+   exists k, In k P /\ get_nameC k = C).
+Proof.
+  intros.
+  destruct H0 as [Hin Hname].
+  unfold interfaceof_P in Hin.
+  pose (in_map_iff interfaceof_C P i) as lemma.
+  destruct lemma.
+  apply H0 in Hin.
+  destruct Hin.
+  exists x. destruct H2.
+  split. apply H3.
+  rewrite <- Hname.
+  rewrite <- H2.
+  apply interfacename_is_componentname.
+Qed.
+
+Lemma component_index_correspondance_eq'' :
   forall C P,
   wellformed_whole_program P ->
-  (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C ->
-  In (nth C P (0, 0, [], 0, 0, [])) P.
+  In (nth C (interfaceof_P P) (0, 0, [])) (interfaceof_P P) ->
+  (get_name (nth C (interfaceof_P P) (0, 0, []))) = C.
 Proof.
+  intros. 
+  (* Transposition of the goal *)
+  unfold interfaceof_P.
+  pose (map_nth interfaceof_C P (0, 0, [], 0, 0, []) C) as lemma.
+  simpl in lemma. rewrite lemma. rewrite <- interfacename_is_componentname.
+  (* Transposition of the hypothesis *)
+  assert (In (nth C (interfaceof_P P) (0, 0, []))
+       (interfaceof_P P) -> In (nth C P (0, 0, [], 0, 0, [])) P) as Hassert.
+  Case "Proof of assertion".
+  { intro. inversion H. inversion H2.
+    pose (in_map_iff interfaceof_C P (nth C (interfaceof_P P) (0, 0, []))) as lemma'.
+    destruct lemma' as [lemma'1 lemma'2].
+    unfold interfaceof_P in H0. apply lemma'1 in H0. 
+    destruct H0. admit.
+  } 
+  apply Hassert in H0. apply component_index_correspondance_eq'.
+  apply H. apply H0. 
 Admitted.
 
 Lemma negation_transfert :
@@ -1102,25 +1124,42 @@ Proof.
   }
 Qed. 
 
-Lemma interface_component_id_correspondance :
+Lemma interface_index_correspondance_eq :
   forall P, wellformed_whole_program P ->
-  forall C i,
-  (In i (interfaceof_P P) /\ get_name i = C -> 
-   exists k, In k P /\ get_nameC k = C).
+  forall C, 
+  component_defined C interface (interfaceof_P P) = true ->
+  get_name (nth C (interfaceof_P P) (0, 0, [])) = C.
 Proof.
-  intros.
-  destruct H0 as [Hin Hname].
-  unfold interfaceof_P in Hin.
-  pose (in_map_iff interfaceof_C P i) as lemma.
-  destruct lemma.
-  apply H0 in Hin.
-  destruct Hin.
-  exists x. destruct H2.
-  split. apply H3.
-  rewrite <- Hname.
-  rewrite <- H2.
-  apply interfacename_is_componentname.
+  intros. unfold interfaceof_P.
+  assert (In (nth C (interfaceof_P P) (0, 0, [])) (interfaceof_P P)) as Hassert.
+  Case "Proof of assertion".
+  { unfold component_defined in H0. apply andb_true in H0.
+    destruct H0. apply blenat_implies_leq in H0.
+    pose (@nth_In interface C (interfaceof_P P) (0, 0, [])) as lemma.
+    apply lemma in H0. apply H0.
+  }
+  apply component_index_correspondance_eq''. apply H.
+  apply Hassert.
 Qed.
+
+Lemma component_index_correspondance_eq :
+  forall k P C, wellformed_whole_program P ->
+  (In k P /\ get_nameC k = C) ->
+  (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C.
+Proof.
+  intros. inversion H.
+  inversion H2. specialize (H4 C k).
+  destruct H4. assert (H0' := H0).
+  destruct H0'. apply H4.  apply H6 in H0. apply H0.
+Qed.
+
+Lemma component_index_correspondance_in :
+  forall C P,
+  wellformed_whole_program P ->
+  (get_nameC (nth C P (0, 0, [], 0, 0, []))) = C ->
+  In (nth C P (0, 0, [], 0, 0, [])) P.
+Proof.
+Admitted.
 
 Lemma correct_program_contains_main :
   forall P, wellformed_whole_program P ->
