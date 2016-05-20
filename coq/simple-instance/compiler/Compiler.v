@@ -50,20 +50,6 @@ Definition STACKBASE (k:component) : address :=
 Definition CLEARREG (regs:registers) : code :=
   map (fun r => Const 0 r) regs.
 
-(* Temporary definition *)
-Definition r_sp : register :=
-  admit.
-Definition r_one : register :=
-  admit.
-Definition r_aux1 : register :=
-  admit.
-Definition r_aux2 : register :=
-  admit.
-Definition r_ra : register :=
-  admit.
-Definition r_com : register :=
-  admit.
-
 Definition STOREENV (k:component) (r:register) :=
   [Const (pred (STACKBASE k)) r;
    Store r r_sp].
@@ -93,21 +79,16 @@ Definition POP (r:register) :=
           PROCEDURE COMPILATION
    _____________________________________ *)
 
-Definition compile_proc (k:component) (e:expr) : instr :=
+Definition compile_proc (k:component) (e:expr) : code :=
   match e with
   (* EVal *)
-  | EVal i => Const i r_com
+  | EVal i =>
+    [Const i r_com]
   (* EBinop *)
   | EBinop op e1 e2 =>
-    match op with
-    | EAdd => Add
-    | EMinus => Minus
-    | EMul => Mul
-    | ELeq => Leq 
-    | EEq => Eq
-    | ESeq => Nop
-    end 
-  | _ => Halt
+    []
+  | _ => 
+    [Halt]
   end.
 
 Notation "'COMPILE EXPR' ( k , e )↓ " := 

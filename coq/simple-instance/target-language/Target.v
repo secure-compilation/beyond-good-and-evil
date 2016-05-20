@@ -52,6 +52,21 @@ Definition eval_binop (e : binop * nat * nat) : nat :=
 Definition register : Type := nat.
 Definition registers : Type := list register. 
 
+Definition r_pc : register :=
+  0.
+Definition r_sp : register :=
+  1.
+Definition r_one : register :=
+  2.
+Definition r_aux1 : register :=
+  3.
+Definition r_aux2 : register :=
+  4.
+Definition r_ra : register :=
+  5.
+Definition r_com : register :=
+  6.
+
 (* Each component has it's own memory *)
 Definition memory : Type := list nat. 
 Definition global_memory : Type := list memory.
