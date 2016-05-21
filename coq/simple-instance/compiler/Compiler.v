@@ -14,12 +14,25 @@ Fixpoint BUFADDR (k:component) (b:buffer_id) : address :=
     if ble_nat b' bnum then
       (BUFADDR k b') + l
     else
-      0 (*???*)
+      0
   end.
 
-(* _____________________________________ 
-      COMPARTMENT MEMORY LAYOUT (2)
-   _____________________________________ *)
+Fixpoint compiled_length (k:component) (e:expr) : nat :=
+  match e with
+  | EVal _ => 1
+  | EBinop ESeq e1 e2 => (compiled_length k e1) + (compiled_length k e2)
+  | EBinop _ e1 e2 => (compiled_length k e1) + (compiled_length k e2) + 5
+  | EIfThenElse e e1 e2 => 
+    (compiled_length k e) + (compiled_length k e1) + (compiled_length k e2) + 3
+  | ELoad _ e => (compiled_length k e) + 3
+  | EStore _ e1 e2 => (compiled_length k e1) + (compiled_length k e2) + 7
+  | ECall C' P' e=> 
+    if (negb (C' =? (get_nameC k))) then 
+      (compiled_length k e) + nb_regs + 17
+    else
+      (compiled_length k e) + 14
+  | EExit => 1
+  end.
 
 Fixpoint EXTERNALENTRY (k:component) (P:procedure_id) :
   address :=
@@ -29,19 +42,21 @@ Fixpoint EXTERNALENTRY (k:component) (P:procedure_id) :
     let l := length (nth (pred bnum) (get_buffers k) []) in 
     (BUFADDR k (pred bnum)) + l
   | S P' => 
-    let code := admit in code (* UNCOMPLETED *)
+    let length_expr := compiled_length k (nth P (get_procs k) EExit) in 
+    if ble_nat P (get_pnum k) then 
+      (EXTERNALENTRY k P') + length_expr
+    else
+      0
   end.
 
 Definition INTERNALENTRY (k:component) (P:procedure_id) : 
   address := 
   (EXTERNALENTRY k P) + 3.
 
-(* Temporary definition *)
 Definition STACKBASE (k:component) : address :=
-  let code := @nil nat in
-  (EXTERNALENTRY k (pred (get_pnum k))) +
-  length code + 1.
-(* where code = ((κ.name).(κ.pnum-1) ↦ κ.procs[κ.pnum - 1])↓*)
+  let length_expr := 
+    compiled_length k (nth (pred (get_pnum k)) (get_procs k) EExit) in
+  (EXTERNALENTRY k (pred (get_pnum k))) + length_expr + 1.
 
 (* _____________________________________ 
                 MACROS
