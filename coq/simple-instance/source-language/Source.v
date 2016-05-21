@@ -1356,19 +1356,6 @@ Proof.
   now apply Hs.
 Qed.
 
-Lemma blens_state_correspondance :
-  forall (n:component_invariant) b P name bnum pnum blens,
-  wellformed_whole_program P ->
-  n = (name, bnum, pnum, blens) ->
-  nth b blens 0 = length (nth b (nth name (generate_state P) []) []).
-Proof.
-  intros. unfold generate_state.
-  pose (map_nth get_buffers P (0,0,[],0,0,[]) name) as lemma.
-  simpl in lemma. rewrite lemma.
-  assert (blens = (map (@length nat)
-    (get_buffers (nth name P (0, 0, [], 0, 0, []))))).
-Admitted.
-
 Lemma initial_program_safety :
   forall P, wellformed_whole_program P ->
   let Is := interfaceof_P P in
@@ -1406,16 +1393,30 @@ Proof.
       { pose (length_closed_updatestate main_cid 0 0 0 (generate_state p) name b) as lemma.
         simpl in lemma. simpl. rewrite lemma. reflexivity. }
       rewrite Hassert.
-      (* Checkpoint begin *)
-      intros. unfold generate_state.
+      intros. unfold generate_state. 
       pose (map_nth get_buffers p (0,0,[],0,0,[]) name) as lemma.
       simpl in lemma. rewrite lemma.
       assert (blens = (map (@length nat)
         (get_buffers (nth name p (0, 0, [], 0, 0, []))))).
-      
-      (* Checkpoint end *)
-      pose (blens_state_correspondance n b p name bnum pnum blens HWP) as lemma.
-      rewrite HD in lemma. simpl in lemma. apply lemma. reflexivity.
+      SSSCase "Proof of assertion".
+      { unfold wfinv_of_P in H6.
+        pose (in_map_iff wfinv_of_C p n) as lemma'.
+        destruct lemma'. rewrite HD in H9.
+        apply H9 in H6. destruct H6. destruct H6 as [HH1 HH2].
+        destruct x as [[[[[k1 k2] k3] k4] k5] k6].
+        inversion HH1.
+        clear HI; clear HPP; clear H0; clear H1; clear H2.
+        assert ((get_buffers (nth name p (0, 0, [], 0, 0, []))) = k3) as Hassert'.
+        SSSSCase "Proof of assertion".
+        { admit.
+        }
+        rewrite Hassert'. reflexivity.
+      }
+      rewrite H9.
+      pose (@map_nth buffer nat (@length nat) (get_buffers (nth name p (0, 0, [], 0, 0, [])))
+        [] b) as lemma'.
+      simpl in lemma'. rewrite <- lemma'.
+      reflexivity.
     } 
     rewrite <- (getblens_is_lengthbuffer).
     apply andb_true in H8. destruct H8.
