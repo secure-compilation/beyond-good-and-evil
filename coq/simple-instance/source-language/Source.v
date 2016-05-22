@@ -330,6 +330,14 @@ Definition procedure_defined (C:component_id)
   else
     false.
 
+Definition procedure_defined_interfaces (C:component_id) 
+  (P:procedure_id) (Is:program_interfaces) : bool :=
+  let exp := get_export (nth C Is (0,0,[])) in
+  if (andb (ble_nat P exp) (negb (beq_nat P exp))) then
+    true
+  else
+    false.
+
 Definition buffer_defined (C:component_id) 
   (b:buffer_id) (s:state) : bool :=
   let l := (length (nth C s [])) in
@@ -795,6 +803,8 @@ Inductive wellformed_interface (Is : program_interfaces) :
       let exp := (get_export (nth C Is (0, 0, []))) in 
        In P (generate_intlist 0 exp)) ->
     (forall C P, In (C,P) (get_import i) ->
+      procedure_defined_interfaces C P Is = true
+        /\ 
       component_defined C interface Is = true) ->
     INTERFACE Is |- i wellformed 
   where "'INTERFACE' Is |- i 'wellformed'" := (wellformed_interface Is i).
@@ -805,7 +815,8 @@ Inductive wellformed_interfaces : program_interfaces -> Prop :=
   | WF_interfaces : forall Is,
     (forall i, (In i Is) -> wellformed_interface Is i) ->
     (forall i1 i2, (In i1 Is /\ In i2 Is) -> get_name i1 <> get_name i2) ->
-    (exists i', (In i' Is) /\ (get_name i' = main_cid /\ (0 <> (get_export i')))) ->
+    (exists i', (In i' Is) /\ (get_name i' = main_cid /\ (0 <> (get_export i')))
+      /\ procedure_defined_interfaces main_cid 0 Is = true) ->
     INTERFACES |- Is wellformed 
   where "'INTERFACES' |- Is 'wellformed'" := (wellformed_interfaces Is).
 
@@ -860,8 +871,10 @@ Inductive wellformed_expr_alt (i:interface) (n:component_invariant) :
     wellformed_expr_alt i n (EStore b e1 e2)
   | WF_expr_alt_ECall : forall C P e,
     (let l := (get_pnumN n) in
+     let l' := (get_export i) in
     let proc_defined_in := andb (ble_nat P l) (negb (beq_nat P l)) = true in
-    (C = (get_name i) /\ proc_defined_in) \/
+    let proc_defined_in' := andb (ble_nat P l') (negb (beq_nat P l')) = true in
+    (C = (get_name i) /\ proc_defined_in /\ proc_defined_in') \/
     let proc_defined_out := In (C,P) (get_import i) in
      (C <> (get_name i) /\ proc_defined_out)) ->
     wellformed_expr_alt i n e ->
@@ -871,12 +884,13 @@ Inductive wellformed_expr_alt (i:interface) (n:component_invariant) :
 
 Inductive wellformed_component_alt (Is:program_interfaces) : component -> Prop :=
   | WF_component_alt : forall k,
+    (component_defined (get_nameC k) interface Is = true) ->
     (forall P, 
       let i := (nth (get_nameC k) Is (0,0,[])) in
       let n := wfinv_of_C k in
-      (component_defined (get_nameC k) interface Is = true) /\
-      (procedure_defined (get_nameC k) P procedure (get_procs k) = true ->
-       (wellformed_expr_alt i n (nth P (get_procs k) EExit)))) ->
+      ((procedure_defined_interfaces (get_nameC k) P Is = true)
+        ->
+      (wellformed_expr_alt i n (nth P (get_procs k) EExit)))) ->
     (ble_nat (get_exportC k) (get_pnum k) = true) -> 
     (ble_nat 1 (get_bnum k) = true /\ ble_nat 1 (length (nth 0 (get_buffers k) [])) = true) ->    
     wellformed_component_alt Is k.
@@ -959,8 +973,10 @@ Inductive wellformed_flatevalcon_alt (i:interface)
     wellformed_flatevalcon_alt i n (CStoreHole b v)
   | WF_flatevalcon_alt_CCallHole : forall C P,
     (let l := (get_pnumN n) in
+     let l' := (get_export i) in
     let proc_defined_in := andb (ble_nat P l) (negb (beq_nat P l)) = true in
-    (C = (get_name i) /\ proc_defined_in) \/
+    let proc_defined_in' := andb (ble_nat P l') (negb (beq_nat P l')) = true in
+    (C = (get_name i) /\ proc_defined_in /\ proc_defined_in') \/
     let proc_defined_out := In (C,P) (get_import i) in
      (C <> (get_name i) /\ proc_defined_out)) ->
     wellformed_flatevalcon_alt i n (CCallHole C P).
@@ -1043,8 +1059,8 @@ Proof.
   intros C P HWP H. inversion HWP.
   inversion H1. specialize (H3 C (nth C P (0, 0, [], 0, 0, []))).
   destruct H3. destruct H3. destruct H5.
-  apply H. destruct H5.
-  apply H8 in H. apply H.
+  apply H. destruct H5. destruct H9.
+  apply H9 in H. apply H.
 Qed.
 
 Lemma interface_component_id_correspondance :
@@ -1430,22 +1446,24 @@ Proof.
     assert (In x (interfaceof_P p) /\ get_name x = main_cid) as Hassert.
     split. apply H2. apply H6.
     apply lemma in Hassert. destruct Hassert. destruct H8.
-    specialize (H4 x0 H8).
-    inversion H4. specialize (H10 0).
-    destruct H10. rewrite H9 in H10.
-    apply H10.
+    specialize (H4 main_cid x0). destruct H4. destruct H10.
+    apply H4 in H8. inversion H8. specialize (H13 0).
+    rewrite H9 in H12.
+    apply H12.
   }
   Case "Continuations wellformed".
   { constructor. }
   Case "Expr".
   { destruct H2; destruct H2; destruct H6.
     rewrite program_invariant_correspondance.
-    specialize (H4 (nth main_cid p (0,0,[],0,0,[]))).
+    specialize (H4 main_cid (nth main_cid p (0,0,[],0,0,[]))).
     pose (correct_program_contains_main) as lemma.
+    destruct H4. destruct H8.
     apply H4 in lemma. inversion lemma.
-    specialize (H8 0). simpl in H8.
+    specialize (H11 0). simpl in H11.
     pose (interface_component_index_correspondance_eq x p main_cid HWP) as lemma'.
-    rewrite lemma' in H8. apply H8.
+    rewrite lemma' in H11. apply H11.
+    apply H7.
     split.
     SCase "Left".
     { apply H2. }
@@ -1453,7 +1471,7 @@ Proof.
     { apply H6. }
     apply HWP. apply HWP.
   }
-Qed.
+Admitted.
 
 Definition partial_progress : Prop :=
   forall P, wellformed_whole_program P ->
@@ -1652,7 +1670,7 @@ Proof.
   Case "Call In".
   { destruct H6.
     pose (interface_index_correspondance_eq P HWP n) as lemma.
-    rewrite lemma in H6. rewrite H6. apply Hdef.
+    rewrite lemma in H6. rewrite H6. apply Hdef. apply Hdef.
   }
   Case "Call Out".
   { destruct H6. inversion HWP. inversion H9.
@@ -1675,7 +1693,7 @@ Proof.
   unfold ep. inversion HWP. inversion H0.
   destruct H6; destruct H6; destruct H8.
   inversion H2.
-  specialize (H10 (nth C' P (0,0,[],0,0,[]))).
+  specialize (H10 C' (nth C' P (0,0,[],0,0,[]))).
   assert (In (nth C' P (0, 0, [], 0, 0, [])) P) as Hassert.
   Case "Proof of assertion".
   { rewrite <- DK in HK. inversion HK.
@@ -1684,6 +1702,7 @@ Proof.
     { pose (interface_index_correspondance_eq P HWP n) as lemma.
       rewrite lemma in H17. rewrite H17.
       pose (@nth_In interface n (interfaceof_P P) (0, 0, [])) as lemma'.
+      assert (Hdef' := Hdef).
       unfold component_defined in Hdef. apply andb_true in Hdef.
       destruct Hdef as [Hdef1 Hdef2].
       apply blenat_implies_leq in Hdef1.
@@ -1695,10 +1714,10 @@ Proof.
             (interfaceof_P P) /\
           get_name (nth n (interfaceof_P P) (0, 0, [])) = n) as Hassert.
       SSCase "Proof of assertion".
-      { split. apply Hdef1. apply lemma'''. }
+      { split. apply Hdef1. apply lemma'''. apply Hdef'. }
       apply lemma'' in Hassert.
       apply (component_index_correspondance_in n P HWP).
-      apply Hassert.
+      apply Hassert. apply Hdef.
     }
     SCase "Call out".
     { assert (In (interfaceof_C (nth C P (0,0,[],0,0,[]))) (interfaceof_P P)) as Hassert.
@@ -1715,9 +1734,10 @@ Proof.
       destruct H17. specialize (H21 C' P').
       rewrite <- DC in H23.
       rewrite <- map_interface_correspondance in H23.
+      assert (H23' := H23).
       apply H21 in H23.
-      unfold component_defined in H23.
-      apply andb_true in H23. destruct H23 as [Hdef2 Hdef2'].
+      unfold component_defined in H23. destruct H23.
+      apply andb_true in H24. destruct H24 as [Hdef2 Hdef2'].
       pose (@nth_In interface C' (interfaceof_P P) (0, 0, [])) as lemma.
       apply blenat_implies_leq in Hdef2.
       apply lemma in Hdef2. rewrite <- map_interface_correspondance in Hdef2.
@@ -1729,17 +1749,17 @@ Proof.
           get_name (nth C' (interfaceof_P P) (0, 0, [])) = C') as Hassert'.
       SSCase "Proof of assertion".
       { split. rewrite <- map_interface_correspondance.
-        apply Hdef2. apply lemma'''. 
+        apply Hdef2. apply lemma'''. apply H21. apply H23'. 
       }
       apply lemma'' in Hassert'.
       apply (component_index_correspondance_in C' P HWP).
       apply Hassert'.
     }
   }
-  assert (Hassert2 := Hassert).
+  assert (Hassert2 := Hassert). destruct H10.
   apply H10 in Hassert.
   inversion Hassert.
-  simpl in H12. specialize (H12 P').
+  simpl in H12. specialize (H14 P').
   rewrite program_invariant_correspondance.
   assert ((get_nameC (nth C' P (0, 0, [], 0, 0, []))) = C') as Hassert'.
   Case "Proof of assertion".
@@ -1753,7 +1773,44 @@ Proof.
     pose (map_nth get_procs P (0, 0, [], 0, 0, []) C') as lemma.
     simpl in lemma. symmetry in lemma. apply lemma.
   }
-  rewrite <- Hassert''. apply H12. apply HWP.
+  rewrite <- Hassert''. simpl in H14.
+  rewrite Hassert' in H14. apply H14.
+  inversion H0.
+  specialize (H18 (nth C (interfaceof_P P) (0,0,[]))).
+  rewrite <- map_interface_correspondance in H18.
+  rewrite <- DK in HK. inversion HK. inversion H24.
+  destruct H27.
+  Case "Call In".
+  { destruct H27. unfold procedure_defined_interfaces.
+    destruct H29. apply andb_true in H30. destruct H30.
+    rewrite H27. pose (interface_index_correspondance_eq P HWP n) as lemma.
+    rewrite lemma. rewrite H30. rewrite H31. simpl. reflexivity.
+    apply Hdef.
+  }
+  Case "Call Out".
+  { simpl in H27. destruct H27. rewrite <- DC in H29.
+    assert (In (interfaceof_C (nth C P (0, 0, [], 0, 0, [])))
+        (interfaceof_P P)).
+    SCase "Proof of assertion".
+    { rewrite <- DC in Hdef.
+      pose (interface_index_correspondance_eq P HWP C) as lemma.
+      apply lemma in Hdef. inversion H2. unfold interfaceof_P in Hdef.
+      pose (map_nth interfaceof_C P (0, 0, [], 0, 0, []) C) as lemma'.
+      simpl in lemma'. rewrite lemma' in Hdef.
+      rewrite <- interfacename_is_componentname in Hdef.
+      specialize (H30 C (nth C P (0, 0, [], 0, 0, []))).
+      destruct H30. destruct H32. destruct H33.
+      apply H34 in Hdef.
+      pose (in_map interfaceof_C P (nth C P (0, 0, [], 0, 0, []))) as lemma''.
+      apply lemma'' in Hdef. unfold interfaceof_P. apply Hdef.
+    }
+    apply H18 in H30. inversion H30.
+    specialize (H33 C' P'). unfold interfaceof_P in H29.
+    pose (map_nth interfaceof_C P (0, 0, [], 0, 0, []) C) as lemma.
+    simpl in lemma. rewrite lemma in H29. apply H33 in H29.
+    destruct H29. apply H29.
+  }
+  apply HWP.
   (* State with update *)
   intros.
   rewrite <- WFD in HCFG.
