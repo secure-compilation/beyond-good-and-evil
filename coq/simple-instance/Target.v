@@ -76,9 +76,14 @@ Definition fetch_mem (C:component_id) (mem:global_memory)
   (a:address) : nat := 
   nth C (nth a (mem) []) 0.
 
+Definition code : Type :=
+  list instr.
+
 Definition decode (n:nat) : option instr := admit.
 
 Definition encode (i:instr) : nat := admit.
+
+Definition encode_code (c:code) : list nat := admit.
 
 Theorem decode_encode :
   forall (i:instr), decode (encode i) = Some i.
@@ -89,9 +94,6 @@ Inductive protected_call : Type :=
 
 Definition protected_callstack : Type := 
   list protected_call.
-
-Definition code : Type :=
-  list instr.
 
 Definition component_memory : Type :=
   (code * protected_callstack * buffer).

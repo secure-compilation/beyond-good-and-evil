@@ -222,3 +222,45 @@ Definition compile_proc (k:component) (P:procedure_id) : code :=
 Notation "'COMPILE_PROC' ( k , P )↓ " := 
   (compile_proc k P) (at level 0).
 
+
+(* _____________________________________ 
+          COMPONENT COMPILATION
+   _____________________________________ *)
+
+Definition component_allocated_memory : nat := 1000.
+
+Definition compile_component (k:component) : Target.program :=
+  let Is := [interfaceof_C k] in
+  let mem := 
+    (concat (get_buffers k)) ++
+    (concat (map encode_code 
+      (map (compile_proc k) (generate_intlist 0 (get_pnum k))))) ++
+    [STACKBASE k] ++
+    (map (fun x => 0) (seq 0 component_allocated_memory)) in
+  let E := [map (EXTERNALENTRY k) 
+    (generate_intlist 0 (get_pnum k))] in
+  (Is, mem, E).
+
+
+(* _____________________________________ 
+        PARTIAL PROGRAM COMPILATION
+   _____________________________________ *)
+
+(* Definition fusion_3tuple () () :
+
+Definition compile_partial_program (P:program) : Target.program :=
+  let Is := map compile_component  in
+  let mem := in
+  let E := in  
+  (Is, mem, E).
+
+φ↓ ::= (ψ₁ ⊎ ... ⊎ ψₙ, mem₁ ⊎ ... ⊎ memₙ, E₁ ⊎ ... ⊎ Eₙ)
+  where φ = {κ₁, ..., κₙ}
+        (ψᵢ, memᵢ, Eᵢ) = κᵢ↓*)
+
+
+
+
+
+
+
