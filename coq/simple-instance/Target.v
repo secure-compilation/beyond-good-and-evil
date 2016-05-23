@@ -69,7 +69,7 @@ Definition LLeval_binop (e : LLbinop * nat * nat) : nat :=
   | (Leq, a, b) => if ble_nat a b then 1 else 0 
   end.
 
-Definition memory : Type := list address.
+Definition memory : Type := list nat.
 Definition global_memory : Type := list memory.
 
 Definition fetch_mem (C:component_id) (mem:global_memory) 
@@ -97,7 +97,7 @@ Definition component_memory : Type :=
   (code * protected_callstack * buffer).
 
 Definition program : Type :=
-  (program_interfaces * global_memory * entry_points).
+  (program_interfaces * memory * entry_points).
 
 (* _____________________________________ 
                 SEMANTICS
