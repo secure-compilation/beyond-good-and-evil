@@ -810,6 +810,12 @@ reg[r] = 0
 
 Note: this semantics can be used to reduce *partial* programs.
 
+** Initial reduction state of a program
+
+I(ψ, mem, E) :=
+  (main,[],mem,reg₀,E[main][0])
+  where reg₀ is a register file with all registers set to 0
+
 *** Lemma (Determinism)
 ∀ ψ E ρ ρ₁ ρ₂.
   ψ; E ⊢ ρ → ρ₁  ∧  ψ; E ⊢ ρ → ρ₂ ⇒
@@ -1018,7 +1024,7 @@ lint — internal call entry point
 
  lext: Const 1 → rₐᵤₓ₂;
        RESTOREENV(κ);
-       Bnz rₒₙₑ lmain;
+       Bnz rₒₙₑ lmain;   – always branches
  lint: Const 0 → rₐᵤₓ₂;
        PUSH(rᵣₐ);
 lmain: STOREARG(κ ← r_com, rₐᵤₓ₁);     – store call argument in memory
@@ -1124,10 +1130,10 @@ lend: Nop
          ∃ cfg'. Δ ⊢ cfg → cfg'
 
 (ψ,mem,E) terminates ≜
-  ∃ ρ. ψ; E ⊢ I(mem,E[main][0]) → ρ  ∧  ψ; E ⊢ ρ ↛
+  ∃ ρ. ψ; E ⊢ I(ψ,mem,E) → ρ  ∧  ψ; E ⊢ ρ ↛
 
 (ψ,mem,E) diverges ≜
-  ∀ ρ. ψ; E ⊢ I(mem,E[main][0]) →* ρ ⇒
+  ∀ ρ. ψ; E ⊢ I(ψ,mem,E) →* ρ ⇒
        ∃ ρ'. ψ; E ⊢ ρ → ρ'
 
 *** Assumption (Whole programs compiler correctness)
@@ -1149,7 +1155,7 @@ lend: Nop
 ∀ s A P. A well formed ∧ A fully defined ∧ A ⊢ s ⇒
          P well formed ∧ P fully defined ∧ P ⊢ₙ s ⇒
   (A[P])↓ ~L A↓[P↓]
-
+  
 * Proofs using trace semantics
 
 ** Labeled reduction for partial programs
