@@ -1,6 +1,6 @@
 -R . SimpleInstance
 
 SfLib.v
-source-language/Source.v
-target-language/Target.v
-compiler/Compiler.v
+Source.v
+Target.v
+Compiler.v
