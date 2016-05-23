@@ -229,7 +229,7 @@ Notation "'COMPILE_PROC' ( k , P )↓ " :=
 
 Definition component_allocated_memory : nat := 1000.
 
-Definition compile_component (k:component) : Target.program :=
+Definition compile_component (k:Source.component) : Target.program :=
   let Is := [interfaceof_C k] in
   let mem := 
     (concat (get_buffers k)) ++
@@ -246,17 +246,20 @@ Definition compile_component (k:component) : Target.program :=
         PARTIAL PROGRAM COMPILATION
    _____________________________________ *)
 
-(* Definition fusion_3tuple () () :
+Definition fusion_compiled_program
+  (ck1:Target.program) (ck2:Target.program) : Target.program :=
+  match ck1 with
+  | (Is1, mem1, E1) =>
+    match ck2 with
+    | (Is2, mem2, E2) =>
+      (Is1++Is2, mem1++mem2, E1++E2)
+    end
+  end.
 
-Definition compile_partial_program (P:program) : Target.program :=
-  let Is := map compile_component  in
-  let mem := in
-  let E := in  
-  (Is, mem, E).
-
-φ↓ ::= (ψ₁ ⊎ ... ⊎ ψₙ, mem₁ ⊎ ... ⊎ memₙ, E₁ ⊎ ... ⊎ Eₙ)
-  where φ = {κ₁, ..., κₙ}
-        (ψᵢ, memᵢ, Eᵢ) = κᵢ↓*)
+Definition compile_partial_program (P:Source.program) : 
+  Target.program :=
+  let compiled_components := map compile_component P in
+  fold_right fusion_compiled_program ([],[],[]) compiled_components.
 
 
 
