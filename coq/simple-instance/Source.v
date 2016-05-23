@@ -466,6 +466,15 @@ Inductive small_step (D: context) : cfg -> cfg -> Prop :=
 
 Notation "D ⊢ e '⇒*' e'" := (multi (small_step D) e e') (at level 40).
 
+(* ------- Definitions : small-step irreducibility ------- *)
+
+Reserved Notation "D ⊢ cfg '↛'" (at level 40).
+Inductive cfg_irreducible (D:context) : cfg -> Prop :=
+  | S_Irreducible : forall cfg cfg',
+    ~(D ⊢ cfg ⇒ cfg') ->
+    D ⊢ cfg ↛
+  where "D ⊢ cfg '↛'" := (cfg_irreducible D cfg).
+
 (* ---- Undefined behaviors ---- *)
 
 Inductive undefined_cfg : context -> cfg -> Prop :=
