@@ -262,8 +262,34 @@ Definition compile_partial_program (P:Source.program) :
   fold_right fusion_compiled_program ([],[],[]) compiled_components.
 
 
+(* _____________________________________ 
+               PROPERTIES
+   _____________________________________ *)
 
+Definition program_terminates (P:Source.program) : Prop :=
+  let D := procbodies P in
+  exists cfg, D ⊢ (initial_cfg_of P) ⇒ cfg
+    /\
+  D ⊢ cfg ↛.
 
+Definition program_diverges (P:Source.program) : Prop :=
+  let D := procbodies P in
+  forall cfg, (D ⊢ (initial_cfg_of P) ⇒* cfg) ->
+    exists cfg', D ⊢ cfg ⇒ cfg'.
 
+(*Definition cprogram_terminates (P:Target.program) : Prop :=
+  match P with
+  | (Is, mem, E) =>
+    exists cfg, Is;;E ⊢ ??? ⇒ cfg
+      /\
+    Is;;E ⊢ cfg ↛ 
+  end.
+
+Definition cprogram_diverges (P:Target.program) : Prop :=
+  match P with
+  | (Is, mem, E) =>
+    forall cfg, (Is;;E ⊢ ??? ⇒* cfg) ->
+    exists cfg', Is;;E ⊢ cfg ⇒ cfg'
+  end.*)
 
 
