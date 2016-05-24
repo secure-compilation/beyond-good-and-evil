@@ -19,6 +19,8 @@ Definition fetch_entry_points
   : entry_point :=
   nth P (nth C E []) 0.
 
+(* ------- Begin Definitions : Registers ------- *)
+
 Definition register : Type := nat.
 
 Definition nb_regs : nat := 7.
@@ -38,6 +40,10 @@ Definition r_sp : register :=
   6.
 
 Definition registers : Type := list register.
+Definition g_regs : registers :=
+  map (fun x => 0) (seq 0 nb_regs).
+
+(* ------- End Definitions : Registers ------- *)
 
 Inductive LLbinop : Set :=
   | Add :  LLbinop
@@ -99,7 +105,7 @@ Definition component_memory : Type :=
   (code * protected_callstack * buffer).
 
 Definition program : Type :=
-  (program_interfaces * memory * entry_points).
+  (program_interfaces * global_memory * entry_points).
 
 (* _____________________________________ 
                 SEMANTICS
@@ -112,6 +118,14 @@ Definition state : Type :=
    registers * 
    address).
 
+(* ------- Definitions : Special reduction state ------- *)
+Definition LL_initial_cfg_of (P:program) : state :=
+  match P with
+  | (Is, mem, E) =>
+    (main_cid, [], mem, g_regs, (nth 0 (nth main_cid E []) 0))
+  end.
+
+(* ------- Definitions : useful functions ------- *)
 Definition fetch_reg (a:address) (reg:registers) : register :=
   nth a reg 0.
 
@@ -143,6 +157,7 @@ Definition boolean_call_exists (Is:program_interfaces)
     &&
   (existsb (fun x => (fst x =? C) && (snd x =? P)) import).
 
+(* ------- Definitions : operational semantics ------- *)
 Reserved Notation "Is ;; E |- s '⇒' s'" (at level 40).
 Inductive step (Is:program_interfaces) (E:entry_points) : 
   state -> state -> Prop :=

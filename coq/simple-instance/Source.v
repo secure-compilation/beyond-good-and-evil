@@ -84,6 +84,7 @@ Definition get_procs (k:component) : list procedure :=
   end.
 
 Definition program : Type := list component.
+Definition partial_program : Type := list (option component).
 
 Definition proc_bodies (p:program) :=
   map get_procs p. 

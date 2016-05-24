@@ -232,11 +232,11 @@ Definition component_allocated_memory : nat := 1000.
 Definition compile_component (k:Source.component) : Target.program :=
   let Is := [interfaceof_C k] in
   let mem := 
-    (concat (get_buffers k)) ++
+    [(concat (get_buffers k)) ++
     (concat (map encode_code 
       (map (compile_proc k) (generate_intlist 0 (get_pnum k))))) ++
     [STACKBASE k] ++
-    (map (fun x => 0) (seq 0 component_allocated_memory)) in
+    (map (fun x => 0) (seq 0 component_allocated_memory))] in
   let E := [map (EXTERNALENTRY k) 
     (generate_intlist 0 (get_pnum k))] in
   (Is, mem, E).
