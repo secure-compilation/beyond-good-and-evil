@@ -118,13 +118,6 @@ Definition state : Type :=
    registers * 
    address).
 
-(* ------- Definitions : Special reduction state ------- *)
-Definition LL_initial_cfg_of (P:program) : state :=
-  match P with
-  | (Is, mem, E) =>
-    (main_cid, [], mem, g_regs, (nth 0 (nth main_cid E []) 0))
-  end.
-
 (* ------- Definitions : useful functions ------- *)
 Definition fetch_reg (a:address) (reg:registers) : register :=
   nth a reg 0.
@@ -239,6 +232,26 @@ Inductive step (Is:program_interfaces) (E:entry_points) :
     (fetch_reg r reg = 0) ->
     Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+1)
   where "Is ;; E |- s '⇒' s'" := (step Is E s s').
+
+(* ------- Definitions : Multi-step reduction ------- *)
+Definition LV_multi_step 
+  (Is:program_interfaces) (E:entry_points)
+  (e e':state) := 
+    (multi (step Is E) e e').
+
+(* ------- Definitions : Irreducibility ------- *)
+Inductive state_irreducible 
+  (Is:program_interfaces) (E:entry_points) : state -> Prop :=
+  | S_Irreducible : forall cfg cfg',
+    ~(step Is E cfg cfg') ->
+    state_irreducible Is E cfg.
+
+(* ------- Definitions : Special reduction state ------- *)
+Definition LL_initial_cfg_of (P:program) : state :=
+  match P with
+  | (Is, mem, E) =>
+    (main_cid, [], mem, g_regs, (nth 0 (nth main_cid E []) 0))
+  end.
 
 Inductive stuck_state : program_interfaces -> state -> Prop :=
   (* S_DecodingError *)

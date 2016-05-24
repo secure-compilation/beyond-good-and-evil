@@ -277,19 +277,19 @@ Definition program_diverges (P:Source.program) : Prop :=
   forall cfg, (D ⊢ (initial_cfg_of P) ⇒* cfg) ->
     exists cfg', D ⊢ cfg ⇒ cfg'.
 
-(*Definition cprogram_terminates (P:Target.program) : Prop :=
+Definition cprogram_terminates (P:Target.program) : Prop :=
   match P with
   | (Is, mem, E) =>
-    exists cfg, Is;;E ⊢ ??? ⇒ cfg
+    exists cfg, (step Is E (LL_initial_cfg_of P) cfg)
       /\
-    Is;;E ⊢ cfg ↛ 
+    (state_irreducible Is E cfg) 
   end.
 
 Definition cprogram_diverges (P:Target.program) : Prop :=
   match P with
   | (Is, mem, E) =>
-    forall cfg, (Is;;E ⊢ ??? ⇒* cfg) ->
-    exists cfg', Is;;E ⊢ cfg ⇒ cfg'
-  end.*)
+    forall cfg, (LV_multi_step Is E (LL_initial_cfg_of P) cfg) ->
+    exists cfg', (step Is E cfg cfg')
+  end.
 
 
