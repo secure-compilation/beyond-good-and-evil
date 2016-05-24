@@ -1297,7 +1297,7 @@ when calling or returning to the context (which is not in E), but then
 other rules will apply (6 and 7).
 
 Top(PΣ) = σ         PΣ' = SetTop(PΣ, σ')
-ψ; E ⊢• (C,σ,mem,reg,pc) → (C',σ',mem',reg',pc')
+ψ; E ⊢ (C,σ,mem,reg,pc) → (C',σ',mem',reg',pc')
 ————————————————————————————————————————————————— T_CallRetTau+
                  action(C,σ,mem,reg,pc)
 ψ; E ⊢• (C,PΣ,mem,reg,pc) → (C',PΣ',mem',reg',pc')
@@ -1697,12 +1697,12 @@ variant of t.
 
 *** Internal trace recovery
 
-                       t
-∀ ψ E t θ θ'. ψ; E ⊢ θ ⇒ θ'   ⇒
+                        t
+∀ ψ E t θ θ'. ψ; E ⊢• θ ⇒ θ'   ⇒
   ∃ (T=α₁...αₙ) (θ₀...θₙ₊₁).
     θ₀ = θ ∧ θₙ₊₁ = θ' ∧ erase(T) = t ∧
-                   αᵢ
-    ∀i.  ψ; E ⊢ θᵢ → θᵢ₊₁
+                    αᵢ
+    ∀i.  ψ; E ⊢• θᵢ → θᵢ₊₁
 
 
 Proof: We can repeatedly apply inversion to directly get the result.
@@ -1710,15 +1710,15 @@ Proof: We can repeatedly apply inversion to directly get the result.
 Note: Alternative point of view.
 
 Consider the alternate trace semantics
-           T
-  ψ; E ⊢ θ ⇒ θ'
+            T
+  ψ; E ⊢• θ ⇒ θ'
 where the rules are copied except rule T_Internal which we replace with:
 
-         Iα
-ψ; E ⊢ θ → θ'
-————————————— T_Internal'
-         Iα
-ψ; E ⊢ θ ⇒ θ'
+          Iα
+ψ; E ⊢• θ → θ'
+—————————————— T_Internal'
+          Iα
+ψ; E ⊢• θ ⇒ θ'
 
 There is a direct mapping between proofs of
            t
@@ -2590,29 +2590,27 @@ Qed.
 
 *** Definability lemma (trace mapping)
 
-∀ s t γ₀. t = ζ(t) ⇒
-         (∃ p. p well formed ∧ p ⊢ₙ s ∧
-               t.γ₀! ∈ Traces(p)) ⇒
-  ∃A. A well formed ∧ A fully defined ∧ A ⊢ s ∧
-      (1) t⁻¹ ∈ Traces(A↓) ∧
-      (2) γ₀ ≠ ✓ ⇒ (t.γ₀!.✓?)⁻¹ ∈ Traces(A↓) ∧
-      (3) (∀ γ γ'. (t.γ!.γ'?)⁻¹ ∈ Traces(A↓) ⇒
-            ζ(γ) = ζ(γ₀) ∧ γ' = ✓)
+∀ s t γ₁. t = ζ∘(t) ⇒
+         (∃ p. p ∈• s ∧ t.γ₁! ∈ Traces_∘s(p)) ⇒
+  ∃A. A ∈∘ s ∧ A fully defined wrt. programs of shape •s ∧
+      (1) t ∈ Traces_•s(A↓) ∧
+      (2) γ₁ ≠ ✓ ⇒ (t.γ₁!.✓?) ∈ Traces_•s(A↓) ∧
+      (3) (∀ γ γ'. (t.γ!.γ'?) ∈ Traces_•s(A↓) ⇒
+            ζ(γ) = ζ(γ₁) ∧ γ' = ✓)
 
 Proof intuition:
-  From p ⊢ₙ s we can deduce that s = (ψ,dom(ψ)∖dom(Eₚ)).
-  From the fact that t.γ₀! ∈ Traces(p) we can apply internal trace
+  From the fact that t.γ₁! ∈ Traces(p) we can apply internal trace
   recovery to trace t to get a trace with internal actions T such that
-    t = erase(T) ∧ T=ζ(T).
+    t = erase(T) ∧ T=ζ∘(T).
 
   We have written an algorithm in OCaml that constructs A.
   Its correctness would deserve its own proof and we later give some
   intuition about it. Here, we assume it:
-    A well formed ∧ A fully defined ∧ A ⊢ s ∧
-      (1) erase(T⁻¹) = t⁻¹ ∈ Traces(A↓) ∧
-      (2) γ₀ ≠ ✓ ⇒ (t.γ₀!.✓?)⁻¹ ∈ Traces(A↓) ∧
-      (3) (∀ γ γ'. t.γ!.γ'? ∈ Traces(A↓) ⇒
-            ζ(γ) = ζ(γ₀) ∧ γ' = ✓)
+    A ∈∘ s ∧ A fully defined wrt. programs of shape •s ∧
+      (1) t ∈ Traces_•s(A↓) ∧
+      (2) γ₁ ≠ ✓ ⇒ (t.γ₁!.✓?) ∈ Traces_•s(A↓) ∧
+      (3) (∀ γ γ'. (t.γ!.γ'?) ∈ Traces_•s(A↓) ⇒
+            ζ(γ) = ζ(γ₁) ∧ γ' = ✓)
 
 Implementation of the algorithm: <tracemapping.ml>
 
@@ -2621,13 +2619,13 @@ Intuition about algorithm correctness:
   different action each time a context procedure is called.
   The counter increments by one upon each call to a procedure in the
   component. Based upon the value of the counter, we can produce the
-  series of action that is prescribed by T⁻¹.
+  series of context actions that is prescribed by T.
   This corresponds to function
     reproduce_trace : state → trace → state
   where state is the type that is used to progressively reconstruct
   code for all procedures.
 
-  A key point is that T⁻¹ is a legitimate sequence of actions with
+  A key point is that context actions in T is a legitimate sequence of actions with
   respect to interface ψ since it's extracted from a proof that
     t ∈ Traces(p).
   This allows us to define A such that
@@ -2645,17 +2643,17 @@ Intuition about algorithm correctness:
   to action to take after control returns to the pending function that
   is on top of the call stack.
   This allows us to only terminate if the next program action
-  canonicalizes to γ₀ (provided that γ₀ gives back control,
-  i.e. γ₀ ≠  ✓): we choose the next program action to be termination
-  if the program takes a step that canonicalizes to γ₀, or divergence
+  canonicalizes to γ₁ (provided that γ₁ gives back control,
+  i.e. γ₁ ≠  ✓): we choose the next program action to be termination
+  if the program takes a step that canonicalizes to γ₁, or divergence
   otherwise. The latter is done by calling a private procedure that
   unconditionally calls itself recursively.
   This corresponds to function
     discriminate_action : state → external_action → state.
   Formally, this translates to:
-      (2) γ₀ ≠ ✓ ⇒ (t.γ₀!.✓?)⁻¹ ∈ Traces(A↓) ∧
+      (2) γ₁ ≠ ✓ ⇒ (t.γ₁!.✓?)⁻¹ ∈ Traces(A↓) ∧
       (3) (∀ γ γ'. t.γ!.γ'? ∈ Traces(A↓) ⇒
-            ζ(γ) = ζ(γ₀) ∧ γ' = ✓).
+            ζ(γ) = ζ(γ₁) ∧ γ' = ✓).
 
 ** Theorems
 *** 1st Theorem (the boring direction of structured full abstraction)
