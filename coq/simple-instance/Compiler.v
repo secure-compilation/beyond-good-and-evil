@@ -302,14 +302,20 @@ Theorem compiler_correct_terminates :
     ((cprogram_terminates (compile_partial_program P)) 
       <->
     (program_terminates P)).
+Proof.
+  intros. destruct H as [HWP Hdef].
+  split.
+  Case "Left".
+  { intro Hterminates. unfold program_terminates. 
+Admitted.
 
 Theorem compiler_correct_diverges :
   forall P, (wellformed_whole_program P /\ program_defined P) ->
     ((cprogram_diverges (compile_partial_program P)) 
       <->
     (program_diverges P)).
-
-
+Proof.
+Admitted.
 
 
 
