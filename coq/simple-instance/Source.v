@@ -1045,6 +1045,17 @@ Inductive wellformed_cfg (Is:program_interfaces)
     wellformed_cfg Is G (C, s, d, K, e)
   where "'CFG' Is G |- c 'wellformed'" := (wellformed_state Is G c).
 
+(* ------- Definitions : definedness of programs ------- *)
+
+Inductive program_undefined (P:program) : Prop :=
+  | P_Undef : 
+    wellformed_whole_program P ->
+    (procbodies P) ⊢ (initial_cfg_of P) ↛ ->
+    program_undefined P.
+
+Definition program_defined (P:program) : Prop :=
+  ~(program_undefined P).     
+
 (* _____________________________________ 
         PROOF : PARTIAL TYPE SAFETY
    _____________________________________ *)

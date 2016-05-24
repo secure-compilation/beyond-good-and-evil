@@ -293,3 +293,28 @@ Definition cprogram_diverges (P:Target.program) : Prop :=
   end.
 
 
+(* _____________________________________ 
+          PROOF : CORRECTNESS
+   _____________________________________ *)
+
+Theorem compiler_correct_terminates :
+  forall P, (wellformed_whole_program P /\ program_defined P) ->
+    ((cprogram_terminates (compile_partial_program P)) 
+      <->
+    (program_terminates P)).
+
+Theorem compiler_correct_diverges :
+  forall P, (wellformed_whole_program P /\ program_defined P) ->
+    ((cprogram_diverges (compile_partial_program P)) 
+      <->
+    (program_diverges P)).
+
+
+
+
+
+
+
+
+
+
