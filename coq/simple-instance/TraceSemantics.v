@@ -97,7 +97,7 @@ Definition SetTop_ASIGMA (AE:A_SIGMA) (Ao:A_sigma) : A_SIGMA :=
    _____________________________________ *)
 
 Inductive reduction (Is:program_interfaces) (E:entry_points) : 
-  program_state -> program_state -> action -> Prop :=
+  program_state -> program_state -> trace -> Prop :=
   | T_CallRetTauPlus :
     forall C C' d d' mem mem' reg reg' pc pc' o o' PE PE',
     let action := fun cfg =>
@@ -113,7 +113,7 @@ Inductive reduction (Is:program_interfaces) (E:entry_points) :
     Top_PSIGMA = o -> PE' = SetTop_PSIGMA PE o' ->
     step Is E (C,d,mem,reg,pc) (C',d',mem',reg',pc') ->
     reduction Is E (C,PE,mem,reg,pc) (C',PE',mem',reg',pc')
-    (action (C,d,mem,reg,pc)). 
+    [(action (C,d,mem,reg,pc))]. 
 
 
 
