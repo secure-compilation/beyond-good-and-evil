@@ -655,23 +655,6 @@ Definition: A well-formed program φ is undefined if I(φ) gets stuck.
 
 Definition: A well-formed program φ is defined if it is not undefined.
 
-*** Fully defined partial programs
-
-Intuition:
-A partial program (set of components) is fully defined if there
-exists no well-formed and complete program featuring that component
-that gets stuck while executing one of the components in the set.
-
-Definition (fully defined partial program): A partial program φ* is
-fully defined if there exists no partial program φ so that φ ∪ φ* is a
-well-formed program and I(φ ∪ φ*) →* cfg, cfg is a stuck state
-(i.e. cfg not final and cfg does not step), and the current component
-in cfg is in comps(φ*).
-
-If we choose φ*={κ} (i.e. a partial program with a single component κ)
-we obtain a notion of fully defined component.
-
-
 * Target: an abstract machine with interacting components
 
 Starting point: RISC register machine from Oakland 2015
@@ -909,6 +892,63 @@ dom(E) = dom(mem) = comps(ψₐ) = comps(ψ)∖{C₀,...,Cₙ}
 
 (ψₐ, memₐ, Eₐ)[(ψₚ, memₚ, Eₚ)] ::=
   (ψₐ ⊎ ψₚ, memₐ ⊎ memₚ, Eₐ ⊎ Eₚ)
+
+
+** Full definedness
+
+*** Definition: P fully defined wrt. contexts of shape ∘s
+
+A partial program P ∈• s is fully defined wrt. contexts of shape ∘s if
+there exists no context A ∈∘ s so that I(A[P]) →* cfg, cfg is a stuck
+state (i.e. cfg not final and cfg does not step), and the current
+component in cfg is in comps(P).
+
+*** Definition: A fully defined wrt. programs of shape •s
+
+A context A ∈∘ s is fully defined wrt. programs of shape •s if there
+exists no program P ∈• s so that I(A[P]) →* cfg, cfg is a stuck state
+(i.e. cfg not final and cfg does not step), and the current component
+in cfg is in comps(A).
+
+*** Sanity checks
+
+We want to make sure that the following intuitive properties are
+satisfied:
+
+ (1) ∀ P ∈• s,
+       P fully defined wrt. contexts of shape ∘s
+         ⇔
+       (∀ A ∈∘ s,
+          A fully defined wrt. programs of shape •s ⇒
+           A[P] defined)
+
+ (2) ∀ A ∈∘ s,
+       A fully defined wrt. programs of shape •s
+         ⇔
+       (∀ P ∈• s,
+          P fully defined wrt. contexts of shape ∘s ⇒
+            A[P] defined)
+
+**** Left to right arrows (same for (1) and (2))
+
+∀ P ∈• s, ∀ A ∈∘ s,
+   A fully defined wrt. contexts of shape •s ⇒
+   P fully defined wrt. contexts of shape ∘s ⇒
+   A[P] defined
+
+Proof:
+
+Let P A. Assume A[P] is undefined, i.e. I(A[P]) →* cfg where cfg is a
+stuck state. The current component in cfg must be in either A or P;
+however, by full definedness, neither case is possible. Contradiction.
+
+**** (1), Right to left arrow
+
+∀ P ∈• s,
+  (∀ A ∈∘ s,
+      A fully defined wrt. programs of shape •s ⇒
+        A[P] defined) ⇒
+  P fully defined wrt contexts of shape ∘s
 
 * Compiler
 
