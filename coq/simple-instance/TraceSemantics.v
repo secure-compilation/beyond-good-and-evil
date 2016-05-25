@@ -9,9 +9,9 @@ Inductive origin : Type :=
   | ProgramOrigin : origin.
 
 Inductive external_action : Type :=
-  | ExtCall : component_id -> procedure_id -> register -> 
+  | ExtCall : component_id -> procedure_id -> registers -> 
     external_action
-  | ExtRet : register -> external_action
+  | ExtRet : registers -> external_action
   | End : external_action.
 
 Inductive internal_action : Type :=
@@ -42,7 +42,7 @@ Definition dual (t:trace) :=
    _____________________________________ *)
 
 Definition sigma :=
-  call_stack.
+  list (component_id * nat).
 
 Definition A_sigma :=
   list (component_id).
@@ -70,8 +70,8 @@ Definition context_state : Type :=
    global_memory).
 
 Inductive state_partial_view : Type :=
-  | ProgramControl : Target.state -> state_partial_view
-  | ContextControl : Target.state -> state_partial_view
+  | ProgramControl : program_state -> state_partial_view
+  | ContextControl : context_state -> state_partial_view
   | EXITED.
 
 (* ------- Definitions : Extra notations ------- *)
@@ -94,8 +94,8 @@ Definition SetTop {A B : Type} (E:alt_list A B) (new:A)
                 REDUCTIONS
    _____________________________________ *)
 
-Inductive reduction_intprogram (Is:program_interfaces) (E:entry_points) : 
-  program_state -> program_state -> trace -> Prop :=
+Inductive reduction (Is:program_interfaces) (E:entry_points) : 
+  state_partial_view -> state_partial_view -> trace -> Prop :=
   | T_CallRetTauPlus :
     forall C C' d d' mem mem' reg reg' pc pc' o o' PE PE',
     let action := fun cfg =>
@@ -110,39 +110,73 @@ Inductive reduction_intprogram (Is:program_interfaces) (E:entry_points) :
     in 
     (Top PE = o) -> (PE' = SetTop PE o') ->
     step Is E (C,d,mem,reg,pc) (C',d',mem',reg',pc') ->
-    reduction_intprogram Is E (C,PE,mem,reg,pc) (C',PE',mem',reg',pc')
-      [action (C,d,mem,reg,pc)].
-
-Inductive reduction_intcontext (Is:program_interfaces) (E:entry_points) :
-  context_state -> context_state -> trace -> Prop :=
+    reduction Is E 
+      (ProgramControl (C,PE,mem,reg,pc)) 
+      (ProgramControl (C',PE',mem',reg',pc'))
+      [action (C,d,mem,reg,pc)]
   | T_TauMinus : forall C AE mem,
-    reduction_intcontext Is E (C, AE, mem) (C, AE, mem) 
+    reduction Is E 
+      (ContextControl (C, AE, mem)) 
+      (ContextControl (C, AE, mem)) 
       [Int IntTau ContextOrigin]
-  | T_CallMinus : forall C C' P' AE AE' Ao mem, 
+  | T_CallMinus : forall C C' P' AE AE' Ao mem,
+    (component_defined C interface Is = true) ->
     In (C', P') (get_import (nth C Is (0,0,[]))) \/ (C' = C) ->
-    (In C' (dom_entry_points E)) -> (Top AE = Ao) ->
+    ~(In C' (dom_entry_points E)) -> (Top AE = Ao) ->
     (AE' = SetTop AE (C::Ao)) ->
-    reduction_intcontext Is E (C, AE, mem) (C', AE',mem) 
+    reduction Is E 
+      (ContextControl (C, AE, mem))
+      (ContextControl (C', AE',mem)) 
       [Int (IntCall C' P') ContextOrigin]
   | T_RetMinus : forall C C' AE AE' o mem,
     (C'::o = Top AE) -> (AE' = SetTop AE o) ->
-    reduction_intcontext Is E (C, AE, mem) (C', AE', mem)
-      [Int IntRet ContextOrigin].
-
-(*Inductive reduction_context2program (Is:program_interfaces)
-  (E:entry_points) : context_state -> program_state -> trace -> Prop :=
-  | T_CallCtx : forall C C' P' AE AE' Ao r reg mem,
+    reduction Is E
+      (ContextControl (C, AE, mem))
+      (ContextControl (C', AE', mem))
+      [Int IntRet ContextOrigin]
+  | T_CallCtx : forall C C' P' AE AE' Ao reg mem,
+    (component_defined C interface Is = true) ->
     In (C',P') (get_import (nth C Is (0,0,[]))) ->
     (In C' (dom_entry_points E)) -> (Top AE = Ao) ->
     (AE' = SetTop AE (C::Ao)) ->
-    reduction_context2program Is E (C,AE,mem)
-    (C',(alt_cons sigma A_sigma [] AE'),
-      mem,reg,fetch_entry_points C' P' E)
-        [Ext (ExtCall C' P' r) ContextOrigin]
+    reduction Is E 
+    (ContextControl (C,AE,mem))
+    (ProgramControl (C',(alt_cons sigma A_sigma [] AE'),
+      mem,reg,fetch_entry_points C' P' E))
+        [Ext (ExtCall C' P' reg) ContextOrigin]
   | T_RetCtx : forall C C' pc o PE PE' reg mem,
     (Top PE = (C',pc)::o) -> (PE' = SetTop PE o) ->
-    reduction_context2program Is E 
-      (C, (alt_cons A_sigma sigma [] PE), mem) (C',PE',mem,reg,pc)
-        [Ext (ExtRet reg) ContextOrigin]   
-.
-*)
+    reduction Is E 
+    (ContextControl (C, (alt_cons A_sigma sigma [] PE), mem))
+    (ProgramControl (C',PE',mem,reg,pc))
+      [Ext (ExtRet reg) ContextOrigin]
+  | T_CallPrg : forall C C' P' o PE PE' mem reg pc i,
+    (fetch_mem C mem pc = i) -> (decode i = Some (Call C' P')) ->
+    (component_defined C interface Is = true) ->
+    (In (C',P') (get_import (nth C Is (0,0,[])))) ->
+    ~(In C' (dom_entry_points E)) -> (Top PE = o) ->
+    (PE' = SetTop PE ((C,pc+1)::o)) ->
+    reduction Is E
+    (ProgramControl (C,PE,mem,reg,pc))
+    (ContextControl (C',(alt_cons A_sigma sigma [] PE'),mem))
+      [Ext (ExtCall C' P' reg) ProgramOrigin]
+  | T_RetPrg : forall C C' Ao AE AE' i pc mem reg,
+    (fetch_mem C mem pc = i) -> (decode i = Some Return) ->
+    (Top AE = C'::Ao) -> (AE' = SetTop AE Ao) ->
+    reduction Is E 
+    (ProgramControl (C,(alt_cons sigma A_sigma [] AE),mem,reg,pc))
+    (ContextControl (C',AE',mem))
+      [Ext (ExtRet reg) ProgramOrigin]
+  | T_ExitCtx : forall C AE mem,
+    reduction Is E
+    (ContextControl (C,AE,mem)) EXITED [Ext End ContextOrigin]
+  | T_ExitPrg : forall theta C PE mem reg pc,
+    (forall alpha, (alpha <> (Ext End ProgramOrigin) ->
+      reduction Is E (ProgramControl(C,PE,mem,reg,pc)) theta [alpha])) ->
+    reduction Is E
+    (ProgramControl (C,PE,mem,reg,pc)) EXITED [Ext End ProgramOrigin].
+
+
+
+
+
