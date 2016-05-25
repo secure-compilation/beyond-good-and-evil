@@ -16,8 +16,7 @@ Inductive external_action : Type :=
 
 Inductive internal_action : Type :=
   | IntTau : internal_action
-  | IntCall : component_id -> procedure_id ->
-    internal_action
+  | IntCall : component_id -> procedure_id -> internal_action
   | IntRet : internal_action.
 
 Inductive action : Type :=
@@ -42,17 +41,15 @@ Definition dual (t:trace) :=
                   STATES
    _____________________________________ *)
 
-Inductive slash : Type := Slash.
-
 Definition sigma :=
   call_stack.
 
 Definition A_sigma :=
-  list (component_id * slash).
+  list (component_id).
 
-Inductive alt_list (a b: Type): Type :=
-  | init : a -> alt_list a b
-  | cons : a -> alt_list b a -> alt_list a b.
+Inductive alt_list (A B : Type) : Type :=
+  | alt_init : A -> alt_list A B
+  | alt_cons : A -> alt_list B A -> alt_list A B.
 
 Definition A_SIGMA : Type :=
   alt_list A_sigma sigma.
@@ -69,7 +66,7 @@ Definition program_state : Type :=
 
 Definition context_state : Type :=
   (component_id *
-   P_SIGMA *
+   A_SIGMA *
    global_memory).
 
 Inductive state_partial_view : Type :=
@@ -79,24 +76,25 @@ Inductive state_partial_view : Type :=
 
 (* ------- Definitions : Extra notations ------- *)
 
-Definition Top_PSIGMA (PE:P_SIGMA) : sigma :=
-  admit.
+Definition Top {A B : Type} (E:alt_list A B) : A :=
+  match E with
+  | alt_init _ _ h => h 
+  | alt_cons _ _ h t => h
+  end.
 
-Definition Top_ASIGMA (AE:A_SIGMA) : sigma :=
-  admit.
-
-Definition SetTop_PSIGMA (PE:P_SIGMA) (o:sigma) : P_SIGMA :=
-  admit.
-
-Definition SetTop_ASIGMA (AE:A_SIGMA) (Ao:A_sigma) : A_SIGMA :=
-  admit.
+Definition SetTop {A B : Type} (E:alt_list A B) (new:A)
+  : alt_list A B :=
+  match E with
+  | alt_init _ _ h => alt_init A B new
+  | alt_cons _ _ h t => alt_cons A B new t 
+  end.
 
 
 (* _____________________________________ 
                 REDUCTIONS
    _____________________________________ *)
 
-Inductive reduction (Is:program_interfaces) (E:entry_points) : 
+Inductive reduction_intprogram (Is:program_interfaces) (E:entry_points) : 
   program_state -> program_state -> trace -> Prop :=
   | T_CallRetTauPlus :
     forall C C' d d' mem mem' reg reg' pc pc' o o' PE PE',
@@ -110,10 +108,41 @@ Inductive reduction (Is:program_interfaces) (E:entry_points) :
         end
       end
     in 
-    Top_PSIGMA = o -> PE' = SetTop_PSIGMA PE o' ->
+    (Top PE = o) -> (PE' = SetTop PE o') ->
     step Is E (C,d,mem,reg,pc) (C',d',mem',reg',pc') ->
-    reduction Is E (C,PE,mem,reg,pc) (C',PE',mem',reg',pc')
-    [(action (C,d,mem,reg,pc))]. 
+    reduction_intprogram Is E (C,PE,mem,reg,pc) (C',PE',mem',reg',pc')
+      [action (C,d,mem,reg,pc)].
 
+Inductive reduction_intcontext (Is:program_interfaces) (E:entry_points) :
+  context_state -> context_state -> trace -> Prop :=
+  | T_TauMinus : forall C AE mem,
+    reduction_intcontext Is E (C, AE, mem) (C, AE, mem) 
+      [Int IntTau ContextOrigin]
+  | T_CallMinus : forall C C' P' AE AE' Ao mem, 
+    In (C', P') (get_import (nth C Is (0,0,[]))) \/ (C' = C) ->
+    (In C' (dom_entry_points E)) -> (Top AE = Ao) ->
+    (AE' = SetTop AE (C::Ao)) ->
+    reduction_intcontext Is E (C, AE, mem) (C', AE',mem) 
+      [Int (IntCall C' P') ContextOrigin]
+  | T_RetMinus : forall C C' AE AE' o mem,
+    (C'::o = Top AE) -> (AE' = SetTop AE o) ->
+    reduction_intcontext Is E (C, AE, mem) (C', AE', mem)
+      [Int IntRet ContextOrigin].
 
-
+(*Inductive reduction_context2program (Is:program_interfaces)
+  (E:entry_points) : context_state -> program_state -> trace -> Prop :=
+  | T_CallCtx : forall C C' P' AE AE' Ao r reg mem,
+    In (C',P') (get_import (nth C Is (0,0,[]))) ->
+    (In C' (dom_entry_points E)) -> (Top AE = Ao) ->
+    (AE' = SetTop AE (C::Ao)) ->
+    reduction_context2program Is E (C,AE,mem)
+    (C',(alt_cons sigma A_sigma [] AE'),
+      mem,reg,fetch_entry_points C' P' E)
+        [Ext (ExtCall C' P' r) ContextOrigin]
+  | T_RetCtx : forall C C' pc o PE PE' reg mem,
+    (Top PE = (C',pc)::o) -> (PE' = SetTop PE o) ->
+    reduction_context2program Is E 
+      (C, (alt_cons A_sigma sigma [] PE), mem) (C',PE',mem,reg,pc)
+        [Ext (ExtRet reg) ContextOrigin]   
+.
+*)
