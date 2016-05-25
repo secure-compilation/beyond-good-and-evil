@@ -58,15 +58,25 @@ Definition STACKBASE (k:component) : address :=
     compiled_length k (nth (pred (get_pnum k)) (get_procs k) EExit) in
   (EXTERNALENTRY k (pred (get_pnum k))) + length_expr + 1.
 
+
 (* _____________________________________ 
                 MACROS
    _____________________________________ *)
 
-Definition list_regs : registers :=
-  generate_intlist 0 nb_regs.
+Fixpoint update_code
+  (i:nat) (i':instr) (l:code) : code :=
+  match l with
+  | [] => [] 
+  | h::t => match i with
+            | 0 => i'::t
+            | S n => h :: (update_code n i' t)
+            end
+  end.
 
 Definition CLEARREG : code :=
-  map (fun r => Const 0 r) list_regs.
+  let r_com_val := nth r_com g_regs 0 in
+  let zeros := map (fun r => Const 0 r) (seq 0 nb_regs) in
+  update_code r_com (Const r_com_val r_com) zeros.
 
 Definition STOREENV (k:component) (r:register) :=
   [Const (pred (STACKBASE k)) r;

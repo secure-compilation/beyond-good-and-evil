@@ -126,6 +126,11 @@ Definition update_reg (a:address) (i:nat)
   (reg:registers) : registers :=
   update_value a i reg.
 
+Definition clear_regs (reg:registers) : registers :=
+  let r_com_val := nth r_com reg 0 in
+  let zeros := map (fun x => 0) reg in
+  update_reg r_com r_com_val zeros.
+
 Fixpoint update_mem (C:component_id) (mem:global_memory)
   (a:address) (new:nat) : global_memory :=
   match mem with

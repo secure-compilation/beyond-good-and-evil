@@ -25,15 +25,6 @@ Inductive action : Type :=
 
 Definition trace : Type := list action.
 
-Definition is_internal (a:action) : bool :=
-  match a with
-  | Ext _ _ => false
-  | Int _ _ => true
-  end.
-
-Definition is_external (a:action) : bool :=
-  negb (is_internal a).
-
 
 (* _____________________________________ 
                   STATES
@@ -228,15 +219,13 @@ Inductive reduction_multi (Is:program_interfaces) (E:entry_points) :
   | T_Refl : forall o o', 
     reduction_multi Is E o o' []
   (* T_Internal *)
-  | T_Internal : forall o o' Ia,
-    is_internal Ia = true ->
-    reduction Is E o o' Ia ->
+  | T_Internal : forall o o' Ia origin,
+    reduction Is E o o' (Int Ia origin) ->
     reduction_multi Is E o o' []
   (* T_Cross *)
-  | T_Cross : forall o o' Ea,
-    is_external Ea = true ->
-    reduction Is E o o' Ea ->
-    reduction_multi Is E o o' [Ea]
+  | T_Cross : forall o o' Ea origin,
+    reduction Is E o o' (Ext Ea origin) ->
+    reduction_multi Is E o o' [Ext Ea origin]
   (* T_Trans *)
   | T_Trans : forall o o' o'' t u,
     reduction Is E o o' t ->
@@ -254,20 +243,30 @@ Inductive reduction_duality (Is:program_interfaces) (E:entry_points) :
     reduction_multi Is E o o' (dual_trace t) ->
     reduction_duality Is E o o' t.
 
- 
+
+(* _____________________________________ 
+       TRACES WITH INTERNAL ACTIONS
+   _____________________________________ *)
+
+Fixpoint erase (t:trace) : trace :=
+  match t with
+  | [] => []
+  | (Int _ _)::t => erase t
+  | (Ext Ea origin)::t =>
+    (Ext Ea origin) :: (erase t)
+  end.
 
 
+(* _____________________________________ 
+         TRACE CANONICALIZATION
+   _____________________________________ *)
 
-
-
-
-
-
-
-
-
-
-
+Fixpoint Zeta_ExtAction (Ea:external_action) : external_action :=
+  match Ea with
+  | ExtCall C P reg => ExtCall C P (clear_regs reg)
+  | ExtRet reg => ExtRet (clear_regs reg) 
+  | End => End
+  end.
 
 
 
