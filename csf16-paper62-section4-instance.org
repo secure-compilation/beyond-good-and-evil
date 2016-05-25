@@ -2655,6 +2655,149 @@ Intuition about algorithm correctness:
       (3) (∀ γ γ'. t.γ!.γ'? ∈ Traces(A↓) ⇒
             ζ(γ) = ζ(γ₁) ∧ γ' = ✓).
 
+*** Decomposing definability
+
+**** High-level traces: T
+
+Words over alphabet Hα.
+
+Hα ::=          action and origin
+  | HEα           external action and origin
+  | HIα           internal action and origin
+
+HEα ::=         external action and origin
+  | Hea !         external action performed by the program
+  | Hea ?         external action performed by the context
+
+Hea, Γ ::=         cross-boundary action
+  | C.P(i)     cross-boundary call
+  | Ret i      cross-boundary return
+  | ✓          termination
+
+Note: undefined behavior and infinite loops lead to the same sets of
+traces here. We only consider high-level traces of fully defined
+programs anyway in this subsection. Could track undefined behavior in
+traces if necessary (could be useful e.g. if we want to prove the
+sanity checks on full-definedness using traces).
+
+**** Asssumption: Source-level definability
+
+∀ s T Γ₁. (∃ P. P ∈• s ∧ T.Γ₁! ∈ TR_∘s(P)) ⇒
+  ∃A. A ∈∘ s ∧ A fully defined wrt. programs of shape •s ∧
+      (1) T ∈ TR_•s(A) ∧
+      (2) Γ₁ ≠ ✓ ⇒ (T.Γ₁!.✓?) ∈ TR_•s(A) ∧
+      (3) (∀ Γ Γ'. (T.Γ!.Γ'?) ∈ TR_•s(A) ⇒ Γ = Γ₁ ∧ Γ' = ✓)
+
+Note: Could require that P is fully defined here.
+
+**** Mapping high-level traces to low-level traces: T↓
+
+(C.P(i))↓ = C.P(reg₀[r_com ↦ i])
+ (Ret i)↓ = Ret reg₀[r_com ↦ i]
+       ✓↓ = ✓
+
+**** Mapping low-level traces to high-level traces: t↑
+
+(C.P(reg))↑ = C.P(reg[r_com])
+ (Ret reg)↑ = Ret reg[r_com]
+         ✓↑ = ✓
+
+**** Relating ↑ and ↓
+
+∀ t, ((t↑)↓) = ζ•(ζ∘(t)) = ζ∘(ζ•(t))
+
+∀ T, (T↓)↑ = T
+
+**** Assumption: Compiler preserves high-level traces for fully-defined programs
+
+∀ s T P. P ∈• s ∧ P fully defined wrt. contexts of shape ∘s ⇒
+  (T↓ ∈ Tr_∘s(P↓) ⇔ T ∈ TR_∘s(P))
+
+∀ s T A. A ∈∘ s ∧ A fully defined wrt. programs of shape •s ⇒
+  (T↓ ∈ Tr_•s(A↓) ⇔ T ∈ TR_•s(A))
+
+Note: Full definedness is actively used for the left-to-right
+direction.
+
+**** Corollary: Extended trace preservation
+
+∀ s t P. t = ζ•(t) ∧ P ∈• s ∧ P fully defined wrt. contexts of shape ∘s ⇒
+  (t ∈ Tr_∘s(P↓) ⇔ t↑ ∈ TR_∘s(P))
+
+∀ s t A. t = ζ∘(t) ∧ A ∈∘ s ∧ A fully defined wrt. programs of shape •s ⇒
+  (t ∈ Tr_•s(A↓) ⇔ t↑ ∈ TR_•s(A))
+
+Proof:
+
+⇒ Let s t P.
+  Suppose that t ∈ Tr_∘s(P↓).
+  Applying "Canonicalization is invisible to fully defined players",
+  we know that
+     ζ∘(t) ∈ Tr_∘s(P↓).
+  But since t = ζ•(t) by hypothesis,
+     ζ∘(t) = ζ∘(ζ•(t)) = (t↑)↓.
+  Applying "Compiler preserves high-level traces for fully-defined
+  programs" to T = t↑, we get that
+     t↑ ∈ TR_∘s(P).
+  Qed.
+
+⇐ Let s t P.
+  Suppose that t↑ ∈ TR_∘s(P).
+  Applying "Compiler preserves high-level traces for fully-defined
+  programs" to T = t↑, we get that
+    (t↑)↓ ∈ Tr_∘s(P↓)
+  where
+    (t↑)↓ = ζ∘(ζ•(t)) = ζ∘(t),
+  hence
+    ζ∘(t) ∈ Tr_∘s(P↓).
+  From "Canonicalization is invisible to fully defined players" we get that
+    t ∈ Tr_∘s(P↓).
+  Qed.
+
+**** Theorem: Target-level definability
+
+∀ s t γ₁. t = ζ∘(t) ⇒
+         (∃ P. P ∈• s ∧ P fully defined wrt. contexts of shape ∘s ∧ t.γ₁! ∈ Tr_∘s(P↓)) ⇒
+  ∃A. A ∈∘ s ∧ A fully defined wrt. programs of shape •s ∧
+      (1) t ∈ Tr_•s(A↓) ∧
+      (2) γ₁ ≠ ✓ ⇒ (t.γ₁!.✓?) ∈ Tr_•s(A↓) ∧
+      (3) (∀ γ γ'. (t.γ!.γ'?) ∈ Tr_•s(A↓) ⇒
+            ζ(γ) = ζ(γ₁) ∧ γ' = ✓)
+
+Note: t = ζ∘(ζ•(t)) = (t↑)↓ in this case because "Compiled,
+      fully-defined players only yield canonical traces" and P is
+      fully defined.
+
+Proof:
+
+Let s t γ₁ P.
+Because
+  (t.γ₁!) ∈ Traces_∘s(P↓)
+and "Compiled, fully-defined players only yield canonical traces",
+  t.γ₁! = ζ•(t.γ₁!).
+We can thus apply extended trace preservation to (t.γ₁!) and P to get
+that
+  (t.γ₁!)↑ ∈ TR_∘s(P).
+Applying source-level definability, we get an A such that
+  A ∈∘ s ∧ A fully defined wrt. programs of shape •s ∧
+   (a) t↑ ∈ TR_•s(A) ∧
+   (b) γ₁↑ ≠ ✓ ⇒ (t↑.γ₁↑.✓?) ∈ TR_•s(A) ∧
+   (c) (∀ Γ Γ'. (T.Γ!.Γ'?) ∈ TR_•s(A) ⇒ Γ = γ₁↑ ∧ Γ' = ✓).
+
+Applying extended trace preservation to (a) immediately gives (1).
+
+Regarding (2), suppose that γ₁ ≠ ✓. In this case, γ₁↑ ≠ ✓↑. So
+applying (b) and extended trace preservation to (t.γ₁.✓?) yields the
+expected result.
+
+Let us finally consider (3).
+Let γ γ' such that (t.γ!.γ'?) ∈ Tr_•s(A↓).
+Hence, from extended trace preservation, (t.γ!.γ'?)↑ ∈ TR_•s(A).
+Applying (c), we get that
+  γ↑ = γ₁↑ ∧ γ'↑ = ✓,
+hence
+  ζ(γ) = ζ(γ₁) ∧ γ' = ✓.
+
 ** Theorems
 *** 1st Theorem (the boring direction of structured full abstraction)
 
