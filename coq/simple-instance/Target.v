@@ -151,39 +151,39 @@ Definition boolean_call_exists (Is:program_interfaces)
   (existsb (fun x => (fst x =? C) && (snd x =? P)) import).
 
 (* ------- Definitions : operational semantics ------- *)
-Reserved Notation "Is ;; E |- s '⇒' s'" (at level 40).
+Reserved Notation "'LOW_LEVEL' Is ; E |- s '⇒' s'" (at level 40).
 Inductive step (Is:program_interfaces) (E:entry_points) : 
   state -> state -> Prop :=
   (* S_Nop *)
   | S_Nop : forall mem C pc i d reg, 
     (fetch_mem C mem pc = i) -> 
     (decode i = Some Nop) -> 
-    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+1)
+    LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+1)
   (* S_Const *)
   | S_Const : forall mem C pc i r i' d reg reg',
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Const i' r)) ->
     (update_reg r i' reg = reg') ->
-    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
+    LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
   (* S_Mov *)
   | S_Mov : forall mem C pc i r1 r2 reg reg' d,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Mov r1 r2)) ->
     (update_reg r2 (fetch_reg r1 reg) reg = reg') ->
-    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
+    LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
   (* S_BinOp *)
   | S_BinOp : forall mem C pc i r1 r2 r3 reg reg' d op,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (BinOp op r1 r2 r3)) ->
     (update_reg r3 (LLeval_binop (op, (fetch_reg r1 reg), (fetch_reg r2 reg))) reg = reg') ->
-    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
+    LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
   (* S_Load *)
   | S_Load : forall mem C pc i r1 r2 reg reg' d i1,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Load r1 r2)) ->
     (fetch_reg r1 reg = i1) ->
     (update_reg r2 (fetch_mem C mem i1) reg = reg') ->
-    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
+    LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
   (* S_Store *)
   | S_Store : forall mem C pc i r1 r2 reg d i1 i2 mem',
     (fetch_mem C mem pc = i) ->
@@ -191,14 +191,14 @@ Inductive step (Is:program_interfaces) (E:entry_points) :
     (fetch_reg r1 reg = i1) ->
     (fetch_reg r2 reg = i2) ->
     (update_mem C mem i1 i2 = mem') ->
-    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem',reg,pc+1)
+    LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem',reg,pc+1)
   (* S_Jal *)
   | S_Jal : forall mem C pc i i' r reg reg' d,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Jal r)) ->
     (fetch_reg r reg = i') ->
     (update_reg r_ra (pc+1) reg = reg') ->
-    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',i')
+    LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',i')
   (* S_Call *)
   | S_Call : forall mem C pc i reg d d' C' P',
     (fetch_mem C mem pc = i) ->
@@ -206,32 +206,32 @@ Inductive step (Is:program_interfaces) (E:entry_points) :
     (decode i = Some (Call C' P')) ->
     (In (C',P') (get_import (nth C Is (0,0,[]))) \/ C' = C) ->
     (d' = (PCall C (pc+1))::d) ->
-    Is;;E |- (C,d,mem,reg,pc) ⇒ (C',d',mem,reg,fetch_entry_points C' P' E)
+    LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C',d',mem,reg,fetch_entry_points C' P' E)
   (* S_Jump *)
   | S_Jump : forall mem C pc i i' r reg d,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Jump r)) ->
     (fetch_reg r reg = i') ->
-    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,i')
+    LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,i')
   (* S_Return *)
   | S_Return : forall mem C pc i i' d' reg d C',
     (fetch_mem C mem pc = i) ->
     (decode i = Some Return) ->
     (d = (PCall C' i')::d') ->
-    Is;;E |- (C,d,mem,reg,pc) ⇒ (C',d',mem,reg,i')
+    LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C',d',mem,reg,i')
   (* S_BnzNZ *)
   | S_BnzNZ : forall mem C pc i i' r reg d,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Bnz r i')) ->
     ~(fetch_reg r reg = 0) ->
-    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+i')
+    LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+i')
   (* S_BnzZ *)
   | S_BnzZ : forall mem C pc i i' r reg d,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Bnz r i')) ->
     (fetch_reg r reg = 0) ->
-    Is;;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+1)
-  where "Is ;; E |- s '⇒' s'" := (step Is E s s').
+    LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg,pc+1)
+  where "'LOW_LEVEL' Is ; E |- s '⇒' s'" := (step Is E s s').
 
 (* ------- Definitions : Multi-step reduction ------- *)
 Definition LV_multi_step 
@@ -403,13 +403,13 @@ Fixpoint eval_step (Is:program_interfaces) (E:entry_points)
 
 Lemma step_eval_1step :
   forall Is E cfg1 cfg2,
-  (Is;;E |- cfg1 ⇒ cfg2) -> eval_step Is E cfg1 1 = cfg2.
+  (LOW_LEVEL Is;E |- cfg1 ⇒ cfg2) -> eval_step Is E cfg1 1 = cfg2.
 Proof.
 Admitted.
 
 Theorem abstractmachine_determinism :
   forall Is E cfg cfg1 cfg2,
-  (Is;;E |- cfg ⇒ cfg1) /\ (Is;;E |- cfg ⇒ cfg2) ->
+  (LOW_LEVEL Is;E |- cfg ⇒ cfg1) /\ (LOW_LEVEL Is;E |- cfg ⇒ cfg2) ->
   cfg1 = cfg2.
 Proof.
   intros. destruct H as [Hcfg1 Hcfg2].
