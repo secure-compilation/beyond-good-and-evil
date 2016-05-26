@@ -915,14 +915,16 @@ in cfg is in comps(A).
 We want to make sure that the following intuitive properties are
 satisfied:
 
- (1) ∀ P ∈• s,
+ (1) ∀ s,
+     ∀ P ∈• s,
        P fully defined wrt. contexts of shape ∘s
          ⇔
        (∀ A ∈∘ s,
           A fully defined wrt. programs of shape •s ⇒
            A[P] defined)
 
- (2) ∀ A ∈∘ s,
+ (2) ∀ s,
+     ∀ A ∈∘ s,
        A fully defined wrt. programs of shape •s
          ⇔
        (∀ P ∈• s,
@@ -931,8 +933,9 @@ satisfied:
 
 **** Left to right arrows (same for (1) and (2))
 
+∀ s,
 ∀ P ∈• s, ∀ A ∈∘ s,
-   A fully defined wrt. contexts of shape •s ⇒
+   A fully defined wrt. programs of shape •s ⇒
    P fully defined wrt. contexts of shape ∘s ⇒
    A[P] defined
 
@@ -942,13 +945,57 @@ Let P A. Assume A[P] is undefined, i.e. I(A[P]) →* cfg where cfg is a
 stuck state. The current component in cfg must be in either A or P;
 however, by full definedness, neither case is possible. Contradiction.
 
-**** (1), Right to left arrow
+**** Lemma: Fully-defined opponents are enough to trigger any undefined behavior
 
+∀ s,
+∀ P ∈• s, ∀ A ∈∘ s,
+   I(A[P]) →* cfg ∧ cfg stuck ∧ current_component cfg ∈ comps(P) ⇒
+   ∃ A' cfg'.
+     A' ∈∘ s ∧ A' fully defined wrt. programs of shape •s ∧
+       I(A'[P]) →* cfg' ∧ cfg' stuck
+
+∀ s,
+∀ P ∈• s, ∀ A ∈∘ s,
+   I(A[P]) →* cfg ∧ cfg stuck ∧ current_component cfg ∈ comps(A) ⇒
+   ∃ P' cfg'.
+     P' ∈• s ∧ P' fully defined wrt. contexts of shape ∘s ∧
+       I(A[P']) →* cfg' ∧ cfg' stuck
+
+**** Right to left arrows
+
+∀ s,
 ∀ P ∈• s,
   (∀ A ∈∘ s,
       A fully defined wrt. programs of shape •s ⇒
         A[P] defined) ⇒
   P fully defined wrt contexts of shape ∘s
+
+∀ s,
+∀ A ∈∘ s,
+  (∀ P ∈• s,
+      P fully defined wrt. contexts of shape ∘s ⇒
+        A[P] defined) ⇒
+  A fully defined wrt programs of shape •s
+
+Proof of first property (second is symmetric):
+
+Let s P such that
+  (∀ A ∈∘ s,
+      A fully defined wrt. programs of shape •s ⇒
+        A[P] defined)
+and let us show that
+  P fully defined wrt contexts of shape ∘s.
+Take an arbitrary context A ∈∘ s.
+Suppose by contradiction that for some cfg,
+  I(A[P]) →* cfg ∧ cfg stuck ∧ current_component cfg ∈ comps(P).
+We can apply the previous lemma to get a context A' ∈∘ s such that
+  A' fully defined wrt. programs of shape •s ∧
+  ∃ cfg'. I(A'[P]) →* cfg' ∧ cfg' stuck,
+so,
+  A' fully defined wrt. programs of shape •s ∧
+  A'[P] undefined,
+which contradicts the assumption on P.
+Contradiction.
 
 * Compiler
 
