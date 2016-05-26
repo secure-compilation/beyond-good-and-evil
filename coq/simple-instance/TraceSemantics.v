@@ -379,6 +379,16 @@ dom(memₚ) ∩ dom(memₐ) = ∅
 mergeable (C, PΣ, memₚ, reg, pc) (C, AΣ, memₐ, /, /)
 *)
 
+Fixpoint combine {A B C: Type} (f: A -> B -> list C) (e1: alt_list A B) (e2: alt_list B A) :=
+  match e1, e2 with
+    | alt_init _ _ h1, alt_init _ _ h2 => f h1 h2
+    | alt_cons _ _ h1 t1, alt_cons _ _ h2 t2 => f h1 h2 ++ @combine B A C (swap f) t1 t2
+s    | _, _ => []
+  end.
+
+Definition merge (e1: P_SIGMA) (e2: A_SIGMA): sigma :=
+  combine (fun (s:sigma) (a_s:A_sigma) => s) e1 e2.
+
 (* _____________________________________ 
                 PROPERTIES
    _____________________________________ *)
