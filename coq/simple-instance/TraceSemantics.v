@@ -180,7 +180,8 @@ Inductive reduction (Is:program_interfaces) (E:entry_points) :
           INITIAL TRACE STATES
    _____________________________________ *)
 
-Definition initial_trace_state (P:Target.program) : state_partial_view :=
+Definition initial_trace_state (P:Target.program) : 
+  state_partial_view :=
   match P with
   | (Is, mem, E) =>
     let CS_PRG := (alt_init sigma A_sigma []) in
@@ -261,12 +262,62 @@ Fixpoint erase (t:trace) : trace :=
          TRACE CANONICALIZATION
    _____________________________________ *)
 
-Fixpoint Zeta_ExtAction (Ea:external_action) : external_action :=
+Definition zeta_gamma (Ea:external_action) : external_action :=
   match Ea with
   | ExtCall C P reg => ExtCall C P (clear_regs reg)
   | ExtRet reg => ExtRet (clear_regs reg) 
   | End => End
   end.
+
+Definition zetaC_Ea (a:action) : action :=
+  match a with
+  | Ext gamma ContextOrigin => Ext (zeta_gamma gamma) ContextOrigin
+  | _ => a
+  end.
+
+Fixpoint zetaC_t (t:trace) : trace :=
+  match t with
+  | [] => []
+  | (Ext g ContextOrigin)::t' => 
+    (zetaC_Ea (Ext g ContextOrigin))::(zetaC_t t')
+  | _ => t
+  end.
+
+Fixpoint zetaC_T (T:trace) : trace :=
+  match T with
+  | [] => []
+  | (Ext g ContextOrigin)::T' => (zetaC_Ea (Ext g ContextOrigin))::(zetaC_T T')
+  | (Int g ContextOrigin)::T' => (Int g ContextOrigin)::(zetaC_T T')
+  | _ => T
+  end.
+
+Definition zetaP_Ea (a:action) : action :=
+  match a with
+  | Ext gamma ProgramOrigin => Ext (zeta_gamma gamma) ProgramOrigin
+  | _ => a
+  end.
+
+Fixpoint zetaP_t (t:trace) : trace :=
+  match t with
+  | [] => []
+  | (Ext g ProgramOrigin)::t' => 
+    (zetaP_Ea (Ext g ProgramOrigin))::(zetaP_t t')
+  | _ => t
+  end.
+
+Fixpoint zetaP_T (T:trace) : trace :=
+  match T with
+  | [] => []
+  | (Ext g ProgramOrigin)::T' => 
+    (zetaP_Ea (Ext g ProgramOrigin))::(zetaP_T T')
+  | (Int g ProgramOrigin)::T' => 
+    (Int g ProgramOrigin)::(zetaP_T T')
+  | _ => T
+  end.
+
+
+
+
 
 
 
