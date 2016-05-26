@@ -86,6 +86,9 @@ Definition get_procs (k:component) : list procedure :=
 Definition program : Type := list component.
 Definition partial_program : Type := list (option component).
 
+Definition dom_program (P:program) : list component_id :=
+  map get_nameC P.
+
 Definition proc_bodies (p:program) :=
   map get_procs p. 
 
@@ -112,6 +115,10 @@ Definition get_export (i:interface) : nat :=
   end.
 
 Definition program_interfaces : Type := list interface.
+
+Definition dom_interfaces (Is:program_interfaces) : 
+  list component_id :=
+  map get_name Is.
 
 Fixpoint procsin (e:expr) : list proc_call :=
   match e with
@@ -749,6 +756,9 @@ Definition compsComponent (Cs:list component) :=
 Definition compsInterface (Is:program_interfaces) :=
   map get_name Is.
 
+Definition compsProgram (P:program) :=
+  map get_nameC P.
+
 (* Lower bound included, upper bound exluded *)
 Fixpoint generate_intlist (min:nat) (max:nat) : list nat :=
   match max with
@@ -807,7 +817,7 @@ Reserved Notation "'INTERFACE' Is |- i 'wellformed'" (at level 40).
 Inductive wellformed_interface (Is : program_interfaces) : 
   interface -> Prop :=
   | WF_interface : forall i,
-    let not_i := (fun i' => if (negb (beq_nat (get_name i) i')) then true else false) in
+    let not_i := (fun i' => (negb (beq_nat (get_name i) i'))) in
     incl (compsImport (get_import i)) (filter (not_i) (compsInterface Is)) ->    
     (forall C P, In (C,P) (get_import i) ->
       let exp := (get_export (nth C Is (0, 0, []))) in 
