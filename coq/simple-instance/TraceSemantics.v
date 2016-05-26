@@ -316,6 +316,74 @@ Fixpoint zetaP_T (T:trace) : trace :=
   end.
 
 
+(* _____________________________________ 
+            WELL-FORMEDNESS
+   _____________________________________ *)
+
+Inductive wellformed_o (E:entry_points) : sigma -> Prop :=
+  | WF_Nil_o :
+    wellformed_o E []
+  | WF_Cons_o : forall o o' C pc,
+    (o = (C,pc)::o') -> (In C (dom_entry_points E)) ->
+    (wellformed_o E o') -> (wellformed_o E o).
+
+Inductive wellformed_Ao (E:entry_points) : A_sigma -> Prop :=
+  | WF_Nil_Ao :
+    wellformed_Ao E []
+  | WF_Cons_Ao : forall C Ao Ao',
+    (Ao = C::Ao') -> ~(In C (dom_entry_points E)) ->
+    (wellformed_Ao E Ao') -> (wellformed_Ao E Ao).
+
+
+(* _____________________________________ 
+              STATE MERGING
+   _____________________________________ *)
+
+Inductive mergeable_Ao_o : A_sigma -> sigma -> Prop :=
+  | M_Ao_o_Nil :
+    mergeable_Ao_o [] []
+  | M_Ao_o_Cons : forall C Ao o i,
+    (mergeable_Ao_o Ao o) ->
+    mergeable_Ao_o (C::Ao) ((C,i)::o).
+
+Inductive mergeable_PE_AE : P_SIGMA -> A_SIGMA -> Prop :=
+  | M_AEPE_Init : forall Ao o,
+    mergeable_Ao_o Ao o -> mergeable_PE_AE 
+      (alt_init sigma A_sigma o) (alt_init A_sigma sigma Ao)
+  | M_AEPE_Cons : forall Ao o AE PE,
+    mergeable_Ao_o Ao o -> mergeable_PE_AE PE AE -> mergeable_PE_AE 
+    (alt_cons sigma A_sigma o AE) (alt_cons A_sigma sigma Ao PE).
+
+(* Assuming they are mergeable *)
+(*Fixpoint merge_PE_AE (PE:P_SIGMA) (AE:A_SIGMA) := 
+  match (PE, AE) with
+  | (alt_init _ _ o, _) => o
+  | (alt_cons _ _ o AE', alt_cons _ _ _ PE') =>
+    o ++ (merge_PE_AE PE' AE')
+  | _ => []
+  end.
+
+merge PΣ AΣ ≜
+  match PΣ, AΣ with
+    σ, _ → σ
+    σ::AΣ, _::PΣ → σ ++ merge PΣ AΣ
+
+Inductive mergeable_P0_A0 : program_state -> context_state -> Prop :=
+  | M_P0_A0 : forall PE AE C mem_p mem_A pc reg,
+    mergeable_PE_AE PE AE ->  ->
+    mergeable_P0_A0 (C,PE,mem_p,reg,pc) (C,AE,mem_a).
+
+mergeable PΣ AΣ
+dom(memₚ) ∩ dom(memₐ) = ∅
+——————————————————————————————————————————————————————
+mergeable (C, PΣ, memₚ, reg, pc) (C, AΣ, memₐ, /, /)
+*)
+
+(* _____________________________________ 
+                PROPERTIES
+   _____________________________________ *)
+
+
 
 
 
