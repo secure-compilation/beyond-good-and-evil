@@ -114,7 +114,7 @@ Inductive reduction (Is:program_interfaces) (E:entry_points) :
   | T_CallMinus : forall C C' P' AE AE' Ao mem,
     (component_defined C interface Is = true) ->
     In (C', P') (get_import (nth C Is (0,0,[]))) \/ (C' = C) ->
-    ~(In C' (dom_entry_points E)) -> (Top AE = Ao) ->
+    ~(In (Some C') (dom_entry_points E)) -> (Top AE = Ao) ->
     (AE' = SetTop AE (C::Ao)) ->
     reduction Is E 
       (ContextControl (C, AE, mem))
@@ -131,7 +131,7 @@ Inductive reduction (Is:program_interfaces) (E:entry_points) :
   | T_CallCtx : forall C C' P' AE AE' Ao reg mem,
     (component_defined C interface Is = true) ->
     In (C',P') (get_import (nth C Is (0,0,[]))) ->
-    (In C' (dom_entry_points E)) -> (Top AE = Ao) ->
+    (In (Some C') (dom_entry_points E)) -> (Top AE = Ao) ->
     (AE' = SetTop AE (C::Ao)) ->
     reduction Is E 
     (ContextControl (C,AE,mem))
@@ -150,7 +150,7 @@ Inductive reduction (Is:program_interfaces) (E:entry_points) :
     (fetch_mem C mem pc = i) -> (decode i = Some (Call C' P')) ->
     (component_defined C interface Is = true) ->
     (In (C',P') (get_import (nth C Is (0,0,[])))) ->
-    ~(In C' (dom_entry_points E)) -> (Top PE = o) ->
+    ~(In (Some C') (dom_entry_points E)) -> (Top PE = o) ->
     (PE' = SetTop PE ((C,pc+1)::o)) ->
     reduction Is E
     (ProgramControl (C,PE,mem,reg,pc))
@@ -186,7 +186,13 @@ Definition initial_trace_state (P:Target.program) :
   | (Is, mem, E) =>
     let CS_PRG := (alt_init sigma A_sigma []) in
     let CS_CTX := (alt_init A_sigma sigma []) in
-    if existsb (fun x => main_cid =? x) (dom_entry_points E) then
+    let f x :=
+      match x with
+      | Some x' => main_cid =? x'
+      | None => false
+      end
+    in
+    if existsb f (dom_entry_points E) then
       ProgramControl (main_cid, CS_PRG, mem, g_regs, 
         fetch_entry_points main_cid 0 E)
     else
@@ -324,14 +330,14 @@ Inductive wellformed_o (E:entry_points) : sigma -> Prop :=
   | WF_Nil_o :
     wellformed_o E []
   | WF_Cons_o : forall o o' C pc,
-    (o = (C,pc)::o') -> (In C (dom_entry_points E)) ->
+    (o = (C,pc)::o') -> (In (Some C) (dom_entry_points E)) ->
     (wellformed_o E o') -> (wellformed_o E o).
 
 Inductive wellformed_Ao (E:entry_points) : A_sigma -> Prop :=
   | WF_Nil_Ao :
     wellformed_Ao E []
   | WF_Cons_Ao : forall C Ao Ao',
-    (Ao = C::Ao') -> ~(In C (dom_entry_points E)) ->
+    (Ao = C::Ao') -> ~(In (Some C) (dom_entry_points E)) ->
     (wellformed_Ao E Ao') -> (wellformed_Ao E Ao).
 
 Inductive wellformed_PE (E:entry_points) : P_SIGMA -> Prop :=
@@ -354,7 +360,7 @@ with wellformed_AE (E:entry_points) : A_SIGMA -> Prop :=
 Inductive wellformed_P0 (E:entry_points) : 
   program_state -> Prop :=
   | WF_P0 : forall P0 PE C mem reg pc,
-    In C (dom_entry_points E) ->
+    In (Some C) (dom_entry_points E) ->
     (dom_global_memory mem = dom_entry_points E) -> 
     wellformed_PE E PE -> P0 = (C, PE, mem, reg, pc) ->
     wellformed_P0 E P0.
@@ -362,7 +368,7 @@ Inductive wellformed_P0 (E:entry_points) :
 Inductive wellformed_A0 (E:entry_points) :
   context_state -> Prop :=
   | WF_A0 : forall A0 AE C mem,
-    ~(In C (dom_entry_points E)) ->
+    ~(In (Some C) (dom_entry_points E)) ->
     (dom_global_memory mem = dom_entry_points E) ->
     wellformed_AE E AE -> A0 = (C, AE, mem) ->
     wellformed_A0 E A0.
@@ -411,12 +417,10 @@ Definition comps_compatible
   (cs1 cs2 : list (option component_id)) : bool :=
   fold_right andb true (map option_pair_match (combine cs1 cs2)).
 
-(*
-Inductive mergeable_P0_A0 : program_state -> context_state -> Prop :=
+(*Inductive mergeable_P0_A0 : program_state -> context_state -> Prop :=
   | M_P0_A0 : forall PE AE C mem_p mem_A pc reg,
     mergeable_PE_AE PE AE -> dom(memₚ) ∩ dom(memₐ) = ∅ ->
-    mergeable_P0_A0 (C,PE,mem_p,reg,pc) (C,AE,mem_a).
-*)
+    mergeable_P0_A0 (C,PE,mem_p,reg,pc) (C,AE,mem_a).*)
 
 
 (* _____________________________________ 

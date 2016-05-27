@@ -9,15 +9,31 @@ Definition address : Type := nat.
 (* For each component we have several procedures corresponding
 to an entry point address *)
 Definition entry_point : Type := address.
-Definition entry_points : Type := list (list entry_point).
+Definition entry_points : Type := 
+  list (option (list entry_point)).
 
-Definition dom_entry_points (E:entry_points) : list component_id :=
-  generate_intlist 0 (length E).    
+Definition dom_entry_points (E:entry_points) : 
+  list (option component_id) :=
+  let indices := seq 0 (length E) in
+  let combination := combine E indices in
+  let f p := 
+    match p with
+    | (val,i) =>
+      match val with
+      | Some _ => [Some i]
+      | None => [None]
+      end
+    end
+  in
+  concat (map f combination).
 
 Definition fetch_entry_points 
   (C:component_id) (P:procedure_id) (E:entry_points)
   : entry_point :=
-  nth P (nth C E []) 0.
+  match (nth C E None) with
+  | Some E' => nth P E' 0 
+  | None => 0
+  end.
 
 (* ------- Begin Definitions : Registers ------- *)
 
@@ -79,15 +95,15 @@ Definition memory : Type := list nat.
 Definition global_memory : Type := list (option memory).
 
 Definition dom_global_memory (mem:global_memory) :
-  list (component_id) :=
+  list (option component_id) :=
   let indices := seq 0 (length mem) in
   let combination := combine mem indices in
   let f p := 
     match p with
     | (val,i) =>
       match val with
-      | Some _ => [i]
-      | None => []
+      | Some _ => [Some i]
+      | None => [None]
       end
     end
   in
@@ -293,7 +309,13 @@ Inductive state_irreducible
 Definition LL_initial_cfg_of (P:program) : state :=
   match P with
   | (Is, mem, E) =>
-    (main_cid, [], mem, g_regs, (nth 0 (nth main_cid E []) 0))
+    let ep :=
+      match (nth main_cid E None) with
+      | Some E' => nth 0 E' 0
+      | None => 0
+      end    
+    in
+    (main_cid, [], mem, g_regs, ep)
   end.
 
 Inductive stuck_state : program_interfaces -> state -> Prop :=
