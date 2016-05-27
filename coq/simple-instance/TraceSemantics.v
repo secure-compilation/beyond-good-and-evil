@@ -1,4 +1,5 @@
 Require Import Target.
+Require Import Shape.
 
 (* _____________________________________ 
                   SYNTAX
@@ -249,6 +250,30 @@ Inductive reduction_duality (Is:program_interfaces) (E:entry_points) :
   | T_Dual : forall o o' t,
     reduction_multi Is E o o' (dual_trace t) ->
     reduction_duality Is E o o' t.
+
+(* _____________________________________ 
+              TRACE SETS
+   _____________________________________ *)
+
+(* Defined as a binary relation *)
+
+Definition Traces_p (t:trace) (p:program) (s:shape) : Prop :=
+  match p with
+  | (_, mem_p, E_p) =>
+    match s with
+    | (Is, _) => exists O, 
+    reduction_multi Is E_p (initial_trace_state p) O t
+    end 
+  end.
+
+Definition Traces_a (t:trace) (a:program) (s:shape) : Prop :=
+  match a with
+  | (_, mem_a, E_a) =>
+    match s with
+    | (Is, _) => exists O, 
+    reduction_multi Is E_a (initial_trace_state a) O t
+    end 
+  end.
 
 
 (* _____________________________________ 

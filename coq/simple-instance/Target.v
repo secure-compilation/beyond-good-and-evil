@@ -141,6 +141,21 @@ Definition component_memory : Type :=
 Definition program : Type :=
   (program_interfaces * global_memory * entry_points).
 
+Definition get_interfacesLLP (P:program) :=
+  match P with
+  | (Is, _, _) => Is
+  end.
+
+Definition get_memLLP (P:program) :=
+  match P with
+  | (_, mem, _) => mem
+  end.
+
+Definition get_entrypointsLLP (P:program) :=
+  match P with
+  | (_, _, E) => E
+  end.
+
 (* _____________________________________ 
                 SEMANTICS
    _____________________________________ *)
