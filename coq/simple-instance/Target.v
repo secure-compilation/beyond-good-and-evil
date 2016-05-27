@@ -76,18 +76,21 @@ Definition LLeval_binop (e : LLbinop * nat * nat) : nat :=
   end.
 
 Definition memory : Type := list nat.
-Definition global_memory : Type := list memory.
+Definition global_memory : Type := list (option memory).
 
 Definition fetch_mem (C:component_id) (mem:global_memory) 
-  (a:address) : nat := 
-  nth C (nth a (mem) []) 0.
+  (a:address) : option nat := 
+  match (nth a mem None) with
+  | Some l => Some (nth C l 0)
+  | _ => None
+  end.
 
 Definition code : Type :=
   list instr.
 
-Definition decode (n:nat) : option instr := admit.
+Definition decode (n:option nat) : option instr := admit.
 
-Definition encode (i:instr) : nat := admit.
+Definition encode (i:instr) : option nat := admit.
 
 Definition encode_code (c:code) : list nat := admit.
 
@@ -122,23 +125,43 @@ Definition state : Type :=
 Definition fetch_reg (a:address) (reg:registers) : register :=
   nth a reg 0.
 
-Definition update_reg (a:address) (i:nat)
+Fixpoint update_reg_value (a : address) (i' : option nat)
+  (reg : registers) : memory :=
+  match reg with
+  | [] => []
+  | h :: t =>
+      match a with
+      | 0 => 
+        match i' with
+        | Some v => v :: t
+        | None => 0 :: t
+        end
+      | S n => h :: update_reg_value n i' t
+      end
+  end.
+
+Definition update_reg (a:address) (i:option nat)
   (reg:registers) : registers :=
-  update_value a i reg.
+  update_reg_value a i reg.
 
 Definition clear_regs (reg:registers) : registers :=
   let r_com_val := nth r_com reg 0 in
   let zeros := map (fun x => 0) reg in
-  update_reg r_com r_com_val zeros.
+  update_reg r_com (Some r_com_val) zeros.
 
 Fixpoint update_mem (C:component_id) (mem:global_memory)
   (a:address) (new:nat) : global_memory :=
   match mem with
   | [] => []
-  | h::t => match a with
-            | 0 => (update_value a new h) :: t
-            | S a' => h::(update_mem C mem a' new)
-            end
+  | h::t => 
+    match C with
+    | 0 => 
+      match h with
+      | Some h' => Some (update_value a new h') :: t
+      | None => mem
+      end
+    | S C' => h::(update_mem C' mem a new)
+    end
   end.
 
 Definition call_exists (Is:program_interfaces)
@@ -168,19 +191,19 @@ Inductive step (Is:program_interfaces) (E:entry_points) :
   | S_Const : forall mem C pc i r i' d reg reg',
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Const i' r)) ->
-    (update_reg r i' reg = reg') ->
+    (update_reg r (Some i') reg = reg') ->
     LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
   (* S_Mov *)
   | S_Mov : forall mem C pc i r1 r2 reg reg' d,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Mov r1 r2)) ->
-    (update_reg r2 (fetch_reg r1 reg) reg = reg') ->
+    (update_reg r2 (Some (fetch_reg r1 reg)) reg = reg') ->
     LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
   (* S_BinOp *)
   | S_BinOp : forall mem C pc i r1 r2 r3 reg reg' d op,
     (fetch_mem C mem pc = i) ->
     (decode i = Some (BinOp op r1 r2 r3)) ->
-    (update_reg r3 (LLeval_binop (op, (fetch_reg r1 reg), (fetch_reg r2 reg))) reg = reg') ->
+    (update_reg r3 (Some (LLeval_binop (op, (fetch_reg r1 reg), (fetch_reg r2 reg)))) reg = reg') ->
     LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',pc+1)
   (* S_Load *)
   | S_Load : forall mem C pc i r1 r2 reg reg' d i1,
@@ -202,7 +225,7 @@ Inductive step (Is:program_interfaces) (E:entry_points) :
     (fetch_mem C mem pc = i) ->
     (decode i = Some (Jal r)) ->
     (fetch_reg r reg = i') ->
-    (update_reg r_ra (pc+1) reg = reg') ->
+    (update_reg r_ra (Some (pc+1)) reg = reg') ->
     LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C,d,mem,reg',i')
   (* S_Call *)
   | S_Call : forall mem C pc i reg d d' C' P',
@@ -314,16 +337,16 @@ Definition basic_eval_step (Is:program_interfaces) (E:entry_points)
       (C,d,mem,reg,pc+1)
     (* S_Const *)
     | Some (Const i' r) => 
-      let reg' := (update_reg r i' reg) in
+      let reg' := (update_reg r (Some i') reg) in
       (C,d,mem,reg',pc+1)
     (* S_Mov *)
     | Some (Mov r1 r2) =>
-      let reg' := (update_reg r2 (fetch_reg r1 reg) reg) in
+      let reg' := (update_reg r2 (Some (fetch_reg r1 reg)) reg) in
       (C,d,mem,reg',pc+1)
     (* S_BinOp *)
     | Some (BinOp op r1 r2 r3) =>
-      let reg' := (update_reg r3 (LLeval_binop 
-        (op, (fetch_reg r1 reg), (fetch_reg r2 reg))) reg) in
+      let reg' := (update_reg r3 (Some (LLeval_binop 
+        (op, (fetch_reg r1 reg), (fetch_reg r2 reg)))) reg) in
       (C,d,mem,reg',pc+1)
     (* S_Load *)
     | Some (Load r1 r2) =>
@@ -339,7 +362,7 @@ Definition basic_eval_step (Is:program_interfaces) (E:entry_points)
     (* S_Jal *)
     | Some (Jal r) =>
       let i' := (fetch_reg r reg) in
-      let reg' := (update_reg r_ra (pc+1) reg) in
+      let reg' := (update_reg r_ra (Some (pc+1)) reg) in
       (C,d,mem,reg',i')
     (* S_Call *)
     | Some (Call C' P') =>
