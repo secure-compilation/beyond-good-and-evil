@@ -961,6 +961,84 @@ however, by full definedness, neither case is possible. Contradiction.
      P' ∈• s ∧ P' fully defined wrt. contexts of shape ∘s ∧
        I(A[P']) →* cfg' ∧ cfg' stuck
 
+Proof of first property (second is symmetric):
+
+We defined a mapping FD(A) that takes and arbirtrary context A to a
+fully defined context and a statement "φ ⊢ cfg rewrites to cfg'" that
+satisfy the simulation diagram illustrated by the second property
+below:
+
+∀ s, ∀ A ∈∘ s,
+  FD(A) ∈∘ s ∧
+  FD(A) fully defined wrt. programs of shape •s
+
+∀ s, ∀ A ∈∘ s, ∀ P ∈• s,
+  A ⊢ I(P[A]) rewrites to I(P[FD(A)]) ∧
+  let ψ = interfaceof(P[A]) in
+  let Γ = wfinv(P[A]) in
+  let Δ = procbodies(P[A]) in
+  let Γ_FD = wfinv(P[FD(A)]) in
+  let Δ_FD = procbodies(P[FD(A)]) in
+  ∀ cfg₀ cfg₁,
+    ψ; Γ ⊢ cfg₀ well formed ⇒
+    Δ ⊢ cfg₀ → cfg'₀ ⇒
+    A ⊢ cfg₀ rewrites to cfg₁ ⇒
+      ∃ cfg'₁.
+        A ⊢ cfg'₀ rewrites to cfg'₁ ∧
+        Δ_FD ⊢ cfg₁ →* cfg'₁
+
+
+FD(φ) ::= {FD(κ) | κ ∈ φ}
+
+FD(κ) ::= κ' such that
+  κ'.name = κ'.name
+  κ'.bnum = κ.bnum + 1
+  κ'.bufs[b] = κ.bufs[b] for all b in 0 .. κ.bnum-1
+  κ'.bufs[κ.bnum] = [ 0 ]
+  κ'.pnum = κ.pnum
+  κ'.export = κ.export
+  κ'.procs[P] = FD_κ(κ.procs[P]) for all P in 0 .. κ.pnum - 1
+
+FD_κ(i) ::= i
+FD_κ(e₁ ⊗ e₂) ::= FD_κ(e₁) ⊗ FD_κ(e₂)
+FD_κ(if e then e₁ else e₂) ::= if FD_κ(e) then FD_κ(e₁) else FD_κ(e₂)
+FD_κ(b[e]) ::=
+  let b' = κ.bnum in
+  let i = κ.blens[b] in
+  b'[0] := make_fd e; if b'[0] < i then b[b'[0]] else 0
+FD_κ(b[e] := e') ::=
+  let b' = κ.bnum in
+  let i = κ.blens[b] in
+  b'[0] := make_fd e; if b'[0] < i then b[b'[0]] := e' else 0
+FD_κ(C.P(e)) ::= C.P(FD_κ(e))
+FD_κ(exit) ::= exit
+
+
+
+(C₀, s₀, σ₀, K₀, e₀) well formed
+(C₀, s₁, σ₁, K₁, e₁) well formed
+dom(s₀) = dom(s₁)         (in terms of components)
+∀ C ∈ dom(s₀)∖dom(φ),
+  s₁[C] = s₀[C]
+∀ C ∈ dom(φ),
+  length s₁[C] = 1 + length s₀[C]
+∀ C ∈ dom(φ), ∀ b in 0 .. length s₀[C] - 1,
+  s₁[C,b] = s₀[C,b]
+C₀ ∈ dom(φ) ⇒ FD_{φ[C]}(K₀) = K₁ ∧ FD_{φ[C]}(e₀) = e₁
+C₀ ∉ dom(φ) ⇒ K₀ = K₁ ∧ e₀ = e₁
+φ ⊢ σ₀ rewrites to σ₁
+———————————————–——————————————————————————–—————————————–
+φ ⊢ (C₀, s₀, σ₀, K₀, e₀) rewrites to (C₀, s₁, σ₁, K₁, e₁)
+
+————–———————————————–
+φ ⊢ [] rewrites to []
+
+R σ₀ σ₁
+C₀ ∈ dom(φ) ⇒ FD_{φ[C]}(K₀) = K₁
+C₀ ∉ dom(φ) ⇒ K₀ = K₁
+——————–———————————————————————————————————–———–—————————–
+φ ⊢ ((C₀, i₀, K₀) :: σ₀) rewrites to ((C₀, i₀, K₁) :: σ₁)
+
 **** Right to left arrows
 
 ∀ s,
