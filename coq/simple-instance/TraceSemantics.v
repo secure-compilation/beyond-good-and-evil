@@ -405,22 +405,26 @@ Fixpoint combine_alt {A B C: Type} (f: A -> B -> list C)
 Definition merge (e1: P_SIGMA) (e2: A_SIGMA): sigma :=
   combine_alt (fun (s:sigma) (a_s:A_sigma) => s) e1 e2.
 
-Definition option_pair_match
+Definition option_pair_dismatch
   (p:option component_id * option component_id) : bool :=
   match p with
-  | (None, None) => true
-  | (Some _, Some _) => true
+  | (Some _, None) => true
+  | (None, Some _) => true
   | _ => false
   end.
 
-Definition comps_compatible 
+Definition comps_are_complements 
   (cs1 cs2 : list (option component_id)) : bool :=
-  fold_right andb true (map option_pair_match (combine cs1 cs2)).
+  fold_right andb true (map option_pair_dismatch (combine cs1 cs2)).
 
-(*Inductive mergeable_P0_A0 : program_state -> context_state -> Prop :=
-  | M_P0_A0 : forall PE AE C mem_p mem_A pc reg,
-    mergeable_PE_AE PE AE -> dom(memₚ) ∩ dom(memₐ) = ∅ ->
-    mergeable_P0_A0 (C,PE,mem_p,reg,pc) (C,AE,mem_a).*)
+Inductive mergeable_P0_A0 : 
+  program_state -> context_state -> Prop :=
+  | M_P0_A0 : forall PE AE C mem_p mem_a pc reg,
+    mergeable_PE_AE PE AE -> 
+    (comps_are_complements
+      (dom_global_memory mem_p)
+      (dom_global_memory mem_a)) = true ->
+    mergeable_P0_A0 (C,PE,mem_p,reg,pc) (C,AE,mem_a).
 
 
 (* _____________________________________ 
