@@ -334,6 +334,38 @@ Inductive wellformed_Ao (E:entry_points) : A_sigma -> Prop :=
     (Ao = C::Ao') -> ~(In C (dom_entry_points E)) ->
     (wellformed_Ao E Ao') -> (wellformed_Ao E Ao).
 
+Inductive wellformed_PE (E:entry_points) : P_SIGMA -> Prop :=
+  | WF_Init_PE : forall o PE,
+    PE = alt_init sigma A_sigma o -> wellformed_PE E PE
+  | WF_Cons_PE : forall PE AE h t o,
+    PE = alt_cons sigma A_sigma o AE ->
+    Top AE = h::t ->
+    wellformed_o E o -> wellformed_AE E AE ->
+    wellformed_PE E PE
+with wellformed_AE (E:entry_points) : A_SIGMA -> Prop :=
+  | WF_Init_AE : forall AE Ao,
+    AE = alt_init A_sigma sigma Ao -> wellformed_AE E AE
+  | WF_Cons_AE : forall AE Ao h t PE,
+    AE = alt_cons A_sigma sigma Ao PE ->
+    Top PE = h::t ->
+    wellformed_Ao E Ao -> wellformed_PE E PE ->
+    wellformed_AE E AE.
+
+Inductive wellformed_P0 (E:entry_points) : 
+  program_state -> Prop :=
+  | WF_P0 : forall P0 PE C mem reg pc,
+    In C (dom_entry_points E) ->
+    (dom_global_memory mem = dom_entry_points E) -> 
+    wellformed_PE E PE -> P0 = (C, PE, mem, reg, pc) ->
+    wellformed_P0 E P0.
+
+Inductive wellformed_A0 (E:entry_points) :
+  context_state -> Prop :=
+  | WF_A0 : forall A0 AE C mem,
+    ~(In C (dom_entry_points E)) ->
+    (dom_global_memory mem = dom_entry_points E) ->
+    wellformed_AE E AE -> A0 = (C, AE, mem) ->
+    wellformed_A0 E A0.
 
 (* _____________________________________ 
               STATE MERGING

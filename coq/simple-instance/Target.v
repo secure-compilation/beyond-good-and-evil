@@ -78,6 +78,21 @@ Definition LLeval_binop (e : LLbinop * nat * nat) : nat :=
 Definition memory : Type := list nat.
 Definition global_memory : Type := list (option memory).
 
+Definition dom_global_memory (mem:global_memory) :
+  list (component_id) :=
+  let indices := seq 0 (length mem) in
+  let combination := combine mem indices in
+  let f p := 
+    match p with
+    | (val,i) =>
+      match val with
+      | Some _ => [i]
+      | None => []
+      end
+    end
+  in
+  concat (map f combination).
+
 Definition fetch_mem (C:component_id) (mem:global_memory) 
   (a:address) : option nat := 
   match (nth a mem None) with
