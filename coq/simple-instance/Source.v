@@ -86,8 +86,15 @@ Definition get_procs (k:component) : list procedure :=
 Definition program : Type := list component.
 Definition partial_program : Type := list (option component).
 
-Definition dom_program (P:program) : list component_id :=
-  map get_nameC P.
+Definition dom_partial_program (P:partial_program) : 
+  list (option component_id) :=
+  let g k := 
+    match k with
+    | Some k' => Some (get_nameC k')
+    | None => None
+    end
+  in
+  map g P.
 
 Definition proc_bodies (p:program) :=
   map get_procs p. 
@@ -119,6 +126,10 @@ Definition program_interfaces : Type := list interface.
 Definition dom_interfaces (Is:program_interfaces) : 
   list component_id :=
   map get_name Is.
+
+Definition dom2partial (comps: list component_id) :
+  list (option component_id) :=
+  map (fun x => Some x) comps.
 
 Fixpoint procsin (e:expr) : list proc_call :=
   match e with
@@ -759,6 +770,15 @@ Definition compsInterface (Is:program_interfaces) :=
 Definition compsProgram (P:program) :=
   map get_nameC P.
 
+Definition compsPartialProgram (P:partial_program) :=
+  let g k :=
+    match k with
+    | Some k' => Some (get_nameC k')
+    | None => None
+    end
+  in
+  map g P.
+
 (* Lower bound included, upper bound exluded *)
 Fixpoint generate_intlist (min:nat) (max:nat) : list nat :=
   match max with
@@ -928,6 +948,26 @@ Inductive wellformed_partial_program (Is:program_interfaces) : program -> Prop :
     ) ->
     PARTIAL_PROGRAM Is |- p wellformed
   where "'PARTIAL_PROGRAM' Is |- p 'wellformed'" := (wellformed_partial_program Is p).
+
+Definition get_nameC_partial (k:option component) :
+  option component_id :=
+  match k with
+  | Some k' => Some (get_nameC k')
+  | None => None
+  end.
+
+Inductive wellformed_partial_program_alt (Is:program_interfaces) : 
+  partial_program -> Prop :=
+  | WF_partial_program' : forall (p:partial_program),
+    (forall C K (k:component),
+      (K = Some k) -> 
+      (In K p -> wellformed_component_alt Is k) 
+        /\
+      ((In K p) /\ (get_nameC_partial K = Some C) -> (get_nameC_partial (nth C p None)) = Some C)
+        /\
+      (In (nth C p None) p <-> (get_nameC_partial (nth C p None)) = Some C)
+    ) ->
+    wellformed_partial_program_alt Is p.
 
 (* ---- Well-formedness of a whole program ---- *)
 Reserved Notation "'WHOLE_PROGRAM' |- p 'wellformed'" (at level 40).

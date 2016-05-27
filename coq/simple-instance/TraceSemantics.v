@@ -426,6 +426,13 @@ Inductive mergeable_P0_A0 :
       (dom_global_memory mem_a)) = true ->
     mergeable_P0_A0 (C,PE,mem_p,reg,pc) (C,AE,mem_a).
 
+Definition merge_P0A0 (P0:program_state) (A0:context_state) :
+  program_state :=  
+  match P0, A0 with
+  | (C, PE, mem_p, reg, pc), (_, AE, mem_a) =>
+    (C, alt_init sigma A_sigma (merge PE AE), 
+     mem_p ++ mem_a, reg, pc)
+  end.
 
 (* _____________________________________ 
                 PROPERTIES
