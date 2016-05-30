@@ -1858,7 +1858,7 @@ of registers *after* writing to them. As a consequence, any sequence
 of reductions followed under t can be followed under the canonicalized
 variant of t.
 
-** Main lemmas (changes not propagated yet)
+** Main lemmas
 
 *** Internal trace recovery
 
@@ -2845,7 +2845,7 @@ programs anyway in this subsection. Could track undefined behavior in
 traces if necessary (could be useful e.g. if we want to prove the
 sanity checks on full-definedness using traces).
 
-**** Asssumption: Source-level definability
+**** Assumption: Source-level definability
 
 ∀ s T Γ₁. (∃ P. P ∈• s ∧ T.Γ₁! ∈ TR_∘s(P)) ⇒
   ∃A. A ∈∘ s ∧ A fully defined wrt. programs of shape •s ∧
