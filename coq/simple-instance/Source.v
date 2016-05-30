@@ -872,6 +872,7 @@ Inductive wellformed_interfaces : program_interfaces -> Prop :=
     INTERFACES |- Is wellformed 
   where "'INTERFACES' |- Is 'wellformed'" := (wellformed_interfaces Is).
 
+
 (* ---- Compatibility between interfaces ---- *)
 Reserved Notation "'COMPATIBILITY' i1 ⊆ i2" (at level 40).
 Inductive compatibility_interface : interface -> interface -> Prop :=
@@ -1112,7 +1113,9 @@ Inductive wellformed_cfg (Is:program_interfaces)
 Inductive program_undefined (P:program) : Prop :=
   | P_Undef : 
     wellformed_whole_program P ->
-    (procbodies P) ⊢ (initial_cfg_of P) ↛ ->
+    forall cfg',
+    (procbodies P) ⊢ (initial_cfg_of P) ⇒* cfg' ->
+    undefined_cfg (procbodies P) cfg' ->
     program_undefined P.
 
 Definition program_defined (P:program) : Prop :=

@@ -257,7 +257,8 @@ Inductive reduction_duality (Is:program_interfaces) (E:entry_points) :
 
 (* Defined as a binary relation *)
 
-Definition Traces_p (t:trace) (p:program) (s:shape) : Prop :=
+Definition Traces_p (t:trace) (p:Target.program) (s:shape) : 
+  Prop :=
   match p with
   | (_, mem_p, E_p) =>
     match s with
@@ -266,7 +267,8 @@ Definition Traces_p (t:trace) (p:program) (s:shape) : Prop :=
     end 
   end.
 
-Definition Traces_a (t:trace) (a:program) (s:shape) : Prop :=
+Definition Traces_a (t:trace) (a:Target.program) (s:shape) : 
+  Prop :=
   match a with
   | (_, mem_a, E_a) =>
     match s with
@@ -464,9 +466,11 @@ Definition merge_P0A0 (P0:program_state) (A0:context_state) :
    _____________________________________ *)
 
 
+(* _____________________________________ 
+                  PROOFS
+   _____________________________________ *)
 
-
-
+(* ------- Definability ------- *)
 
 
 

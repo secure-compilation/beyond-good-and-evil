@@ -249,7 +249,9 @@ Definition compile_component (k:Source.component) : Target.program :=
     (map (fun x => 0) (seq 0 component_allocated_memory))] in
   let E := [map (EXTERNALENTRY k) 
     (generate_intlist 0 (get_pnum k))] in
-  (Is, mem, E).
+  (map (fun x => Some x) Is, 
+   map (fun x => Some x) mem,
+   map (fun x => Some x) E).
 
 
 (* _____________________________________ 

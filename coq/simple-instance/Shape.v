@@ -185,7 +185,7 @@ Inductive program_fully_defined : partial_program -> Prop :=
     let PC := (context_application A P) in
     (procbodies PC) ⊢ (initial_cfg_of PC) ⇒* (C,s,d,K,e) ->
     undefined_cfg (procbodies PC) (C,s,d,K,e) ->
-    In C (compsComponent PC)) ->
+    In (Some C) (compsPartialProgram P)) ->
     program_fully_defined P.
 
 Inductive context_fully_defined : partial_program -> Prop :=
@@ -195,8 +195,32 @@ Inductive context_fully_defined : partial_program -> Prop :=
     let PC := (context_application A P) in
     (procbodies PC) ⊢ (initial_cfg_of PC) ⇒* (C,s,d,K,e) ->
     undefined_cfg (procbodies PC) (C,s,d,K,e) ->
-    In C (compsComponent PC)) ->
+    In (Some C) (compsPartialProgram A)) ->
     context_fully_defined A.
+
+
+(* _____________________________________ 
+             SANITY CHECKING
+   _____________________________________ *)
+
+Example sanity_check1 :
+  forall s,
+  forall P, PROGRAM_SHAPE P ∈• s ->
+  forall A, CONTEXT_SHAPE A ∈∘ s ->
+  context_fully_defined A ->
+  program_fully_defined P ->
+  program_defined (context_application A P).
+Proof.
+  intros s P HP A HA H1 H2.
+  unfold program_defined. unfold not.
+  intro contra.
+  inversion contra.
+Admitted.
+
+
+
+
+
 
 
 

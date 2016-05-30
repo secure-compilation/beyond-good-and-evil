@@ -210,23 +210,31 @@ Fixpoint update_mem (C:component_id) (mem:global_memory)
     end
   end.
 
-Definition call_exists (Is:program_interfaces)
+Definition call_exists (Is:partial_program_interfaces)
   (C:component_id) (P:procedure_id) : Prop :=
-  let l := length Is in
-  let import := get_import (nth C Is (0,0,[])) in
-  (ble_nat C l) && negb (beq_nat C l) = true /\ (In (C,P) import).
+  match (nth C Is None) with
+  | Some i =>
+    let l := length Is in
+    let import := get_import i in
+    (ble_nat C l) && negb (beq_nat C l) = true /\ (In (C,P) import)
+  | None => False
+  end.
 
-Definition boolean_call_exists (Is:program_interfaces)
+Definition boolean_call_exists (Is:partial_program_interfaces)
   (C:component_id) (P:procedure_id) : bool :=
   let l := length Is in
-  let import := get_import (nth C Is (0,0,[])) in
-  (ble_nat C l) && negb (beq_nat C l) 
-    &&
-  (existsb (fun x => (fst x =? C) && (snd x =? P)) import).
+  match (nth C Is None) with
+  | Some i =>
+    let import := get_import i in
+    (ble_nat C l) && negb (beq_nat C l) 
+      &&
+    (existsb (fun x => (fst x =? C) && (snd x =? P)) import)
+  | None => false
+  end.
 
 (* ------- Definitions : operational semantics ------- *)
 Reserved Notation "'LOW_LEVEL' Is ; E |- s '⇒' s'" (at level 40).
-Inductive step (Is:program_interfaces) (E:entry_points) : 
+Inductive step (Is:partial_program_interfaces) (E:entry_points) : 
   state -> state -> Prop :=
   (* S_Nop *)
   | S_Nop : forall mem C pc i d reg, 
@@ -278,9 +286,13 @@ Inductive step (Is:program_interfaces) (E:entry_points) :
     (fetch_mem C mem pc = i) ->
     call_exists Is C' P' ->
     (decode i = Some (Call C' P')) ->
-    (In (C',P') (get_import (nth C Is (0,0,[]))) \/ C' = C) ->
-    (d' = (PCall C (pc+1))::d) ->
-    LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C',d',mem,reg,fetch_entry_points C' P' E)
+    match (nth C Is None) with
+    | Some i =>
+      (In (C',P') (get_import i) \/ C' = C)
+    | None => False \/ C' = C
+    end ->
+      (d' = (PCall C (pc+1))::d) ->
+      LOW_LEVEL Is;E |- (C,d,mem,reg,pc) ⇒ (C',d',mem,reg,fetch_entry_points C' P' E)
   (* S_Jump *)
   | S_Jump : forall mem C pc i i' r reg d,
     (fetch_mem C mem pc = i) ->
@@ -309,13 +321,14 @@ Inductive step (Is:program_interfaces) (E:entry_points) :
 
 (* ------- Definitions : Multi-step reduction ------- *)
 Definition LV_multi_step 
-  (Is:program_interfaces) (E:entry_points)
+  (Is:partial_program_interfaces) (E:entry_points)
   (e e':state) := 
     (multi (step Is E) e e').
 
 (* ------- Definitions : Irreducibility ------- *)
 Inductive state_irreducible 
-  (Is:program_interfaces) (E:entry_points) : state -> Prop :=
+  (Is:partial_program_interfaces) (E:entry_points) 
+  : state -> Prop :=
   | S_Irreducible : forall cfg cfg',
     ~(step Is E cfg cfg') ->
     state_irreducible Is E cfg.
@@ -333,7 +346,8 @@ Definition LL_initial_cfg_of (P:program) : state :=
     (main_cid, [], mem, g_regs, ep)
   end.
 
-Inductive stuck_state : program_interfaces -> state -> Prop :=
+Inductive stuck_state : 
+  partial_program_interfaces -> state -> Prop :=
   (* S_DecodingError *)
   | S_DecodingError : forall Is i C d mem reg pc,
     (fetch_mem C mem pc = i) ->
@@ -353,7 +367,7 @@ Inductive stuck_state : program_interfaces -> state -> Prop :=
     (decode i = Some Halt) ->
     stuck_state Is (C,d,mem,reg,pc).
 
-Definition boolean_stuckstate (Is:program_interfaces) 
+Definition boolean_stuckstate (Is:partial_program_interfaces) 
   (cfg:state) : bool :=
   match cfg with
   (* S_EmptyCallStack *)
@@ -378,7 +392,8 @@ Definition boolean_stuckstate (Is:program_interfaces)
           EVALUATION FUNCTION
    _____________________________________ *)
 
-Definition basic_eval_step (Is:program_interfaces) (E:entry_points) 
+Definition basic_eval_step 
+  (Is:partial_program_interfaces) (E:entry_points) 
   (cfg:state) : state :=
   match cfg with
   | (C,d,mem,reg,pc) =>
@@ -418,11 +433,17 @@ Definition basic_eval_step (Is:program_interfaces) (E:entry_points)
       (C,d,mem,reg',i')
     (* S_Call *)
     | Some (Call C' P') =>
+      let imp := 
+        match (nth C Is None) with
+        | Some i => (get_import i)
+        | None => []
+        end
+      in
       if ((boolean_call_exists Is C' P') 
           && 
-         (existsb (fun x => (fst x =? C') && (snd x =? P')) (get_import (nth C Is (0,0,[])))
+         (existsb (fun x => (fst x =? C') && (snd x =? P')) imp)
             ||
-        beq_nat C' C)) then
+        beq_nat C' C) then
         let d' := (PCall C (pc+1))::d in 
         (C',d',mem,reg,fetch_entry_points C' P' E)
       else
@@ -447,7 +468,8 @@ Definition basic_eval_step (Is:program_interfaces) (E:entry_points)
     end
   end.
 
-Fixpoint eval_step (Is:program_interfaces) (E:entry_points) 
+Fixpoint eval_step 
+  (Is:partial_program_interfaces) (E:entry_points) 
   (cfg:state) (limit:nat) : state :=
   match limit with
   | 0 =>
