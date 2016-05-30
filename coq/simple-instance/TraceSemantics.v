@@ -84,7 +84,7 @@ Definition SetTop {A B : Type} (E:alt_list A B) (new:A)
                 REDUCTIONS
    _____________________________________ *)
 
-Inductive reduction (Is:program_interfaces) (E:entry_points) : 
+Inductive reduction (Is:partial_program_interfaces) (E:entry_points) : 
   state_partial_view -> state_partial_view -> action -> Prop :=
   (* T_CallRetTau+ *)
   | T_CallRetTauPlus :
@@ -113,8 +113,12 @@ Inductive reduction (Is:program_interfaces) (E:entry_points) :
       (Int IntTau ContextOrigin)
   (* T_Call- *)
   | T_CallMinus : forall C C' P' AE AE' Ao mem,
-    (component_defined C interface Is = true) ->
-    In (C', P') (get_import (nth C Is (0,0,[]))) \/ (C' = C) ->
+    (component_defined C (option interface) Is = true) ->
+    (match (nth C Is None) with
+    | Some i => In (C', P') (get_import i) 
+    | None => False
+    end)
+    \/ (C' = C) ->
     ~(In (Some C') (dom_entry_points E)) -> (Top AE = Ao) ->
     (AE' = SetTop AE (C::Ao)) ->
     reduction Is E 
@@ -130,8 +134,12 @@ Inductive reduction (Is:program_interfaces) (E:entry_points) :
       (Int IntRet ContextOrigin)
   (* T_Call? *)
   | T_CallCtx : forall C C' P' AE AE' Ao reg mem,
-    (component_defined C interface Is = true) ->
-    In (C',P') (get_import (nth C Is (0,0,[]))) ->
+    (component_defined C (option interface) Is = true) ->
+    (match (nth C Is None) with
+    | Some i => In (C',P') (get_import i)
+    | None => False
+    end)
+    ->
     (In (Some C') (dom_entry_points E)) -> (Top AE = Ao) ->
     (AE' = SetTop AE (C::Ao)) ->
     reduction Is E 
@@ -149,8 +157,12 @@ Inductive reduction (Is:program_interfaces) (E:entry_points) :
   (* T_Call! *)
   | T_CallPrg : forall C C' P' o PE PE' mem reg pc i,
     (fetch_mem C mem pc = i) -> (decode i = Some (Call C' P')) ->
-    (component_defined C interface Is = true) ->
-    (In (C',P') (get_import (nth C Is (0,0,[])))) ->
+    (component_defined C (option interface) Is = true) ->
+    (match (nth C Is None) with
+    | Some i => (In (C',P') (get_import i))
+    | None => False
+    end)
+    ->
     ~(In (Some C') (dom_entry_points E)) -> (Top PE = o) ->
     (PE' = SetTop PE ((C,pc+1)::o)) ->
     reduction Is E
@@ -221,7 +233,7 @@ Definition dual_trace (t:trace) :=
             ACTION COMPOSITION
    _____________________________________ *)
 
-Inductive reduction_multi (Is:program_interfaces) (E:entry_points) :
+Inductive reduction_multi (Is:partial_program_interfaces) (E:entry_points) :
   state_partial_view -> state_partial_view -> trace -> Prop :=
   (* T_Refl *)
   | T_Refl : forall o o', 
@@ -245,7 +257,7 @@ Inductive reduction_multi (Is:program_interfaces) (E:entry_points) :
        INFERENCE RULES FOR CONTEXT
    _____________________________________ *)
 
-Inductive reduction_duality (Is:program_interfaces) (E:entry_points) :
+Inductive reduction_duality (Is:partial_program_interfaces) (E:entry_points) :
   state_partial_view -> state_partial_view -> trace -> Prop := 
   | T_Dual : forall o o' t,
     reduction_multi Is E o o' (dual_trace t) ->
@@ -263,7 +275,7 @@ Definition Traces_p (t:trace) (p:Target.program) (s:shape) :
   | (_, mem_p, E_p) =>
     match s with
     | (Is, _) => exists O, 
-    reduction_multi Is E_p (initial_trace_state p) O t
+    reduction_multi (normalize_Is Is) E_p (initial_trace_state p) O t
     end 
   end.
 
@@ -273,7 +285,7 @@ Definition Traces_a (t:trace) (a:Target.program) (s:shape) :
   | (_, mem_a, E_a) =>
     match s with
     | (Is, _) => exists O, 
-    reduction_multi Is E_a (initial_trace_state a) O t
+    reduction_multi (normalize_Is Is) E_a (initial_trace_state a) O t
     end 
   end.
 
