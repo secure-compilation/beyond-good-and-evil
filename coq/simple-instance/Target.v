@@ -139,7 +139,7 @@ Definition component_memory : Type :=
   (code * protected_callstack * buffer).
 
 Definition program : Type :=
-  (program_interfaces * global_memory * entry_points).
+  (partial_program_interfaces * global_memory * entry_points).
 
 Definition get_interfacesLLP (P:program) :=
   match P with

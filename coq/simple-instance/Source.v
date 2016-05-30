@@ -122,6 +122,8 @@ Definition get_export (i:interface) : nat :=
   end.
 
 Definition program_interfaces : Type := list interface.
+Definition partial_program_interfaces : Type :=
+  list (option interface). 
 
 Definition dom_interfaces (Is:program_interfaces) : 
   list component_id :=
@@ -766,6 +768,16 @@ Definition compsComponent (Cs:list component) :=
 
 Definition compsInterface (Is:program_interfaces) :=
   map get_name Is.
+
+Definition compsPartialInterface 
+  (Is:partial_program_interfaces) :=
+  let g i :=
+    match i with
+    | Some i' => Some (get_name i')
+    | None => None
+    end
+  in
+  map g Is.
 
 Definition compsProgram (P:program) :=
   map get_nameC P.
