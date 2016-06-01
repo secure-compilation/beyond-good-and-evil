@@ -168,24 +168,21 @@ Proof.
   Case "Proof of tp ∈ Tr∘s(P↓) ∩ Tr•s(a)".
   { destruct H_tSets as [HD|HD].
     SCase "Left".
-    pose (trace_sets_closed_under_prefix_program 
+      pose (trace_sets_closed_under_prefix_program 
       tp ti (COMPILE_PROG P↓) s H_shp H_tp1 HD)
       as H_prefix_closure.
     left; apply H_prefix_closure.
     SCase "Right".
-    pose (trace_sets_closed_under_prefix_context tp ti
-      a s H_sha H_tp1 HD)
+      pose (trace_sets_closed_under_prefix_context
+      tp ti a s H_sha H_tp1 HD) 
       as H_prefix_closure.
     right; apply H_prefix_closure.
-  } 
+  }
   (* tp is a strict prefix *)
   assert (tp <> ti) as strict_prefix.
   Case "Proof of distinction between tp and ti".
   { unfold not. intro contra.
-    assert (H_shq := H_shQ).
-    apply shape_closed_under_compilation in H_shq.
-    pose (trace_composition tp s (COMPILE_PROG Q↓)
-      H_shq a H_sha) as t_composition. admit.
+    admit. (* Stuck *)
   }
 Admitted.
 
