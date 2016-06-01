@@ -239,16 +239,32 @@ Notation "'COMPILE_PROC' ( k , P )↓ " :=
 
 Definition component_allocated_memory : nat := 1000.
 
-Definition compile_component (k:Source.component) : Target.program :=
-  let Is := [interfaceof_C k] in
-  let mem := 
-    [(concat (get_buffers k)) ++
-    (concat (map encode_code 
-      (map (compile_proc k) (generate_intlist 0 (get_pnum k))))) ++
-    [STACKBASE k] ++
-    (map (fun x => 0) (seq 0 component_allocated_memory))] in
-  let E := [map (EXTERNALENTRY k) 
-    (generate_intlist 0 (get_pnum k))] in
+Definition compile_component (k:option component) : 
+  Target.program :=
+  let Is :=
+    match k with
+    | Some k' => [interfaceof_C k'] 
+    | None => []
+    end
+  in
+  let mem :=
+    match k with
+    | Some k' =>
+      [(concat (get_buffers k')) ++
+      (concat (map encode_code 
+        (map (compile_proc k') (generate_intlist 0 (get_pnum k'))))) ++
+      [STACKBASE k'] ++
+      (map (fun x => 0) (seq 0 component_allocated_memory))]
+    | None => []
+    end
+  in
+  let E :=
+    match k with
+    | Some k' =>
+      [map (EXTERNALENTRY k') (generate_intlist 0 (get_pnum k'))]
+    | None => []
+    end 
+  in
   (map (fun x => Some x) Is, 
    map (fun x => Some x) mem,
    map (fun x => Some x) E).
@@ -268,11 +284,19 @@ Definition fusion_compiled_program
     end
   end.
 
-Definition compile_partial_program (P:Source.program) : 
+Definition compile_partial_program (P:Source.partial_program) : 
   Target.program :=
   let compiled_components := map compile_component P in
   fold_right fusion_compiled_program ([],[],[]) compiled_components.
 
+Definition compile_whole_program (P:Source.program) : 
+  Target.program :=
+  let P' := map (fun x => Some x) P in
+  let compiled_components := map compile_component P' in
+  fold_right fusion_compiled_program ([],[],[]) compiled_components.
+
+Notation "'COMPILE_PROG' P ↓ " := 
+  (compile_partial_program P) (at level 0).
 
 (* _____________________________________ 
                PROPERTIES
@@ -311,19 +335,15 @@ Definition cprogram_diverges (P:Target.program) : Prop :=
 
 Theorem compiler_correct_terminates :
   forall P, (wellformed_whole_program P /\ program_defined P) ->
-    ((cprogram_terminates (compile_partial_program P)) 
+    ((cprogram_terminates (compile_whole_program P)) 
       <->
     (program_terminates P)).
 Proof.
-  intros. destruct H as [HWP Hdef].
-  split.
-  Case "Left".
-  { intro Hterminates. unfold program_terminates. 
 Admitted.
 
 Theorem compiler_correct_diverges :
   forall P, (wellformed_whole_program P /\ program_defined P) ->
-    ((cprogram_diverges (compile_partial_program P)) 
+    ((cprogram_diverges (compile_whole_program P)) 
       <->
     (program_diverges P)).
 Proof.

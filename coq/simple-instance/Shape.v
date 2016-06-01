@@ -178,25 +178,27 @@ Definition LL_context_application (A P:Target.program) :
             FULL DEFINEDNESS
    _____________________________________ *)
 
-Inductive program_fully_defined : partial_program -> Prop :=
-  | FD_program : forall P (PC:Source.program) C s sh d K e,
+Inductive program_fully_defined
+  (sh:shape) : partial_program -> Prop :=
+  | FD_program : forall P (PC:Source.program) C s d K e,
     (PROGRAM_SHAPE P ∈• sh) ->
   ~(exists A, (CONTEXT_SHAPE A ∈∘ sh) ->
     let PC := (context_application A P) in
     (procbodies PC) ⊢ (initial_cfg_of PC) ⇒* (C,s,d,K,e) ->
     undefined_cfg (procbodies PC) (C,s,d,K,e) ->
     In (Some C) (compsPartialProgram P)) ->
-    program_fully_defined P.
+    program_fully_defined sh P.
 
-Inductive context_fully_defined : partial_program -> Prop :=
-  | FD_context : forall A (PC:Source.program) C s sh d K e,
+Inductive context_fully_defined
+  (sh:shape) : partial_program -> Prop :=
+  | FD_context : forall A (PC:Source.program) C s d K e,
     (CONTEXT_SHAPE A ∈∘ sh) ->
   ~(exists P, (PROGRAM_SHAPE P ∈• sh) ->
     let PC := (context_application A P) in
     (procbodies PC) ⊢ (initial_cfg_of PC) ⇒* (C,s,d,K,e) ->
     undefined_cfg (procbodies PC) (C,s,d,K,e) ->
     In (Some C) (compsPartialProgram A)) ->
-    context_fully_defined A.
+    context_fully_defined sh A.
 
 
 (* _____________________________________ 
@@ -207,8 +209,8 @@ Example sanity_check1 :
   forall s,
   forall P, PROGRAM_SHAPE P ∈• s ->
   forall A, CONTEXT_SHAPE A ∈∘ s ->
-  context_fully_defined A ->
-  program_fully_defined P ->
+  context_fully_defined s A ->
+  program_fully_defined s P ->
   program_defined (context_application A P).
 Proof.
   intros s P HP A HA H1 H2.
