@@ -16,6 +16,8 @@ Inductive external_action : Type :=
   | ExtRet : registers -> external_action
   | End : external_action.
 
+Notation "✓" := (End).
+
 Inductive internal_action : Type :=
   | IntTau : internal_action
   | IntCall : component_id -> procedure_id -> internal_action
@@ -495,10 +497,10 @@ Admitted.
 Lemma trace_decomposition :
   forall s,
   forall p, (LL_PROGRAM_SHAPE p ∈• s) ->
-  forall a, (LL_PROGRAM_SHAPE a ∈• s) ->
+  forall a, (LL_CONTEXT_SHAPE a ∈∘ s) ->
     cprogram_terminates (LL_context_application a p)
       ->
-    (exists t, forall t' o, t = t'++[Ext End o] /\
+    (exists t, exists t' o, t = t'++[Ext End o] /\
     ((in_Traces_p t p s) \/ (in_Traces_a t a s))).
 Proof.
 Admitted.
@@ -506,22 +508,16 @@ Admitted.
 Lemma trace_composition :
   forall t s,
   forall p, (LL_PROGRAM_SHAPE p ∈• s) ->
-  forall a, (LL_PROGRAM_SHAPE a ∈• s) ->
+  forall a, (LL_CONTEXT_SHAPE a ∈∘ s) ->
     ((in_Traces_p t p s) \/ (in_Traces_a t a s)) ->
     (forall Ea o, 
       ~(in_Traces_p (t++[Ext Ea o]) p s) /\ 
       ~(in_Traces_a (t++[Ext Ea o]) a s)) ->
     (cprogram_terminates (LL_context_application a p)
       <->
-     forall t' o, t = t'++[Ext End o]).
+     exists t' o, t = t'++[Ext End o]).
 Proof.
 Admitted.
-
-(* _____________________________________ 
-                  PROOFS
-   _____________________________________ *)
-
-(* ------- Definability ------- *)
 
 
 
