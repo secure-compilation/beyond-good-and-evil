@@ -32,7 +32,6 @@ Inductive neq_progH : Source.program -> Source.program -> Prop :=
    _____________________________________ *)
 
 (* ------- Structured Full Abstraction ------- *)
-
 Theorem structured_full_abstraction :
   forall s,
   forall P Q, 

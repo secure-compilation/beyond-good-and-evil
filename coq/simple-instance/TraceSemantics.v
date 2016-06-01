@@ -1,5 +1,6 @@
 Require Import Target.
 Require Import Shape.
+Require Import Compiler.
 
 (* _____________________________________ 
                   SYNTAX
@@ -269,7 +270,7 @@ Inductive reduction_duality (Is:partial_program_interfaces) (E:entry_points) :
 
 (* Defined as a binary relation *)
 
-Definition Traces_p (t:trace) (p:Target.program) (s:shape) : 
+Definition in_Traces_p (t:trace) (p:Target.program) (s:shape) : 
   Prop :=
   match p with
   | (_, mem_p, E_p) =>
@@ -279,7 +280,7 @@ Definition Traces_p (t:trace) (p:Target.program) (s:shape) :
     end 
   end.
 
-Definition Traces_a (t:trace) (a:Target.program) (s:shape) : 
+Definition in_Traces_a (t:trace) (a:Target.program) (s:shape) : 
   Prop :=
   match a with
   | (_, mem_a, E_a) =>
@@ -477,6 +478,44 @@ Definition merge_P0A0 (P0:program_state) (A0:context_state) :
                 PROPERTIES
    _____________________________________ *)
 
+Lemma trace_extensibility :
+  forall t s g,
+  forall p, (LL_PROGRAM_SHAPE p ∈• s) ->
+  forall a, (LL_PROGRAM_SHAPE a ∈• s) ->
+    (in_Traces_p t p s) /\ 
+    (in_Traces_a (t++[Ext g ContextOrigin]) a s)
+    -> (in_Traces_p (t++[Ext g ContextOrigin]) p s)
+      /\
+    (in_Traces_a t a s) /\ 
+    (in_Traces_p (t++[Ext g ProgramOrigin]) p s)
+    -> (in_Traces_a (t++[Ext g ProgramOrigin]) a s).
+Proof.
+Admitted.
+
+Lemma trace_decomposition :
+  forall s,
+  forall p, (LL_PROGRAM_SHAPE p ∈• s) ->
+  forall a, (LL_PROGRAM_SHAPE a ∈• s) ->
+    cprogram_terminates (LL_context_application a p)
+      ->
+    (exists t, forall t' o, t = t'++[Ext End o] /\
+    ((in_Traces_p t p s) \/ (in_Traces_a t a s))).
+Proof.
+Admitted.
+
+Lemma trace_composition :
+  forall t s,
+  forall p, (LL_PROGRAM_SHAPE p ∈• s) ->
+  forall a, (LL_PROGRAM_SHAPE a ∈• s) ->
+    ((in_Traces_p t p s) \/ (in_Traces_a t a s)) ->
+    (forall Ea o, 
+      ~(in_Traces_p (t++[Ext Ea o]) p s) /\ 
+      ~(in_Traces_a (t++[Ext Ea o]) a s)) ->
+    (cprogram_terminates (LL_context_application a p)
+      <->
+     forall t' o, t = t'++[Ext End o]).
+Proof.
+Admitted.
 
 (* _____________________________________ 
                   PROOFS
