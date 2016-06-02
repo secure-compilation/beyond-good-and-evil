@@ -484,13 +484,13 @@ Lemma trace_extensibility :
   forall t s g,
   forall p, (LL_PROGRAM_SHAPE p ∈• s) ->
   forall a, (LL_CONTEXT_SHAPE a ∈∘ s) ->
-    (in_Traces_p t p s) /\ 
+    ((in_Traces_p t p s) /\ 
     (in_Traces_a (t++[Ext g ContextOrigin]) a s)
-    -> (in_Traces_p (t++[Ext g ContextOrigin]) p s)
+    -> (in_Traces_p (t++[Ext g ContextOrigin]) p s))
       /\
-    (in_Traces_a t a s) /\ 
+    ((in_Traces_a t a s) /\ 
     (in_Traces_p (t++[Ext g ProgramOrigin]) p s)
-    -> (in_Traces_a (t++[Ext g ProgramOrigin]) a s).
+    -> (in_Traces_a (t++[Ext g ProgramOrigin]) a s)).
 Proof.
 Admitted.
 
