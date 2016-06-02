@@ -483,7 +483,7 @@ Definition merge_P0A0 (P0:program_state) (A0:context_state) :
 Lemma trace_extensibility :
   forall t s g,
   forall p, (LL_PROGRAM_SHAPE p ∈• s) ->
-  forall a, (LL_PROGRAM_SHAPE a ∈• s) ->
+  forall a, (LL_CONTEXT_SHAPE a ∈∘ s) ->
     (in_Traces_p t p s) /\ 
     (in_Traces_a (t++[Ext g ContextOrigin]) a s)
     -> (in_Traces_p (t++[Ext g ContextOrigin]) p s)

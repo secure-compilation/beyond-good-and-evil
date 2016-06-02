@@ -127,6 +127,19 @@ Lemma trace_sets_closed_under_prefix_context :
 Proof.
 Admitted.
 
+Lemma LL_program_behavior_exclusion :
+  forall p, cprogram_terminates p /\ cprogram_diverges p
+    -> False.
+Proof.
+Admitted.
+
+Lemma game_alternation_context_turn :
+  forall a p s t Ea,
+  in_Traces_p t p s ->
+  in_Traces_a (t++[Ext Ea ContextOrigin]) a s.
+Proof.
+Admitted.
+
 Theorem structured_full_abstraction_proof :
   structured_full_abstraction.
 Proof.
@@ -141,6 +154,8 @@ Proof.
   destruct H_behavior as [ap_terminates ap_diverges].
   (* Goal : build a full-defined A ∈∘ s such that A[P] ≁ A[Q] *)
   (* We first apply trace decomposition *)
+  assert (H_shq := H_shQ).
+  apply shape_closed_under_compilation in H_shq.
   assert (H_shp := H_shP).
   apply shape_closed_under_compilation in H_shp.
   pose (trace_decomposition s (COMPILE_PROG P↓) 
@@ -182,8 +197,49 @@ Proof.
   assert (tp <> ti) as strict_prefix.
   Case "Proof of distinction between tp and ti".
   { unfold not. intro contra.
-    admit. (* Stuck *)
+    assert (in_Traces_p ti COMPILE_PROG Q ↓ s \/
+      in_Traces_a ti a s) as H_or.
+    { left. rewrite contra in H_tp2. apply H_tp2. }
+    assert ((forall (Ea : external_action) (o : origin),
+      ~in_Traces_p (ti ++ [Ext Ea o]) COMPILE_PROG Q ↓ s /\
+      ~in_Traces_a (ti ++ [Ext Ea o]) a s)) as Hassert.
+    { admit. }
+    pose (trace_composition ti s (COMPILE_PROG Q↓)
+      H_shq a H_sha H_or Hassert) as t_composition.
+    destruct t_composition as [t_compositionL t_compositionR].
+    assert (cprogram_terminates
+      (LL_context_application a COMPILE_PROG Q ↓)) as H_absurd.
+    { apply t_compositionR. exists t'. exists o. apply H_tEnd. }
+    assert (
+      cprogram_terminates 
+        (LL_context_application a COMPILE_PROG Q ↓) /\
+      cprogram_diverges 
+        (LL_context_application a COMPILE_PROG Q ↓))
+      as absurd.
+    split. apply H_absurd. apply ap_diverges.
+    apply (LL_program_behavior_exclusion
+      (LL_context_application a COMPILE_PROG Q ↓)) in absurd.
+    contradiction.
   }
+  (* There exists Ea such that tp.Ea such that tp.Ea 
+     is a prefix of ti *)
+  assert (exists Ea, incl (tp++Ea) ti) as Ea_exists.
+  { admit. }
+  destruct Ea_exists as [Ea H_EaExists].
+  (* Ea is a program action *)
+  assert (exists g1, Ea = [Ext g1 ProgramOrigin])
+    as H_program_action.
+  { admit. }
+  destruct H_program_action as [g1 H_g1].
+  (* Let tc be the canonicalization of tp *)
+  pose (tc := zetaC_t tp).
+  (* tc is a trace of P↓ *)
+  pose (canonicalization (tp++Ea) s P H_shP H_PFD)
+    as H_canonicalization.
+  destruct H_canonicalization as [H_canon1 H_canon2].
+  assert (in_Traces_p (tp++Ea) (COMPILE_PROG P↓) s) as H_zeta.
+  { admit. }
+  apply H_canon1 in H_zeta. 
 Admitted.
 
 Definition secure_compartmentalizing_compilation : Prop :=
