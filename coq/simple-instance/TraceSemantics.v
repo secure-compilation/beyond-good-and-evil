@@ -511,8 +511,8 @@ Lemma trace_composition :
   forall a, (LL_CONTEXT_SHAPE a ∈∘ s) ->
     ((in_Traces_p t p s) /\ (in_Traces_a t a s)) ->
     (forall Ea o, 
-      ~(in_Traces_p (t++[Ext Ea o]) p s) /\ 
-      ~(in_Traces_a (t++[Ext Ea o]) a s)) ->
+      ~((in_Traces_p (t++[Ext Ea o]) p s) /\ 
+      (in_Traces_a (t++[Ext Ea o]) a s))) ->
     (cprogram_terminates (LL_context_application a p)
       <->
      exists t' o, t = t'++[Ext End o]).
