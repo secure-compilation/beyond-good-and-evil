@@ -4,3 +4,6 @@ SfLib.v
 Source.v
 Target.v
 Compiler.v
+Shape.v
+TraceSemantics.v
+SCCProof.v
