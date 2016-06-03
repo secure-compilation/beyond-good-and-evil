@@ -501,7 +501,7 @@ Lemma trace_decomposition :
     cprogram_terminates (LL_context_application a p)
       ->
     (exists t, exists t' o, t = t'++[Ext End o] /\
-    ((in_Traces_p t p s) \/ (in_Traces_a t a s))).
+    ((in_Traces_p t p s) /\ (in_Traces_a t a s))).
 Proof.
 Admitted.
 
@@ -509,7 +509,7 @@ Lemma trace_composition :
   forall t s,
   forall p, (LL_PROGRAM_SHAPE p ∈• s) ->
   forall a, (LL_CONTEXT_SHAPE a ∈∘ s) ->
-    ((in_Traces_p t p s) \/ (in_Traces_a t a s)) ->
+    ((in_Traces_p t p s) /\ (in_Traces_a t a s)) ->
     (forall Ea o, 
       ~(in_Traces_p (t++[Ext Ea o]) p s) /\ 
       ~(in_Traces_a (t++[Ext Ea o]) a s)) ->
@@ -518,8 +518,6 @@ Lemma trace_composition :
      exists t' o, t = t'++[Ext End o]).
 Proof.
 Admitted.
-
-
 
 
 
