@@ -150,6 +150,12 @@ Lemma program_Ea_immuable_to_zeta :
 Proof.
 Admitted.
 
+Lemma zeta_gamma_injective :
+  forall x x',
+  (x <> x') -> (zeta_gamma x <> zeta_gamma x').
+Proof.
+Admitted.
+
 Theorem structured_full_abstraction_proof :
   structured_full_abstraction.
 Proof.
@@ -161,7 +167,7 @@ Proof.
   inversion H_low_neq as [ap aq H_behavior ap_eq aq_eq].
   (* We suppose that a[P↓] terminates and a[Q↓] diverges *)
   destruct H_behavior as [H_behavior|H_behavior'].
-  destruct H_behavior as [ap_terminates ap_diverges].
+  destruct H_behavior as [ap_terminates aq_diverges].
   (* Goal : build a full-defined A ∈∘ s such that A[P] ≁ A[Q] *)
   (* We first apply trace decomposition *)
   assert (H_shq := H_shQ).
@@ -177,14 +183,16 @@ Proof.
       (in_Traces_p tp (COMPILE_PROG Q↓) s) /\
     (forall tp', (incl tp' ti) /\ 
       (in_Traces_p tp (COMPILE_PROG Q↓) s) ->
-      (length tp') <= (length tp) 
-    )) 
+      (length tp') <= (length tp)) /\
+    (forall alpha, ~(in_Traces_p (tp++[alpha])
+      (COMPILE_PROG Q↓) s))) 
   as tp_exists.
   Case "Proof of existence of tp".
   { admit. }
   destruct tp_exists as [tp H_tp].
   destruct H_tp as [H_tp1 H_tp2].
   destruct H_tp2 as [H_tp2 H_tp3].
+  destruct H_tp3 as [H_tp3 H_tp4].
   destruct H_decomposition as [t' [o]].
   destruct H as [H_tEnd H_tSets].
   destruct H_tSets as [H_tSets1 H_tSets2].
@@ -221,7 +229,7 @@ Proof.
       cprogram_diverges 
         (LL_context_application a COMPILE_PROG Q ↓))
       as absurd.
-    split. apply H_absurd. apply ap_diverges.
+    split. apply H_absurd. apply aq_diverges.
     apply (LL_program_behavior_exclusion
       (LL_context_application a COMPILE_PROG Q ↓)) in absurd.
     contradiction.
@@ -470,10 +478,67 @@ Proof.
       assert (in_Traces_a tp a s /\ in_Traces_p 
         (tp ++ [Ext ✓ ProgramOrigin]) COMPILE_PROG Q ↓ s)
         as ext_premise.
-      { split. admit. admit.
+      { split. destruct H_tp_in_Pa as [H_tp_in_Pa1 H_tp_in_Pa2].
+        apply H_tp_in_Pa2. apply contra.
       }
-      admit.  
+      (* We use trace composition *)
+      pose (trace_composition (tp ++ [Ext ✓ ProgramOrigin])
+        s (COMPILE_PROG Q↓) H_shq a H_sha)
+        as t_composition.
+      assert (in_Traces_p (tp ++ [Ext ✓ ProgramOrigin])
+        COMPILE_PROG Q ↓ s /\ in_Traces_a 
+        (tp ++ [Ext ✓ ProgramOrigin]) a s) as ext_premise'.
+      { split. apply contra. apply t_ext2.
+        split. apply (trace_sets_closed_under_prefix_context
+        tp ti a s H_sha H_tp1 H_tSets2). apply contra.
+      }
+      specialize (t_composition ext_premise').
+      assert ((forall (Ea : external_action) (o : origin),
+        ~(in_Traces_p ((tp ++ [Ext ✓ ProgramOrigin]) ++
+        [Ext Ea o]) COMPILE_PROG Q ↓ s /\ in_Traces_a
+        ((tp ++ [Ext ✓ ProgramOrigin]) ++ [Ext Ea o]) a s)))
+        as ext_premise''.
+      { admit. }
+      specialize (t_composition ext_premise'').
+      destruct t_composition as [t_comp1 t_comp2].
+      (* We state that Q↓ terminates which is a contradiction *)
+      assert (cprogram_terminates
+        (LL_context_application a COMPILE_PROG Q ↓)) as absurd.
+      { apply t_comp2. exists tp. exists ProgramOrigin. trivial. }
+      assert (cprogram_terminates
+        (LL_context_application a COMPILE_PROG Q ↓) /\
+        cprogram_diverges
+        (LL_context_application a COMPILE_PROG Q ↓)) as absurd'.
+      { split. apply absurd. apply aq_diverges. }
+      apply LL_program_behavior_exclusion in absurd'.
+      contradiction.
     }
+    (* We prove that Q↓ cannot perform (g1) *)
+    assert (~(in_Traces_p (tc++[Ext g1 ProgramOrigin])
+      (COMPILE_PROG Q↓) s)) as cant_be_g1.
+    { intro contra. unfold tc in contra.
+      rewrite <- program_Ea_immuable_to_zeta in contra.
+      apply canon_c in contra.
+      specialize (H_tp4 (Ext g1 ProgramOrigin)).
+      unfold not in H_tp4. apply H_tp4 in contra.
+      contradiction.
+    }
+    (* We prove that Q↓ cannot perform any (γ?) *)
+    assert (forall g2 g', g2 <> End /\ g2 <> g1 -> ~(in_Traces_a 
+      (tc++[Ext g' ProgramOrigin]++[Ext g2 ContextOrigin]) 
+      (COMPILE_PROG A↓) s)) as cant_be_context.
+    { intros g2 g' contra. destruct contra as [contra1 contra2].
+      intro contra. specialize (H_def3 g2).
+      apply zeta_gamma_injective in contra2.
+      admit.
+    }
+    (* We prove that Q↓ can perform any (ia+) *)
+    assert (forall ia, (in_Traces_p 
+      (tc++[Int ia ProgramOrigin]) (COMPILE_PROG Q↓) s) ->
+      cprogram_diverges (LL_context_application 
+        COMPILE_PROG A ↓ COMPILE_PROG Q ↓))
+      as ia_implies_divergence.
+    { intros ia H_ia. admit. }
     admit.
   }
   (* Symmetric case *)
