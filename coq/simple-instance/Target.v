@@ -329,8 +329,8 @@ Definition LV_multi_step
 Inductive state_irreducible 
   (Is:partial_program_interfaces) (E:entry_points) 
   : state -> Prop :=
-  | S_Irreducible : forall cfg cfg',
-    ~(step Is E cfg cfg') ->
+  | S_Irreducible : forall cfg,
+    (forall cfg', ~(step Is E cfg cfg')) ->
     state_irreducible Is E cfg.
 
 (* ------- Definitions : Special reduction state ------- *)

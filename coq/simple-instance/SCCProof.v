@@ -136,19 +136,87 @@ Lemma LL_program_behavior_exclusion :
   forall p, cprogram_terminates p /\ cprogram_diverges p
     -> False.
 Proof.
+  intros. destruct p as [[Is mem] E].
+  destruct H as [terminates diverges].
+  unfold cprogram_terminates in terminates.
+  unfold cprogram_diverges in diverges.
+  destruct terminates as [s H_terminates].
+  destruct H_terminates as [H_term1 H_term2].
+  inversion H_term2. unfold not in H.
+  specialize (diverges s).
+  assert (LV_multi_step Is E 
+    (LL_initial_cfg_of (Is, mem, E)) s) as H_assert.
+  { unfold LV_multi_step. eapply multi_step.
+    apply H_term1. apply multi_refl.
+  }
+  apply diverges in H_assert. destruct H_assert.
+  specialize (H x). apply H in H1. contradiction.
+Qed.
+
+Lemma app_is_cons :
+  forall {X:Type} a (l:list X), a::l = [a]++l.
+Proof.
+  intros. reflexivity.
+Qed.
+
+Lemma zeta_linear :
+  forall t t',
+  zetaC_t (t++t') = (zetaC_t t) ++ (zetaC_t t').
+Proof.
+  intros t t'. generalize dependent t.
+  induction t'.
+  Case "t' = []".
+  { intros. simpl. rewrite app_nil_r.
+    rewrite (app_nil_r (zetaC_t t)). reflexivity.
+  }
+  Case "t = t'.a".
+  { admit.
+  } 
 Admitted.
+
+Lemma clear_regs_idempotent :
+  forall reg,
+  clear_regs reg = clear_regs (clear_regs reg).
+Proof.
+Admitted.
+
+Lemma zeta_gamma_idempotent :
+  forall e,
+  zeta_gamma e = zeta_gamma (zeta_gamma e).
+Proof.
+  intros. destruct e;
+  try (simpl; rewrite <- clear_regs_idempotent; reflexivity).
+  simpl. reflexivity.
+Qed.
 
 Lemma zetaC_t_idempotent :
   forall t, zetaC_t t = zetaC_t (zetaC_t t).
 Proof.
-Admitted.
+  intros. induction t.
+  { reflexivity. }
+  { destruct a; destruct o; simpl; try (reflexivity).
+    rewrite <- zeta_gamma_idempotent.
+    rewrite <- IHt. reflexivity.
+  }
+Qed.
+
+Lemma program_Ea_immuable_to_zeta_unit :
+  forall g1,
+  zetaC_t [Ext g1 ProgramOrigin] = [Ext g1 ProgramOrigin].
+Proof.
+  intros. simpl. reflexivity.
+Qed.
 
 Lemma program_Ea_immuable_to_zeta :
   forall t g1,
   zetaC_t (t ++ [Ext g1 ProgramOrigin])
   = zetaC_t (t) ++ [Ext g1 ProgramOrigin].
 Proof.
-Admitted.
+  intros.
+  rewrite zeta_linear.
+  rewrite program_Ea_immuable_to_zeta_unit.
+  reflexivity.
+Qed.
 
 Lemma zeta_gamma_injective :
   forall x x',
