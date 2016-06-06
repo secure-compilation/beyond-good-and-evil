@@ -328,6 +328,12 @@ Definition cprogram_diverges (P:Target.program) : Prop :=
     exists cfg', (step Is E cfg cfg')
   end.
 
+Theorem cterminates_cdiverges_opposition :
+  forall P,
+  (~cprogram_terminates P) = (cprogram_diverges P).
+Proof.
+Admitted.
+
 
 (* _____________________________________ 
           PROOF : CORRECTNESS

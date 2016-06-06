@@ -156,6 +156,21 @@ Lemma zeta_gamma_injective :
 Proof.
 Admitted.
 
+Theorem separate_compilation_correctness_proof :
+  separate_compilation_correctness.
+Proof.
+Admitted.
+
+Theorem contrapositive : forall P Q : Prop, 
+  (P -> Q) -> (~Q -> ~P).
+Proof.
+  intros.
+  intro contra.
+  apply H in contra.
+  apply H0 in contra.
+  contradiction.
+Qed.
+
 Theorem structured_full_abstraction_proof :
   structured_full_abstraction.
 Proof.
@@ -524,22 +539,47 @@ Proof.
       contradiction.
     }
     (* We prove that Q↓ cannot perform any (γ?) *)
-    assert (forall g2 g', g2 <> End /\ g2 <> g1 -> ~(in_Traces_a 
-      (tc++[Ext g' ProgramOrigin]++[Ext g2 ContextOrigin]) 
+    assert (forall g gx, g <> End /\ g <> g1 -> ~(in_Traces_a 
+      (tc++[Ext gx ProgramOrigin]++[Ext g ContextOrigin]) 
       (COMPILE_PROG A↓) s)) as cant_be_context.
-    { intros g2 g' contra. destruct contra as [contra1 contra2].
-      intro contra. specialize (H_def3 g2).
-      apply zeta_gamma_injective in contra2.
-      admit.
+    { intros g gx contra. destruct contra as [contra1 contra2].
+      intro contra. apply zeta_gamma_injective in contra2.
+      specialize (H_def3 g contra2). admit.
     }
     (* We prove that Q↓ can perform any (ia+) *)
-    assert (forall ia, (in_Traces_p 
-      (tc++[Int ia ProgramOrigin]) (COMPILE_PROG Q↓) s) ->
+    assert ((in_Traces_p 
+      tc (COMPILE_PROG Q↓) s) ->
       cprogram_diverges (LL_context_application 
         COMPILE_PROG A ↓ COMPILE_PROG Q ↓))
       as ia_implies_divergence.
-    { intros ia H_ia. admit. }
-    admit.
+    { intros H.
+      pose (trace_composition tc s (COMPILE_PROG Q↓) H_shq
+        (COMPILE_PROG A↓) H_sha') as t_composition.
+      assert (in_Traces_p tc COMPILE_PROG Q ↓ s /\
+        in_Traces_a tc COMPILE_PROG A ↓ s) as comp_premise.
+      { split. apply H. apply H_def1. }
+      assert ((forall (Ea : external_action) (o : origin),
+         ~(in_Traces_p (tc ++ [Ext Ea o]) COMPILE_PROG Q ↓ s /\
+         in_Traces_a (tc ++ [Ext Ea o]) COMPILE_PROG A ↓ s)))
+          as comp_premise'.
+      { admit. }
+      specialize (t_composition comp_premise comp_premise').
+      destruct t_composition as [t_comp1 t_comp2].
+      apply contrapositive in t_comp1.
+      rewrite cterminates_cdiverges_opposition in t_comp1.
+      apply t_comp1. intro contra.
+      destruct contra as [t_contra contra].
+      destruct contra as [o_contra contra].
+      unfold tc in contra. admit.
+    }
+    (* There exists an action following tc for Q↓ *)
+    assert (exists alpha, in_Traces_p (tc++[alpha]) 
+      (COMPILE_PROG Q↓) s) as H_exists_alpha.
+    { admit. }
+    destruct H_exists_alpha as [alpha H_alpha_inTracesQ].
+    destruct alpha; destruct o0; try (destruct e);
+    try (destruct i).
+    
   }
   (* Symmetric case *)
   admit.
@@ -548,12 +588,20 @@ Admitted.
 Definition secure_compartmentalizing_compilation : Prop :=
   admit.
 
-Lemma SCC_isormorphism :
+Lemma SCC_isomorphism :
   structured_full_abstraction ->
   separate_compilation_correctness ->
   secure_compartmentalizing_compilation.
 Proof.
 Admitted.
+
+Theorem SCCProof :
+  secure_compartmentalizing_compilation.
+Proof.
+  apply SCC_isomorphism.
+  apply structured_full_abstraction_proof.
+  apply separate_compilation_correctness_proof.
+Qed.
 
 
 
