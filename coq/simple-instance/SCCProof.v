@@ -180,6 +180,30 @@ Lemma clear_regs_idempotent :
 Proof.
 Admitted.
 
+Lemma update_reg_injective :
+  forall a a' n n' reg reg',
+  update_reg a n reg = update_reg a' n' reg' ->
+  (a = a' /\ n = n' /\ reg = reg').
+Proof.
+Admitted.
+
+Lemma map_inversion : 
+  forall {A B : Type} (f : A->B) (l l' : list A),
+  map f l = map f l' -> l = l'.
+Proof.
+Admitted.
+
+Lemma clear_regs_injective :
+  forall reg reg',
+  clear_regs reg = clear_regs reg'
+  -> reg = reg'.
+Proof.
+  intros. unfold clear_regs in H.
+  apply update_reg_injective in H.
+  destruct H. destruct H0.
+  apply map_inversion in H1. apply H1.
+Qed.
+
 Lemma zeta_gamma_idempotent :
   forall e,
   zeta_gamma e = zeta_gamma (zeta_gamma e).
@@ -222,7 +246,34 @@ Lemma zeta_gamma_injective :
   forall x x',
   (x <> x') -> (zeta_gamma x <> zeta_gamma x').
 Proof.
-Admitted.
+  intro x.
+  induction x.
+  Case "x = ExtCall".
+  { intros. intro contra. destruct x'; simpl in contra.
+    { inversion contra. apply clear_regs_injective in H3.
+      rewrite H1 in H. rewrite H2 in H. rewrite H3 in H.
+      assert (ExtCall c0 p0 r0 = ExtCall c0 p0 r0). reflexivity.
+      apply H in H0. contradiction.
+    }
+    { inversion contra. }
+    { inversion contra. }
+  }
+  Case "x = ExtRet".
+  { intros. intro contra. destruct x'; simpl in contra.
+    { inversion contra. }
+    { inversion contra. apply clear_regs_injective in H1.
+      rewrite H1 in H. assert (ExtRet r0 = ExtRet r0). trivial.
+      apply H in H0. contradiction.
+    }
+    { inversion contra. }
+  }
+  Case "x = ✓".
+  { intros. intro contra. destruct x'; simpl in contra.
+    { inversion contra. }
+    { inversion contra. }
+    { apply H in contra. contradiction. }
+  }
+Qed.
 
 Theorem separate_compilation_correctness_proof :
   separate_compilation_correctness.
@@ -596,6 +647,7 @@ Proof.
       apply LL_program_behavior_exclusion in absurd'.
       contradiction.
     }
+    (* Now, following tc, Q↓ perform an action, which one ? *)
     (* We prove that Q↓ cannot perform (g1) *)
     assert (~(in_Traces_p (tc++[Ext g1 ProgramOrigin])
       (COMPILE_PROG Q↓) s)) as cant_be_g1.
@@ -645,9 +697,9 @@ Proof.
       (COMPILE_PROG Q↓) s) as H_exists_alpha.
     { admit. }
     destruct H_exists_alpha as [alpha H_alpha_inTracesQ].
-    destruct alpha; destruct o0; try (destruct e);
-    try (destruct i).
-    
+    (* destruct alpha; destruct o0; try (destruct e);
+    try (destruct i). *)
+    admit.
   }
   (* Symmetric case *)
   admit.
