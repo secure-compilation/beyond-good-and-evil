@@ -174,11 +174,32 @@ Proof.
   } 
 Admitted.
 
+Lemma clear_regs_cons_linear :
+  forall a reg,
+  clear_regs (a::reg) = (clear_regs [a]) ++ (clear_regs reg).
+Proof.
+Admitted.
+
+Lemma clear_regs_linear :
+  forall reg reg',
+  clear_regs (reg++reg') = (clear_regs reg) ++ (clear_regs reg').
+Proof.
+  intros reg. induction reg.
+  { simpl. reflexivity. }
+  { intros. admit.
+  }
+Admitted.
+
 Lemma clear_regs_idempotent :
   forall reg,
   clear_regs reg = clear_regs (clear_regs reg).
 Proof.
-Admitted.
+  intros. induction reg.
+  { unfold clear_regs. simpl. reflexivity. }
+  { intros. rewrite app_is_cons. rewrite !clear_regs_linear.
+    simpl. rewrite <- IHreg. reflexivity.
+  }
+Qed.
 
 Lemma zeta_gamma_idempotent :
   forall e,

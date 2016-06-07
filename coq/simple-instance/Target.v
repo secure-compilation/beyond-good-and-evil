@@ -190,10 +190,19 @@ Definition update_reg (a:address) (i:option nat)
   (reg:registers) : registers :=
   update_reg_value a i reg.
 
+Fixpoint clear_regs_aux (reg:registers) (i:nat) : registers :=
+  match reg, i with
+  | [], _ => []
+  | _, 0 => []
+  | _, S i' =>
+    if beq_nat i' r_com then
+      (clear_regs_aux reg i') ++ [nth r_com reg 0]
+    else
+      (clear_regs_aux reg i') ++ [0]
+  end.
+
 Definition clear_regs (reg:registers) : registers :=
-  let r_com_val := nth r_com reg 0 in
-  let zeros := map (fun x => 0) reg in
-  update_reg r_com (Some r_com_val) zeros.
+  clear_regs_aux reg (length reg).
 
 Fixpoint update_mem (C:component_id) (mem:global_memory)
   (a:address) (new:nat) : global_memory :=
