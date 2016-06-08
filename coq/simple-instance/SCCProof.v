@@ -159,32 +159,19 @@ Proof.
   intros. reflexivity.
 Qed.
 
-Lemma zeta_linear :
-  forall t t',
-  zetaC_t (t++t') = (zetaC_t t) ++ (zetaC_t t').
+Lemma zeta_linear_program :
+  forall t g,
+  zetaC_t (t ++ [Ext g ProgramOrigin]) =
+  zetaC_t t ++ [Ext g ProgramOrigin].
 Proof.
-  intros t t'. generalize dependent t.
-  induction t'.
-  Case "t' = []".
-  { intros. simpl. rewrite app_nil_r.
-    rewrite (app_nil_r (zetaC_t t)). reflexivity.
+  intros.
+  induction t.
+  { simpl. reflexivity. }
+  { rewrite app_is_cons. rewrite <- app_assoc.
+    destruct a; destruct o;
+    simpl; rewrite IHt; reflexivity.
   }
-  Case "t = t'.a".
-  { admit.
-  } 
-Admitted.
-
-Lemma double_clear_regs_remove :
-  forall reg n x,
-  clear_regs_aux reg n =
-  clear_regs_aux (clear_regs_aux reg n)
-  (length (clear_regs_aux reg n))
-    ->
-  clear_regs_aux reg n ++ x =
-  clear_regs_aux (clear_regs_aux reg n ++ x)
-  (length (clear_regs_aux reg n ++ x)).
-Proof.
-Admitted.
+Qed.
 
 Lemma clear_regs_aux_idempotent :
   forall reg,
@@ -196,13 +183,12 @@ Proof.
   induction (length reg).
   { simpl. destruct reg; reflexivity. }
   { simpl. destruct reg. reflexivity.
+    pose (reg' := (r :: reg)). fold reg'. fold reg' in IHn.
+    pose (x := [nth r_com reg' 0]). fold x.
     destruct (n =? r_com); simpl.
-    pose (double_clear_regs_remove (r :: reg) n [nth 1 reg 0]).
-    apply e. apply IHn.
-    pose (double_clear_regs_remove (r :: reg) n [0]).
-    apply e. apply IHn.
+    admit. admit.
   }
-Qed.
+Admitted.
 
 Lemma clear_regs_idempotent :
   forall reg,
@@ -230,17 +216,10 @@ Lemma zetaC_t_idempotent :
 Proof.
   intros. induction t.
   { reflexivity. }
-  { destruct a; destruct o; simpl; try (reflexivity).
-    rewrite <- zeta_gamma_idempotent.
-    rewrite <- IHt. reflexivity.
+  { destruct a; destruct o; simpl; try (reflexivity);
+    try (rewrite <- zeta_gamma_idempotent);
+    rewrite <- IHt; reflexivity.
   }
-Qed.
-
-Lemma program_Ea_immuable_to_zeta_unit :
-  forall g1,
-  zetaC_t [Ext g1 ProgramOrigin] = [Ext g1 ProgramOrigin].
-Proof.
-  intros. simpl. reflexivity.
 Qed.
 
 Lemma program_Ea_immuable_to_zeta :
@@ -249,8 +228,7 @@ Lemma program_Ea_immuable_to_zeta :
   = zetaC_t (t) ++ [Ext g1 ProgramOrigin].
 Proof.
   intros.
-  rewrite zeta_linear.
-  rewrite program_Ea_immuable_to_zeta_unit.
+  rewrite zeta_linear_program.
   reflexivity.
 Qed.
 
@@ -258,12 +236,31 @@ Lemma trace_post_terminaison :
   forall t a p s o,
   ~(in_Traces_p (t++[Ext End o]++[a]) p s).
 Proof.
-Admitted. 
-
-Theorem separate_compilation_correctness_proof :
-  separate_compilation_correctness.
-Proof.
-Admitted.
+  intros. intro contra.
+  destruct s as [Is comps].
+  destruct p as [[Isp mem] E].
+  unfold in_Traces_p in contra. destruct contra.
+  inversion H.
+  { symmetry in H3. apply app_eq_nil in H3.
+    destruct H3. inversion H3. }
+  { symmetry in H0. apply app_eq_nil in H0.
+    destruct H0. inversion H4. }
+  { symmetry in H0. apply app_eq_unit in H0.
+    destruct H0. destruct H0. inversion H4.
+    destruct H0. inversion H4. }
+  { symmetry in H0. rewrite app_is_cons in H0.
+    rewrite app_assoc in H0.
+    assert ([t0; u] = [t0]++[u]). reflexivity.
+    rewrite H5 in H0. apply app_inj_tail in H0.
+    destruct H0. apply app_eq_unit in H0.
+    destruct H0. destruct H0. inversion H7.
+      rewrite <- H9 in H1. inversion H1.
+      destruct (decode (fetch_mem C mem0 pc)).
+      destruct i; inversion H10. inversion H10.
+      rewrite <- H8 in H4. inversion H4.
+      rewrite <- H11 in H4. inversion H4.
+    destruct H0. inversion H7. }
+Qed.
 
 Theorem contrapositive : forall P Q : Prop, 
   (P -> Q) -> (~Q -> ~P).
@@ -274,6 +271,11 @@ Proof.
   apply H0 in contra.
   contradiction.
 Qed.
+
+Theorem separate_compilation_correctness_proof :
+  separate_compilation_correctness.
+Proof.
+Admitted.
 
 Theorem structured_full_abstraction_proof :
   structured_full_abstraction.

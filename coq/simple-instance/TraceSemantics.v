@@ -328,7 +328,7 @@ Fixpoint zetaC_t (t:trace) : trace :=
   | [] => []
   | (Ext g ContextOrigin)::t' => 
     (zetaC_Ea (Ext g ContextOrigin))::(zetaC_t t')
-  | _ => t
+  | h::t' => h :: (zetaC_t t')
   end.
 
 Fixpoint zetaC_T (T:trace) : trace :=
@@ -336,7 +336,7 @@ Fixpoint zetaC_T (T:trace) : trace :=
   | [] => []
   | (Ext g ContextOrigin)::T' => (zetaC_Ea (Ext g ContextOrigin))::(zetaC_T T')
   | (Int g ContextOrigin)::T' => (Int g ContextOrigin)::(zetaC_T T')
-  | _ => T
+  | H::T' => H :: (zetaC_T T')
   end.
 
 Definition zetaP_Ea (a:action) : action :=
