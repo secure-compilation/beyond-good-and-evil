@@ -173,6 +173,15 @@ Proof.
   }
 Qed.
 
+Lemma clear_regs_aux_minus_last :
+  forall a reg,
+  length reg <> r_com ->
+  clear_regs_aux (a :: reg) (length reg) ++ [0] =
+  clear_regs_aux (clear_regs_aux (a :: reg) (length reg) ++ [0])
+  (length (clear_regs_aux (a :: reg) (length reg) ++ [0])).
+Proof.
+Admitted.
+
 Lemma clear_regs_aux_idempotent :
   forall reg,
   clear_regs_aux reg (length reg) =
@@ -180,15 +189,16 @@ Lemma clear_regs_aux_idempotent :
   (length (clear_regs_aux reg (length reg))).
 Proof.
   intros.
-  induction (length reg).
-  { simpl. destruct reg; reflexivity. }
-  { simpl. destruct reg. reflexivity.
-    pose (reg' := (r :: reg)). fold reg'. fold reg' in IHn.
-    pose (x := [nth r_com reg' 0]). fold x.
-    destruct (n =? r_com); simpl.
-    admit. admit.
+  induction reg.
+  { simpl. reflexivity. }
+  { simpl.
+    destruct (length reg =? r_com) eqn:HD; simpl.
+    apply beq_nat_true in HD. rewrite HD. simpl. reflexivity.
+    apply beq_nat_false in HD.
+    rewrite <- clear_regs_aux_minus_last. reflexivity.
+    apply HD.
   }
-Admitted.
+Qed.
 
 Lemma clear_regs_idempotent :
   forall reg,
