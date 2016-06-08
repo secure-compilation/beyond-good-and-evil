@@ -174,21 +174,35 @@ Proof.
   } 
 Admitted.
 
-Lemma clear_regs_cons_linear :
-  forall a reg,
-  clear_regs (a::reg) = (clear_regs [a]) ++ (clear_regs reg).
+Lemma double_clear_regs_remove :
+  forall reg n x,
+  clear_regs_aux reg n =
+  clear_regs_aux (clear_regs_aux reg n)
+  (length (clear_regs_aux reg n))
+    ->
+  clear_regs_aux reg n ++ x =
+  clear_regs_aux (clear_regs_aux reg n ++ x)
+  (length (clear_regs_aux reg n ++ x)).
 Proof.
 Admitted.
 
-Lemma clear_regs_linear :
-  forall reg reg',
-  clear_regs (reg++reg') = (clear_regs reg) ++ (clear_regs reg').
+Lemma clear_regs_aux_idempotent :
+  forall reg,
+  clear_regs_aux reg (length reg) =
+  clear_regs_aux (clear_regs_aux reg (length reg))
+  (length (clear_regs_aux reg (length reg))).
 Proof.
-  intros reg. induction reg.
-  { simpl. reflexivity. }
-  { intros. admit.
+  intros.
+  induction (length reg).
+  { simpl. destruct reg; reflexivity. }
+  { simpl. destruct reg. reflexivity.
+    destruct (n =? r_com); simpl.
+    pose (double_clear_regs_remove (r :: reg) n [nth 1 reg 0]).
+    apply e. apply IHn.
+    pose (double_clear_regs_remove (r :: reg) n [0]).
+    apply e. apply IHn.
   }
-Admitted.
+Qed.
 
 Lemma clear_regs_idempotent :
   forall reg,
@@ -196,8 +210,9 @@ Lemma clear_regs_idempotent :
 Proof.
   intros. induction reg.
   { unfold clear_regs. simpl. reflexivity. }
-  { intros. rewrite app_is_cons. rewrite !clear_regs_linear.
-    simpl. rewrite <- IHreg. reflexivity.
+  { intros. unfold clear_regs.
+    rewrite <- clear_regs_aux_idempotent.
+    reflexivity.
   }
 Qed.
 
@@ -238,6 +253,12 @@ Proof.
   rewrite program_Ea_immuable_to_zeta_unit.
   reflexivity.
 Qed.
+
+Lemma trace_post_terminaison :
+  forall t a p s o,
+  ~(in_Traces_p (t++[Ext End o]++[a]) p s).
+Proof.
+Admitted. 
 
 Theorem separate_compilation_correctness_proof :
   separate_compilation_correctness.
@@ -314,7 +335,10 @@ Proof.
     assert ((forall (Ea : external_action) (o : origin),
       ~(in_Traces_p (ti ++ [Ext Ea o]) COMPILE_PROG Q ↓ s /\
       in_Traces_a (ti ++ [Ext Ea o]) a s))) as Hassert.
-    { admit. }
+    { intros. intro contra_assert. destruct contra_assert.
+      rewrite <- contra in H. apply (H_tp4 (Ext Ea o0)) in H.
+      contradiction.
+    }
     pose (trace_composition ti s (COMPILE_PROG Q↓)
       H_shq a H_sha H_and Hassert) as t_composition.
     destruct t_composition as [t_compositionL t_compositionR].
@@ -430,7 +454,14 @@ Proof.
           [Ext ✓ ContextOrigin]) ++ 
           [Ext Ea o]) COMPILE_PROG A ↓ s)))
         as t_composition_premise'.
-      { admit. }
+      { intros. intro contra_assert. destruct contra_assert.
+        pose (trace_post_terminaison 
+          (tc ++ [Ext (ExtCall c p r) ProgramOrigin])
+          (Ext Ea0 o0) (COMPILE_PROG P↓) s ContextOrigin)
+          as H_absurd.
+        rewrite app_assoc in H_absurd.
+        apply H_absurd in H. contradiction.
+      }
       specialize (t_composition t_composition_premise').
       clear t_composition_premise; clear t_composition_premise'.
       destruct t_composition as [t_comp1 t_comp2].
@@ -491,7 +522,14 @@ Proof.
           [Ext ✓ ContextOrigin]) ++ 
           [Ext Ea o]) COMPILE_PROG A ↓ s)))
         as t_composition_premise'.
-      { admit. }
+      { intros. intro contra_assert. destruct contra_assert.
+        pose (trace_post_terminaison 
+          (tc ++ [Ext (ExtRet r) ProgramOrigin])
+          (Ext Ea0 o0) (COMPILE_PROG P↓) s ContextOrigin)
+          as H_absurd.
+        rewrite app_assoc in H_absurd.
+        apply H_absurd in H. contradiction.
+      }
       specialize (t_composition t_composition_premise').
       clear t_composition_premise; clear t_composition_premise'.
       destruct t_composition as [t_comp1 t_comp2].
@@ -528,7 +566,14 @@ Proof.
         ~(in_Traces_p ((tc ++ Ea) ++ [Ext Ea0 o]) COMPILE_PROG P ↓ s /\
         in_Traces_a ((tc ++ Ea) ++ [Ext Ea0 o]) COMPILE_PROG A ↓ s))
         as H_premise.
-      { admit. }
+      { intros. intro contra_assert. destruct contra_assert.
+        rewrite H_g1 in H.
+        pose (trace_post_terminaison 
+          tc (Ext Ea0 o0) (COMPILE_PROG P↓) s ProgramOrigin)
+          as H_absurd.
+        rewrite app_assoc in H_absurd.
+        apply H_absurd in H. contradiction.
+      }
       specialize (t_composition H_premise); clear H_premise.
       destruct t_composition as [t_comp1 t_comp2].
       apply t_comp2. exists tc. exists ProgramOrigin.
@@ -596,7 +641,13 @@ Proof.
         [Ext Ea o]) COMPILE_PROG Q ↓ s /\ in_Traces_a
         ((tp ++ [Ext ✓ ProgramOrigin]) ++ [Ext Ea o]) a s)))
         as ext_premise''.
-      { admit. }
+      { intros. intro contra_assert. destruct contra_assert.
+        pose (trace_post_terminaison 
+          tp (Ext Ea0 o0) (COMPILE_PROG Q↓) s ProgramOrigin)
+          as H_absurd.
+        rewrite app_assoc in H_absurd.
+        apply H_absurd in H. contradiction.
+      }
       specialize (t_composition ext_premise'').
       destruct t_composition as [t_comp1 t_comp2].
       (* We state that Q↓ terminates which is a contradiction *)
@@ -645,7 +696,12 @@ Proof.
          ~(in_Traces_p (tc ++ [Ext Ea o]) COMPILE_PROG Q ↓ s /\
          in_Traces_a (tc ++ [Ext Ea o]) COMPILE_PROG A ↓ s)))
           as comp_premise'.
-      { admit. }
+      { intros. intro contra_assert. destruct contra_assert.
+        unfold tc in H0. unfold tc in H1. destruct o0.
+        (* rewrite program_Ea_immuable_to_zeta in H0.
+        apply (H_tp4 (Ext Ea0 o0)) in H0. *)
+        admit. admit.
+      }
       specialize (t_composition comp_premise comp_premise').
       destruct t_composition as [t_comp1 t_comp2].
       apply contrapositive in t_comp1.
