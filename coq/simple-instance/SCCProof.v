@@ -190,6 +190,26 @@ Proof.
   }
 Admitted.
 
+(* __________EXPERIENCES___________ *)
+Definition clear_regs_alt (reg:registers) :=
+  let rcomval := nth r_com reg 0 in
+  let zeros := map (fun x => 0) reg in
+  update_reg r_com (Some rcomval) reg.
+
+Lemma clear_regs_alt_idempotent :
+  forall reg,
+  clear_regs_alt reg = clear_regs_alt (clear_regs_alt reg).
+Proof.
+  intros. unfold clear_regs_alt.
+  pose (rcomval := (Some (nth r_com reg 0))). fold rcomval.
+  unfold update_reg. unfold r_com.
+  generalize dependent rcomval.
+  induction reg.
+  { intros. simpl. reflexivity. }
+  { intros. admit. }
+Admitted.
+(* _______________________________ *)
+
 Lemma clear_regs_idempotent :
   forall reg,
   clear_regs reg = clear_regs (clear_regs reg).
@@ -355,22 +375,58 @@ Proof.
   }
   (* There exists Ea such that tp.Ea such that tp.Ea 
      is a prefix of ti *)
-  assert (exists Ea, incl (tp++Ea) ti) as Ea_exists.
+  assert (exists Ea g1 o, incl (tp++Ea) ti /\ 
+    Ea = [Ext g1 o]) as Ea_exists.
   { admit. }
   destruct Ea_exists as [Ea H_EaExists].
+  destruct H_EaExists as [g1 H_EaExists].
+  destruct H_EaExists as [origin_Ea H_EaExists].
+  destruct H_EaExists as [H_EaExists H_g1].
   (* Ea is a program action *)
-  assert (exists g1, Ea = [Ext g1 ProgramOrigin])
+  assert (origin_Ea = ProgramOrigin)
     as H_program_action.
-  { admit. }
-  destruct H_program_action as [g1 H_g1].
+  { destruct origin_Ea.
+    (* Ea cannot be a context action *)
+    pose (trace_extensibility tp s g1 (COMPILE_PROG Q↓)
+    H_shq a H_sha) as t_extensibility.
+    destruct t_extensibility as [t_ext1 t_ext2].
+    assert (in_Traces_p tp COMPILE_PROG Q ↓ s /\
+      in_Traces_a (tp ++ [Ext g1 ContextOrigin]) a s)
+      as H_assert.
+    { split. assumption. rewrite <- H_g1.
+      apply (trace_sets_closed_under_prefix_context
+        (tp++Ea) ti a s H_sha H_EaExists H_tSets2).
+    }
+    apply t_ext1 in H_assert.
+    apply (H_tp4 (Ext g1 ContextOrigin)) in H_assert.
+    contradiction.
+    (* Ea is a program action *)
+    reflexivity.
+  }
+  rewrite H_program_action in H_g1.
   (* Let tc be the canonicalization of tp *)
   pose (tc := zetaC_t tp).
   (* tc is a trace of P↓ *)
   pose (canonicalization (tp++Ea) s P H_shP H_PFD)
     as H_canonicalization.
   destruct H_canonicalization as [H_canon1 H_canon2].
+  assert (in_Traces_p tp COMPILE_PROG P ↓ s) as H_tp_p.
+  { apply (trace_sets_closed_under_prefix_program
+        tp ti (COMPILE_PROG P↓) s H_shp H_tp1 H_tSets1).
+  }
   assert (in_Traces_p (tp++Ea) (COMPILE_PROG P↓) s) as H_zeta.
-  { admit. }
+  { pose (trace_extensibility tp s g1 (COMPILE_PROG P↓)
+    H_shp a H_sha) as t_extensibility.
+    destruct t_extensibility as [t_ext1 t_ext2].
+    assert (in_Traces_p tp COMPILE_PROG P ↓ s /\
+      in_Traces_a (tp ++ [Ext g1 ProgramOrigin]) a s)
+      as H_assert.
+    { split. assumption. rewrite <- H_g1.
+    apply (trace_sets_closed_under_prefix_context
+        (tp++Ea) ti a s H_sha H_EaExists H_tSets2).
+    }
+    admit.
+  }
   apply H_canon1 in H_zeta.
   (* Use of the definability assumption to build A *)
   pose (definability tc g1 s) as H_definability.
