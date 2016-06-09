@@ -173,15 +173,6 @@ Proof.
   }
 Qed.
 
-Lemma clear_regs_aux_minus_last :
-  forall a reg,
-  length reg <> r_com ->
-  clear_regs_aux (a :: reg) (length reg) ++ [0] =
-  clear_regs_aux (clear_regs_aux (a :: reg) (length reg) ++ [0])
-  (length (clear_regs_aux (a :: reg) (length reg) ++ [0])).
-Proof.
-Admitted.
-
 Lemma clear_regs_aux_idempotent :
   forall reg,
   clear_regs_aux reg (length reg) =
@@ -195,21 +186,16 @@ Proof.
     destruct (length reg =? r_com) eqn:HD; simpl.
     apply beq_nat_true in HD. rewrite HD. simpl. reflexivity.
     apply beq_nat_false in HD.
-    rewrite <- clear_regs_aux_minus_last. reflexivity.
-    apply HD.
+    admit.
   }
-Qed.
+Admitted.
 
 Lemma clear_regs_idempotent :
   forall reg,
   clear_regs reg = clear_regs (clear_regs reg).
 Proof.
-  intros. induction reg.
-  { unfold clear_regs. simpl. reflexivity. }
-  { intros. unfold clear_regs.
-    rewrite <- clear_regs_aux_idempotent.
-    reflexivity.
-  }
+  intros. unfold clear_regs.
+  apply clear_regs_aux_idempotent.
 Qed.
 
 Lemma zeta_gamma_idempotent :
@@ -228,8 +214,7 @@ Proof.
   { reflexivity. }
   { destruct a; destruct o; simpl; try (reflexivity);
     try (rewrite <- zeta_gamma_idempotent);
-    rewrite <- IHt; reflexivity.
-  }
+    rewrite <- IHt; reflexivity. }
 Qed.
 
 Lemma program_Ea_immuable_to_zeta :
