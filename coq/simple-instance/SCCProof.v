@@ -190,26 +190,6 @@ Proof.
   }
 Admitted.
 
-(* __________EXPERIENCES___________ *)
-Definition clear_regs_alt (reg:registers) :=
-  let rcomval := nth r_com reg 0 in
-  let zeros := map (fun x => 0) reg in
-  update_reg r_com (Some rcomval) reg.
-
-Lemma clear_regs_alt_idempotent :
-  forall reg,
-  clear_regs_alt reg = clear_regs_alt (clear_regs_alt reg).
-Proof.
-  intros. unfold clear_regs_alt.
-  pose (rcomval := (Some (nth r_com reg 0))). fold rcomval.
-  unfold update_reg. unfold r_com.
-  generalize dependent rcomval.
-  induction reg.
-  { intros. simpl. reflexivity. }
-  { intros. admit. }
-Admitted.
-(* _______________________________ *)
-
 Lemma clear_regs_idempotent :
   forall reg,
   clear_regs reg = clear_regs (clear_regs reg).
@@ -302,7 +282,7 @@ Proof.
   intros H_a. destruct H_a as [a [H_sha H_low_neq]].
   inversion H_low_neq as [ap aq H_behavior ap_eq aq_eq].
   (* We suppose that a[P↓] terminates and a[Q↓] diverges *)
-  destruct H_behavior as [H_behavior|H_behavior'].
+  induction H_behavior as [H_behavior|H_behavior'].
   destruct H_behavior as [ap_terminates aq_diverges].
   (* Goal : build a full-defined A ∈∘ s such that A[P] ≁ A[Q] *)
   (* We first apply trace decomposition *)
@@ -377,7 +357,10 @@ Proof.
      is a prefix of ti *)
   assert (exists Ea g1 o, incl (tp++Ea) ti /\ 
     Ea = [Ext g1 o]) as Ea_exists.
-  { admit. }
+  { admit.
+    (* TODO : Use the fact that tp is a strict prefix
+      so there exists an other action following it *)
+  }
   destruct Ea_exists as [Ea H_EaExists].
   destruct H_EaExists as [g1 H_EaExists].
   destruct H_EaExists as [origin_Ea H_EaExists].
@@ -410,22 +393,11 @@ Proof.
   pose (canonicalization (tp++Ea) s P H_shP H_PFD)
     as H_canonicalization.
   destruct H_canonicalization as [H_canon1 H_canon2].
-  assert (in_Traces_p tp COMPILE_PROG P ↓ s) as H_tp_p.
+  assert (in_Traces_p (tp ++ Ea) COMPILE_PROG P ↓ s)
+    as H_zeta.
   { apply (trace_sets_closed_under_prefix_program
-        tp ti (COMPILE_PROG P↓) s H_shp H_tp1 H_tSets1).
-  }
-  assert (in_Traces_p (tp++Ea) (COMPILE_PROG P↓) s) as H_zeta.
-  { pose (trace_extensibility tp s g1 (COMPILE_PROG P↓)
-    H_shp a H_sha) as t_extensibility.
-    destruct t_extensibility as [t_ext1 t_ext2].
-    assert (in_Traces_p tp COMPILE_PROG P ↓ s /\
-      in_Traces_a (tp ++ [Ext g1 ProgramOrigin]) a s)
-      as H_assert.
-    { split. assumption. rewrite <- H_g1.
-    apply (trace_sets_closed_under_prefix_context
-        (tp++Ea) ti a s H_sha H_EaExists H_tSets2).
-    }
-    admit.
+      (tp++Ea) ti (COMPILE_PROG P↓) s H_shp H_EaExists
+      H_tSets1).
   }
   apply H_canon1 in H_zeta.
   (* Use of the definability assumption to build A *)
@@ -731,7 +703,7 @@ Proof.
       (tc++[Ext gx ProgramOrigin]++[Ext g ContextOrigin]) 
       (COMPILE_PROG A↓) s)) as cant_be_context.
     { intros g gx contra. destruct contra as [contra1 contra2].
-      admit.
+      admit. (* TODO : Stuck with the definition on the paper *)
     }
     (* We prove that Q↓ can perform any (ia+) *)
     assert ((in_Traces_p 
@@ -750,10 +722,25 @@ Proof.
          in_Traces_a (tc ++ [Ext Ea o]) COMPILE_PROG A ↓ s)))
           as comp_premise'.
       { intros. intro contra_assert. destruct contra_assert.
-        unfold tc in H0. unfold tc in H1. destruct o0.
-        (* rewrite program_Ea_immuable_to_zeta in H0.
-        apply (H_tp4 (Ext Ea0 o0)) in H0. *)
-        admit. admit.
+        unfold tc in H0. unfold tc in H1.
+        assert (in_Traces_p (zetaC_t (tp++[Ext Ea0 ProgramOrigin]))
+            (COMPILE_PROG Q↓) s -> 
+            in_Traces_p (tp++[Ext Ea0 ProgramOrigin]) (COMPILE_PROG Q↓) s)
+            as canon_x.
+        { intro. apply canonicalization in H2. apply H2.
+          apply H_shQ. apply H_QFD.
+        }
+        destruct o0; destruct g1;
+        try (
+          rewrite <- program_Ea_immuable_to_zeta in H0;
+          apply canon_x in H0; clear canon_x;
+          specialize (H_tp4 (Ext Ea0 ProgramOrigin));
+          unfold not in H_tp4; apply H_tp4 in H0;
+          contradiction
+        ).
+        (* TODO : use the fact that we can't have a
+           context action *)
+        admit. admit. admit.
       }
       specialize (t_composition comp_premise comp_premise').
       destruct t_composition as [t_comp1 t_comp2].
@@ -762,17 +749,29 @@ Proof.
       apply t_comp1. intro contra.
       destruct contra as [t_contra contra].
       destruct contra as [o_contra contra].
-      unfold tc in contra. admit.
+      rewrite contra in comp_premise.
+      destruct o_contra.
+      destruct comp_premise as [comp1 comp2].
+      unfold tc in contra.
+      (* Q↓ can't have a terminating trace *)
+      admit. admit.
     }
     (* There exists an action following tc for Q↓ *)
     assert (exists alpha, in_Traces_p (tc++[alpha]) 
       (COMPILE_PROG Q↓) s) as H_exists_alpha.
-    { admit. }
+    { (* TODO : tc has the same length as tp and thus is
+        a strict prefix of ti. Since it's a strict prefix
+        there's an action following it *)
+      admit.
+    }
+    (* TODO : How can we get an exhaustive list of cases ? *)
     destruct H_exists_alpha as [alpha H_alpha_inTracesQ].
-    (* destruct alpha; destruct o0; try (destruct e);
-    try (destruct i). *)
     admit.
   }
+  exists A. intros. constructor. left. split.
+  pose (separate_compilation_correctness_proof) as CompCorrect.
+  unfold separate_compilation_correctness in CompCorrect.
+  apply AP_terminates.
   (* Symmetric case *)
   admit.
 Admitted.
@@ -782,7 +781,6 @@ Definition secure_compartmentalizing_compilation : Prop :=
 
 Lemma SCC_isomorphism :
   structured_full_abstraction ->
-  separate_compilation_correctness ->
   secure_compartmentalizing_compilation.
 Proof.
 Admitted.
