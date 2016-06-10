@@ -330,7 +330,7 @@ Definition cprogram_diverges (P:Target.program) : Prop :=
 
 Theorem cterminates_cdiverges_opposition :
   forall P,
-  (~cprogram_terminates P) = (cprogram_diverges P).
+  (~cprogram_terminates P) -> (cprogram_diverges P).
 Proof.
 Admitted.
 

@@ -174,28 +174,19 @@ Proof.
 Qed.
 
 Lemma clear_regs_aux_idempotent :
-  forall reg,
-  clear_regs_aux reg (length reg) =
-  clear_regs_aux (clear_regs_aux reg (length reg))
-  (length (clear_regs_aux reg (length reg))).
+  forall l k n, clear_regs_aux l k n =
+  clear_regs_aux (clear_regs_aux l k n) k n.
 Proof.
-  intros.
-  induction reg.
-  { simpl. reflexivity. }
-  { simpl.
-    destruct (length reg =? r_com) eqn:HD; simpl.
-    apply beq_nat_true in HD. rewrite HD. simpl. reflexivity.
-    apply beq_nat_false in HD.
-    admit.
-  }
-Admitted.
+  induction l.
+  - auto.
+  - intros k n. simpl. rewrite <- IHl. destruct (eq_nat_dec n k); auto.
+Qed.
 
-Lemma clear_regs_idempotent :
-  forall reg,
-  clear_regs reg = clear_regs (clear_regs reg).
+Lemma clear_regs_idempotent : 
+  forall l, clear_regs l = clear_regs (clear_regs l).
 Proof.
   intros. unfold clear_regs.
-  apply clear_regs_aux_idempotent.
+  rewrite <- clear_regs_aux_idempotent. auto.
 Qed.
 
 Lemma zeta_gamma_idempotent :
@@ -282,7 +273,7 @@ Proof.
   intros H_a. destruct H_a as [a [H_sha H_low_neq]].
   inversion H_low_neq as [ap aq H_behavior ap_eq aq_eq].
   (* We suppose that a[P↓] terminates and a[Q↓] diverges *)
-  induction H_behavior as [H_behavior|H_behavior'].
+  destruct H_behavior as [H_behavior|H_behavior'].
   destruct H_behavior as [ap_terminates aq_diverges].
   (* Goal : build a full-defined A ∈∘ s such that A[P] ≁ A[Q] *)
   (* We first apply trace decomposition *)
@@ -607,7 +598,7 @@ Proof.
   }
   (* Now we prove that A↓[Q↓] diverges *)
   assert (cprogram_diverges (LL_context_application
-    (COMPILE_PROG A↓) (COMPILE_PROG Q↓))) as AQ_terminates.
+    (COMPILE_PROG A↓) (COMPILE_PROG Q↓))) as AQ_diverges.
   Case "that A↓[Q↓] diverges".
   { (* We deduce 3 things by canonicalization *)
     (* a *)
@@ -745,7 +736,7 @@ Proof.
       specialize (t_composition comp_premise comp_premise').
       destruct t_composition as [t_comp1 t_comp2].
       apply contrapositive in t_comp1.
-      rewrite cterminates_cdiverges_opposition in t_comp1.
+      apply cterminates_cdiverges_opposition in t_comp1.
       apply t_comp1. intro contra.
       destruct contra as [t_contra contra].
       destruct contra as [o_contra contra].
@@ -769,9 +760,16 @@ Proof.
     admit.
   }
   exists A. intros. constructor. left. split.
-  pose (separate_compilation_correctness_proof) as CompCorrect.
-  unfold separate_compilation_correctness in CompCorrect.
-  apply AP_terminates.
+  pose (separate_compilation_correctness_proof) as CompCorrectP.
+  unfold separate_compilation_correctness in CompCorrectP.
+  specialize (CompCorrectP s A P H_shA H_shP H_PFD H_AFD).
+  destruct CompCorrectP.
+  apply H0 in AP_terminates. apply AP_terminates.
+  pose (separate_compilation_correctness_proof) as CompCorrectQ.
+  unfold separate_compilation_correctness in CompCorrectQ.
+  specialize (CompCorrectQ s A Q H_shA H_shQ H_QFD H_AFD).
+  destruct CompCorrectQ.
+  apply H1 in AQ_diverges. apply AQ_diverges.
   (* Symmetric case *)
   admit.
 Admitted.
@@ -790,7 +788,6 @@ Theorem SCCProof :
 Proof.
   apply SCC_isomorphism.
   apply structured_full_abstraction_proof.
-  apply separate_compilation_correctness_proof.
 Qed.
 
 
