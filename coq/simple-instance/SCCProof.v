@@ -26,8 +26,8 @@ Inductive neq_progH : Source.program -> Source.program -> Prop :=
     (neq_progH P P')
   where "'HIGH_NEQ' P '≁H' P'" := (neq_progH P P').
 
-(* If a[P] ≁L a[Q] we say that a distinguish the partial
-   programs P and Q. The same concept exists for ≁H *)
+(* If a[P↓] ≁L a[Q↓] we say that a distinguish the partial
+   programs P↓ and Q↓. The same concept exists for ≁H *)
 
 (* _____________________________________ 
            LEMMAS & PROPERTIES
