@@ -328,11 +328,42 @@ Definition cprogram_diverges (P:Target.program) : Prop :=
     exists cfg', (step Is E cfg cfg')
   end.
 
-Theorem cterminates_cdiverges_opposition :
-  forall P,
-  (~cprogram_terminates P) -> (cprogram_diverges P).
+Lemma LL_program_behavior_exclusion :
+  forall p, cprogram_terminates p /\ cprogram_diverges p
+    -> False.
 Proof.
+  intros. destruct p as [[Is mem] E].
+  destruct H as [terminates diverges].
+  unfold cprogram_terminates in terminates.
+  unfold cprogram_diverges in diverges.
+  destruct terminates as [s H_terminates].
+  destruct H_terminates as [H_term1 H_term2].
+  inversion H_term2. unfold not in H.
+  specialize (diverges s).
+  assert (LV_multi_step Is E 
+    (LL_initial_cfg_of (Is, mem, E)) s) as H_assert.
+  { unfold LV_multi_step. eapply multi_step.
+    apply H_term1. apply multi_refl. }
+  apply diverges in H_assert. destruct H_assert.
+  specialize (H x). apply H in H1. contradiction.
+Qed.
+
+Lemma LL_program_terminates_or_diverges :
+  forall p,
+  cprogram_terminates p \/ cprogram_diverges p.
+Proof.
+  intros.
 Admitted.
+
+Theorem cterminates_cdiverges_opposition :
+  forall p,
+  (~cprogram_terminates p) -> (cprogram_diverges p).
+Proof.
+  intros. pose (LL_program_terminates_or_diverges p) as Ha.
+  destruct Ha.
+  - apply H in H0. contradiction.
+  - apply H0.
+Qed.
 
 
 (* _____________________________________ 

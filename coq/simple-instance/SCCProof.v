@@ -132,27 +132,6 @@ Lemma trace_sets_closed_under_prefix_context :
 Proof.
 Admitted.
 
-Lemma LL_program_behavior_exclusion :
-  forall p, cprogram_terminates p /\ cprogram_diverges p
-    -> False.
-Proof.
-  intros. destruct p as [[Is mem] E].
-  destruct H as [terminates diverges].
-  unfold cprogram_terminates in terminates.
-  unfold cprogram_diverges in diverges.
-  destruct terminates as [s H_terminates].
-  destruct H_terminates as [H_term1 H_term2].
-  inversion H_term2. unfold not in H.
-  specialize (diverges s).
-  assert (LV_multi_step Is E 
-    (LL_initial_cfg_of (Is, mem, E)) s) as H_assert.
-  { unfold LV_multi_step. eapply multi_step.
-    apply H_term1. apply multi_refl.
-  }
-  apply diverges in H_assert. destruct H_assert.
-  specialize (H x). apply H in H1. contradiction.
-Qed.
-
 Lemma app_is_cons :
   forall {X:Type} a (l:list X), a::l = [a]++l.
 Proof.
@@ -166,11 +145,10 @@ Lemma zeta_linear_program :
 Proof.
   intros.
   induction t.
-  { simpl. reflexivity. }
-  { rewrite app_is_cons. rewrite <- app_assoc.
+  - simpl. reflexivity.
+  - rewrite app_is_cons. rewrite <- app_assoc.
     destruct a; destruct o;
     simpl; rewrite IHt; reflexivity.
-  }
 Qed.
 
 Lemma clear_regs_aux_idempotent :
@@ -202,10 +180,10 @@ Lemma zetaC_t_idempotent :
   forall t, zetaC_t t = zetaC_t (zetaC_t t).
 Proof.
   intros. induction t.
-  { reflexivity. }
-  { destruct a; destruct o; simpl; try (reflexivity);
+  - reflexivity.
+  - destruct a; destruct o; simpl; try (reflexivity);
     try (rewrite <- zeta_gamma_idempotent);
-    rewrite <- IHt; reflexivity. }
+    rewrite <- IHt; reflexivity.
 Qed.
 
 Lemma program_Ea_immuable_to_zeta :
@@ -227,14 +205,14 @@ Proof.
   destruct p as [[Isp mem] E].
   unfold in_Traces_p in contra. destruct contra.
   inversion H.
-  { symmetry in H3. apply app_eq_nil in H3.
-    destruct H3. inversion H3. }
-  { symmetry in H0. apply app_eq_nil in H0.
-    destruct H0. inversion H4. }
-  { symmetry in H0. apply app_eq_unit in H0.
+  - symmetry in H3. apply app_eq_nil in H3.
+    destruct H3. inversion H3.
+  - symmetry in H0. apply app_eq_nil in H0.
+    destruct H0. inversion H4.
+  - symmetry in H0. apply app_eq_unit in H0.
     destruct H0. destruct H0. inversion H4.
-    destruct H0. inversion H4. }
-  { symmetry in H0. rewrite app_is_cons in H0.
+    destruct H0. inversion H4.
+  - symmetry in H0. rewrite app_is_cons in H0.
     rewrite app_assoc in H0.
     assert ([t0; u] = [t0]++[u]). reflexivity.
     rewrite H5 in H0. apply app_inj_tail in H0.
@@ -245,7 +223,7 @@ Proof.
       destruct i; inversion H10. inversion H10.
       rewrite <- H8 in H4. inversion H4.
       rewrite <- H11 in H4. inversion H4.
-    destruct H0. inversion H7. }
+    destruct H0. inversion H7.
 Qed.
 
 Theorem contrapositive : forall P Q : Prop, 
