@@ -375,11 +375,15 @@ Inductive stuck_state :
 Definition boolean_stuckstate (Is:partial_program_interfaces) 
   (cfg:state) : bool :=
   match cfg with
-  (* S_EmptyCallStack *)
-  | (C,[],mem,reg,pc) => true
   | (C,d,mem,reg,pc) =>
     let i := fetch_mem C mem pc in
     match (decode i) with
+    (* S_Return_EmptyCallStack *)
+    | Some Return => 
+      if (length d =? 0) then
+        true
+      else
+        false
     (* S_CallFail *)
     | Some (Call C' P') =>
       if (boolean_call_exists Is C' P') then
@@ -477,30 +481,14 @@ Fixpoint eval_step
   (Is:partial_program_interfaces) (E:entry_points) 
   (cfg:state) (limit:nat) : state :=
   match limit with
-  | 0 =>
-    match cfg with
-    | (C,d,mem,reg,pc) => (C,d,mem,reg,pc+1)
-    end
+  | 0 => cfg
   | S n => 
     match cfg with
-    (* S_EmptyCallStack *)    
-    | (C,[],mem,reg,pc) => (C,[],mem,reg,pc+1)
     | (C,d,mem,reg,pc) =>
-      let i := fetch_mem C mem pc in
-      match (decode i) with
-      (* S_CallFail *)
-      | Some (Call C' P') =>
-        if (negb (boolean_call_exists Is C' P')) then
-          (C,d,mem,reg,pc+1)
-        else
-          eval_step Is E (basic_eval_step Is E cfg) n
-      (* S_Halt *)
-      | Some Halt => (C,d,mem,reg,pc+1)
-      (* S_DecodingError *)
-      | None => (C,d,mem,reg,pc+1)
-      (* Other cases *)
-      | _ => eval_step Is E (basic_eval_step Is E cfg) n
-      end
+      if boolean_stuckstate Is cfg then
+        cfg
+      else
+        eval_step Is E (basic_eval_step Is E cfg) n
     end
   end.
 
@@ -508,11 +496,70 @@ Fixpoint eval_step
           PROOF : DETERMINISM
    _____________________________________ *)
 
+Lemma in_import_eq :
+  forall C' P' i,
+  In (C', P') (get_import i) ->
+  existsb (fun x : nat * nat =>
+    (fst x =? C') && (snd x =? P')) (get_import i) = true.
+Proof.
+  intros.
+  induction (get_import i).
+  - inversion H.
+  - simpl in H. destruct H.
+    + rewrite H. simpl.
+      assert ((C' =? C') && (P' =? P') = true) as Ha.
+      rewrite <- (beq_nat_refl C').
+      rewrite <- (beq_nat_refl P').
+      trivial. rewrite Ha. simpl. trivial.
+    + apply IHl in H. simpl. rewrite H.
+      apply orb_comm.
+Qed.
+
+Lemma callexists_boolean_eq :
+  forall Is C' P',
+  call_exists Is C' P' -> boolean_call_exists Is C' P' = true.
+Proof.
+  intros. unfold call_exists in H. unfold boolean_call_exists.
+  destruct (nth C' Is None).
+  - destruct H. rewrite H. apply in_import_eq in H0.
+    rewrite H0. trivial.
+  - contradiction.
+Qed.
+
 Lemma step_eval_1step :
   forall Is E cfg1 cfg2,
   (LOW_LEVEL Is;E |- cfg1 ⇒ cfg2) -> eval_step Is E cfg1 1 = cfg2.
 Proof.
-Admitted.
+  intros.
+  destruct cfg1 as [[[[C1 d1] mem1] reg1] pc1].
+  destruct cfg2 as [[[[C2 d2] mem2] reg2] pc2].
+  induction H;
+  rename H into H_fetch; rename H0 into H_decode;
+  unfold eval_step; unfold boolean_stuckstate;
+  rewrite H_fetch; try (rewrite H_decode); simpl;
+  rewrite H_fetch; try (rewrite H_decode); simpl;
+  try (subst; reflexivity).
+  - rewrite H1. simpl.
+    destruct (boolean_call_exists Is C' P') eqn:HD.
+    + simpl. destruct (nth C Is None). destruct H2; rewrite H3.
+      apply in_import_eq in H. rewrite H. simpl. reflexivity.
+      rewrite H. assert (C =? C = true).
+      { symmetry. apply beq_nat_refl. }
+      rewrite H0. remember (existsb (fun x : nat * nat =>
+      (fst x =? C) && (snd x =? P')) (get_import i0)) as t_exists.
+      rewrite (orb_comm t_exists true). simpl. reflexivity.
+      destruct H2. contradiction.
+      rewrite H. assert (C =? C = true).
+      { symmetry. apply beq_nat_refl. }
+      rewrite H0. simpl. rewrite H3. reflexivity.
+    + destruct (nth C Is None).
+      * destruct H2; apply callexists_boolean_eq in H_decode;
+        rewrite H_decode in HD; inversion HD.
+      * destruct H2; apply callexists_boolean_eq in H_decode;
+        rewrite H_decode in HD; inversion HD.
+  - apply false_beq_nat in H1. rewrite H1. simpl. reflexivity.
+  - rewrite H1. simpl. reflexivity.
+Qed.
 
 Theorem abstractmachine_determinism :
   forall Is E cfg cfg1 cfg2,
