@@ -348,21 +348,72 @@ Proof.
   specialize (H x). apply H in H1. contradiction.
 Qed.
 
-Lemma LL_program_terminates_or_diverges :
+Axiom excluded_middle :
+  forall P, P \/ ~P.
+
+Lemma de_morgan_instance1 :
+  forall P Q, ~P /\ ~Q -> ~ (P \/ Q).
+Proof.
+  intros. intro contra. destruct H.
+  destruct contra.
+  - apply H in H1. contradiction.
+  - apply H0 in H1. contradiction.
+Qed.
+
+Lemma LL_program_terminates_negation :
   forall p,
-  cprogram_terminates p \/ cprogram_diverges p.
+  match p with
+  | (Isp, mem, E) =>
+    ~(forall cfg,
+    ~LOW_LEVEL Isp; E |- LL_initial_cfg_of (Isp, mem, E) ⇒ cfg
+      \/
+    ~state_irreducible Isp E cfg)
+        ->
+    (exists cfg,
+    LOW_LEVEL Isp; E |- LL_initial_cfg_of (Isp, mem, E) ⇒ cfg
+      /\
+    state_irreducible Isp E cfg)
+  end.
+Proof.
+  destruct p as [[Isp] mem E].
+Admitted.
+
+Lemma LL_program_diverges_negation :
+  forall p,
+  match p with
+  | (Isp, mem, E) =>
+  ~(exists cfg,
+    ~LV_multi_step Isp E (LL_initial_cfg_of (Isp, mem, E)) cfg
+    /\ forall cfg', LOW_LEVEL Isp; E |- cfg ⇒ cfg')
+      ->
+  (forall cfg : state,
+    LV_multi_step Isp E (LL_initial_cfg_of (Isp, mem, E)) cfg ->
+    exists cfg' : state, LOW_LEVEL Isp; E |- cfg ⇒ cfg')
+  end.
+Proof.
+Admitted.
+
+Lemma LL_program_behavior_exclusion' :
+  forall p, 
+    ~cprogram_terminates p -> 
+    ~cprogram_diverges p
+    -> False.
 Proof.
   intros.
+  destruct p as [[Isp mem] E].
+  unfold cprogram_terminates in H.
 Admitted.
 
 Theorem cterminates_cdiverges_opposition :
   forall p,
   (~cprogram_terminates p) -> (cprogram_diverges p).
 Proof.
-  intros. pose (LL_program_terminates_or_diverges p) as Ha.
-  destruct Ha.
-  - apply H in H0. contradiction.
+  intros.
+  pose (excluded_middle (cprogram_diverges p)) as EM.
+  destruct EM.
   - apply H0.
+  - pose (LL_program_behavior_exclusion' p
+    H H0). contradiction.
 Qed.
 
 
