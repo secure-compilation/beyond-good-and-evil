@@ -876,15 +876,15 @@ p, q, a ::= (ψ, mem, E)
 
 *** Program has shape: p ∈• s
 
-∀ ι ∈ ψₚ, ψ[ι.name] = ι
-dom(E) = dom(mem) = comps(ψₚ) = {C₀,...,Cₙ}
+∀ ι ∈ ψₚ, ι ⊆ ψ[ι.name]
+dom(E) ⊆ dom(mem) = comps(ψₚ) = {C₀,...,Cₙ}
 ———————————————————————————————————————————
 (ψₚ, mem, E) ∈• (ψ, {C₀,...,Cₙ})
 
 *** Context has shape: a ∈∘ s
 
-∀ ι ∈ ψₐ, ψ[ι.name] = ι
-dom(E) = dom(mem) = comps(ψₐ) = comps(ψ)∖{C₀,...,Cₙ}
+∀ ι ∈ ψₐ, ι ⊆ ψ[ι.name]
+dom(E) ⊆ dom(mem) = comps(ψₐ) = comps(ψ)∖{C₀,...,Cₙ}
 ————————————————————————————————————————————————————
 (ψₐ, mem, E) ∈∘ (ψ, {C₀,...,Cₙ})
 
