@@ -29,6 +29,26 @@ Inductive neq_progH : Source.program -> Source.program -> Prop :=
 (* If a[P↓] ≁L a[Q↓] we say that a distinguish the partial
    programs P↓ and Q↓. The same concept exists for ≁H *)
 
+Lemma low_neq_symmetry :
+  forall P Q,
+  neq_progL P Q -> neq_progL Q P.
+Proof.
+  intros. inversion H. constructor.
+  destruct H0.
+  - right. apply and_comm. apply H0.
+  - left. apply and_comm. apply H0.
+Qed.
+
+Lemma high_neq_symmetry :
+  forall P Q,
+  neq_progH P Q -> neq_progH Q P.
+Proof.
+  intros. inversion H. constructor.
+  destruct H0.
+  - right. apply and_comm. apply H0.
+  - left. apply and_comm. apply H0.
+Qed.
+
 (* _____________________________________ 
            LEMMAS & PROPERTIES
    _____________________________________ *)
@@ -74,6 +94,25 @@ Definition structured_full_abstraction : Prop :=
     (program_fully_defined s P) ->
     (program_fully_defined s Q) ->
     (exists a, (LL_CONTEXT_SHAPE a ∈∘ s) /\
+       let ap := (LL_context_application a (COMPILE_PROG P↓)) in
+       let aq := (LL_context_application a (COMPILE_PROG Q↓)) in
+       LOW_NEQ ap ≁L aq)
+    ->
+    (exists A,
+    let AP := (context_application A P) in
+    let AQ := (context_application A Q) in
+    (CONTEXT_SHAPE A ∈∘ s) /\ (context_fully_defined s A) ->
+    HIGH_NEQ AP ≁H AQ).
+
+(* Equal to the previous one by prenex normal form transformation *)
+Definition structured_full_abstraction_aux 
+  (a : Target.program) (P Q : Source.partial_program)
+  (s:shape) : Prop :=
+    (PROGRAM_SHAPE P ∈• s) ->
+    (PROGRAM_SHAPE Q ∈• s) ->
+    (program_fully_defined s P) ->
+    (program_fully_defined s Q) ->
+    ((LL_CONTEXT_SHAPE a ∈∘ s) /\
        let ap := (LL_context_application a (COMPILE_PROG P↓)) in
        let aq := (LL_context_application a (COMPILE_PROG Q↓)) in
        LOW_NEQ ap ≁L aq)
@@ -241,18 +280,19 @@ Theorem separate_compilation_correctness_proof :
 Proof.
 Admitted.
 
-Theorem structured_full_abstraction_proof :
-  structured_full_abstraction.
+(* We suppose that a[P↓] terminates and a[Q↓] diverges *)
+Lemma structured_full_abstraction_aux_proof :
+  forall a P Q s,
+  let ap := (LL_context_application a COMPILE_PROG P↓) in
+  let aq := (LL_context_application a COMPILE_PROG Q↓) in
+  cprogram_terminates ap -> cprogram_diverges aq ->
+  structured_full_abstraction_aux a P Q s.
 Proof.
-  unfold structured_full_abstraction.
-  intros s.
-  intros P Q H_shP H_shQ H_PFD H_QFD.
+  unfold structured_full_abstraction_aux.
+  intros a P Q s ap_terminates aq_diverges H_shP H_shQ H_PFD H_QFD.
   (* We consider a ∈∘ s distinguishing P ∈• s and Q ∈• s *)
-  intros H_a. destruct H_a as [a [H_sha H_low_neq]].
+  intros H_a. destruct H_a as [H_sha H_low_neq].
   inversion H_low_neq as [ap aq H_behavior ap_eq aq_eq].
-  (* We suppose that a[P↓] terminates and a[Q↓] diverges *)
-  destruct H_behavior as [H_behavior|H_behavior'].
-  destruct H_behavior as [ap_terminates aq_diverges].
   (* Goal : build a full-defined A ∈∘ s such that A[P] ≁ A[Q] *)
   (* We first apply trace decomposition *)
   assert (H_shq := H_shQ).
@@ -748,9 +788,43 @@ Proof.
   specialize (CompCorrectQ s A Q H_shA H_shQ H_QFD H_AFD).
   destruct CompCorrectQ.
   apply H1 in AQ_diverges. apply AQ_diverges.
-  (* Symmetric case *)
-  admit.
 Admitted.
+
+Theorem structured_full_abstraction_proof :
+  structured_full_abstraction.
+Proof.
+  unfold structured_full_abstraction.
+  intros s P Q H_shP H_shQ H_PFD H_QFD.
+  intro H_a. destruct H_a as [a [H_sha H_low_neq]].
+  inversion H_low_neq as [ap aq H_behavior ap_eq aq_eq].
+  destruct H_behavior as [H_behavior | H_behavior].
+  - destruct H_behavior as [ap_terminates aq_diverges].
+    pose (structured_full_abstraction_aux_proof a P Q
+      s ap_terminates aq_diverges) as lemma.
+    unfold structured_full_abstraction_aux in lemma.
+    apply (lemma H_shP H_shQ H_PFD H_QFD (conj H_sha H_low_neq)).
+  - destruct H_behavior as [ap_diverges aq_terminates].
+    pose (structured_full_abstraction_aux_proof a Q P
+      s aq_terminates ap_diverges) as lemma.
+    unfold structured_full_abstraction_aux in lemma.
+    specialize (lemma H_shQ H_shP H_QFD H_PFD).
+    assert ((exists A : partial_program,
+      CONTEXT_SHAPE A ∈∘ s /\ context_fully_defined s A ->
+      HIGH_NEQ context_application A Q
+      ≁H context_application A P)
+        ->
+    (exists A : partial_program,
+      CONTEXT_SHAPE A ∈∘ s /\ context_fully_defined s A ->
+      HIGH_NEQ context_application A P
+      ≁H context_application A Q)) as H_assert.
+    { intros HA. destruct HA as [A H].
+      exists A. intros. apply H in H0.
+      apply high_neq_symmetry. apply H0. }
+    apply H_assert. apply lemma.
+    split.
+    + apply H_sha.
+    + apply low_neq_symmetry. apply H_low_neq.
+Qed. 
 
 Definition secure_compartmentalizing_compilation : Prop :=
   admit.
