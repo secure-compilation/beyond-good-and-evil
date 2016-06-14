@@ -54,6 +54,7 @@ Qed.
    _____________________________________ *)
 
 (* ------- Canonicalization ------- *)
+(** Proved in the paper **)
 Lemma canonicalization :
   forall t s,
   forall P, (PROGRAM_SHAPE P ∈• s) -> 
@@ -65,6 +66,7 @@ Proof.
 Admitted.
 
 (* ------- Definability / Trace mappping algorithm ------- *)
+(** An OCaml algorithm is available **)
 Lemma definability :
   forall t g1 s, 
     t = zetaC_t t /\ (exists p, (LL_PROGRAM_SHAPE p ∈• s) -> 
@@ -274,6 +276,9 @@ Proof.
   apply H0 in contra.
   contradiction.
 Qed.
+
+Definition is_a_prefix_of (u:trace) (t:trace) : Prop :=
+  exists v, u++v = t.
 
 Theorem separate_compilation_correctness_proof :
   separate_compilation_correctness.
