@@ -280,6 +280,19 @@ Qed.
 Definition is_a_prefix_of (u:trace) (t:trace) : Prop :=
   exists v, u++v = t.
 
+Definition is_largest_prefix_of_satisfying (u:trace) (t:trace) (P:trace -> Prop): Prop :=
+  (is_a_prefix u t /\ P u) /\
+  (forall v, is_a_prefix_of v t /\ P v ->
+               is_a_prefix_of v u).
+
+Hypothesis largest_prefix_of_satisfying (t:trace) (P:trace -> Prop): trace.
+
+Hypothesis largest_prefix_of_satisfying_spec:
+  forall t P,
+    let u := largest_prefix_of_satisfying t P in
+    (is_largest_prefix_of_satisfying u t P).
+
+
 Theorem separate_compilation_correctness_proof :
   separate_compilation_correctness.
 Proof.
@@ -308,21 +321,15 @@ Proof.
     H_shp a H_sha ap_terminates) as t_decomposition.
   destruct t_decomposition as [ti H_decomposition].
   (* We call tp the longest prefix of ti such that tp ∈ Tr•s(a) *)
-  assert 
-    (exists tp, incl tp ti /\ 
-      (in_Traces_p tp (COMPILE_PROG Q↓) s) /\
-    (forall tp', (incl tp' ti) /\ 
-      (in_Traces_p tp (COMPILE_PROG Q↓) s) ->
-      (length tp') <= (length tp)) /\
-    (forall alpha, ~(in_Traces_p (tp++[alpha])
-      (COMPILE_PROG Q↓) s))) 
-  as tp_exists.
+  assert (exists tp, is_a_prefix_of tp ti /\
+    in_Traces_p tp (COMPILE_PROG Q↓) s) as tp_exists.
   Case "Proof of existence of tp".
   { admit. }
-  destruct tp_exists as [tp H_tp].
-  destruct H_tp as [H_tp1 H_tp2].
-  destruct H_tp2 as [H_tp2 H_tp3].
-  destruct H_tp3 as [H_tp3 H_tp4].
+  destruct tp_exists as [tp H_tp]. destruct H_tp as [H_tp H_tp2].
+  unfold is_a_prefix_of in H_tp. inversion H_tp as [v H_prefix].
+  assert (incl tp ti) as H_tp1.
+  { rewrite <- H_prefix. unfold incl. intros.
+    apply in_or_app. left; apply H. }
   destruct H_decomposition as [t' [o]].
   destruct H as [H_tEnd H_tSets].
   destruct H_tSets as [H_tSets1 H_tSets2].
@@ -334,8 +341,7 @@ Proof.
     apply (trace_sets_closed_under_prefix_program
       tp ti (COMPILE_PROG P↓) s H_shp H_tp1 H_tSets1).
     apply (trace_sets_closed_under_prefix_context
-      tp ti a s H_sha H_tp1 H_tSets2).
-  }
+      tp ti a s H_sha H_tp1 H_tSets2). }
   (* tp is a strict prefix *)
   assert (tp <> ti) as strict_prefix.
   Case "Proof of distinction between tp and ti".
@@ -348,8 +354,7 @@ Proof.
       in_Traces_a (ti ++ [Ext Ea o]) a s))) as Hassert.
     { intros. intro contra_assert. destruct contra_assert.
       rewrite <- contra in H. apply (H_tp4 (Ext Ea o0)) in H.
-      contradiction.
-    }
+      contradiction. }
     pose (trace_composition ti s (COMPILE_PROG Q↓)
       H_shq a H_sha H_and Hassert) as t_composition.
     destruct t_composition as [t_compositionL t_compositionR].
