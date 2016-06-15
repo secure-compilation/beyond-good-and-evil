@@ -1295,7 +1295,7 @@ lend: Nop
          ∃ cfg'. Δ ⊢ cfg → cfg'
 
 (ψ,mem,E) terminates ≜
-  ∃ ρ. ψ; E ⊢ I(ψ,mem,E) → ρ  ∧  ψ; E ⊢ ρ ↛
+  ∃ ρ. ψ; E ⊢ I(ψ,mem,E) →* ρ  ∧  ψ; E ⊢ ρ ↛
 
 (ψ,mem,E) diverges ≜
   ∀ ρ. ψ; E ⊢ I(ψ,mem,E) →* ρ ⇒
