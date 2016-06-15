@@ -54,7 +54,7 @@ Qed.
    _____________________________________ *)
 
 (* ------- Canonicalization ------- *)
-(** Proved in the paper **)
+(** Already proved **)
 Lemma canonicalization :
   forall t s,
   forall P, (PROGRAM_SHAPE P ∈• s) -> 
@@ -280,18 +280,19 @@ Qed.
 Definition is_a_prefix_of (u:trace) (t:trace) : Prop :=
   exists v, u++v = t.
 
-Definition is_largest_prefix_of_satisfying (u:trace) (t:trace) (P:trace -> Prop): Prop :=
-  (is_a_prefix u t /\ P u) /\
+Definition is_longest_prefix_of_satisfying (u:trace)
+  (t:trace) (P:trace -> Prop) : Prop :=
+  (is_a_prefix_of u t /\ P u) /\
   (forall v, is_a_prefix_of v t /\ P v ->
                is_a_prefix_of v u).
 
-Hypothesis largest_prefix_of_satisfying (t:trace) (P:trace -> Prop): trace.
+Hypothesis longest_prefix_of_satisfying :
+  trace -> (trace -> Prop) -> trace.
 
-Hypothesis largest_prefix_of_satisfying_spec:
+Hypothesis longest_prefix_of_satisfying_spec :
   forall t P,
-    let u := largest_prefix_of_satisfying t P in
-    (is_largest_prefix_of_satisfying u t P).
-
+    let u := longest_prefix_of_satisfying t P in
+    (is_longest_prefix_of_satisfying u t P).
 
 Theorem separate_compilation_correctness_proof :
   separate_compilation_correctness.
@@ -851,6 +852,3 @@ Proof.
   apply SCC_isomorphism.
   apply structured_full_abstraction_proof.
 Qed.
-
-
-
