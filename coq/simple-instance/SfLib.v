@@ -6,6 +6,9 @@
     or [Export] this file, instead of cluttering our environment with
     all the examples and false starts in those files. *)
 
+(** Some proofs are taken from the GitHub page of
+    Blob, BlindFS and Haklabbeograd **)
+
 (** * From the Coq Standard Library *)
 
 Require Omega.   (* needed for using the [omega] tactic *)
@@ -69,13 +72,20 @@ Proof.
 Theorem andb_true_elim2 : forall b c,
   andb b c = true -> c = true.
 Proof.
-(* An exercise in Basics.v *)
-Admitted.
+  intros b c H.
+  destruct b; simpl in H.
+  - apply H.
+  - inversion H.
+Qed.
 
 Theorem beq_nat_sym : forall (n m : nat),
   beq_nat n m = beq_nat m n.
-(* An exercise in Lists.v *)
-Admitted.
+Proof.
+  intro n.
+  induction n as [|n'].
+  - destruct m. reflexivity. reflexivity.
+  - destruct m. reflexivity. simpl. apply IHn'.
+Qed.
 
 (** * From Props.v *)
 
@@ -93,14 +103,19 @@ Proof.
     destruct c.
       apply conj. reflexivity. reflexivity.
       inversion H.
-    inversion H.  Qed.
+    inversion H.
+Qed.
 
 Theorem false_beq_nat: forall n n' : nat,
      n <> n' ->
      beq_nat n n' = false.
-Proof. 
-(* An exercise in Logic.v *)
-Admitted.
+Proof.
+  intros.
+  destruct (beq_nat n n') eqn:eq.
+  unfold not in H. apply beq_nat_true in eq.
+  apply H in eq. inversion eq.
+  reflexivity.
+Qed.
 
 Theorem ex_falso_quodlibet : forall (P:Prop),
   False -> P.
@@ -110,19 +125,86 @@ Proof.
 
 Theorem ev_not_ev_S : forall n,
   ev n -> ~ ev (S n).
-Proof. 
-(* An exercise in Logic.v *)
-Admitted.
+Proof.
+  intros n E.
+  induction E  as [ | n' E' ].
+  unfold not.
+  intros contra. inversion contra.
+  unfold not.
+  intros ES.
+  inversion ES.
+  unfold not in IHE'.
+  apply IHE' in H0.
+  inversion H0.
+Qed.
+
+Theorem O_le_n : forall n,
+  0 <= n.
+Proof.
+  intros.
+  induction n.
+  apply le_n.
+  apply le_S. apply IHn.
+Qed.
+
+Theorem n_le_m__Sn_le_Sm : forall n m,
+  n <= m -> S n <= S m.
+Proof.
+  intros.
+  induction H. apply le_n.
+  apply le_S. apply IHle.
+Qed.
 
 Theorem ble_nat_true : forall n m,
   ble_nat n m = true -> n <= m.
-(* An exercise in Logic.v *)
-Admitted.
+Proof.
+  intros n.
+  induction n.
+  intros. apply O_le_n.
+  intros.
+  simpl in H. destruct m.
+  inversion H. apply n_le_m__Sn_le_Sm.
+  apply IHn. apply H.
+Qed.
+
+Lemma le_trans : forall m n o, m <= n -> n <= o -> m <= o.
+Proof.
+  intros.
+  induction H0. apply H.
+  apply le_S. apply IHle.
+Qed.
+
+Theorem Sn_le_Sm__n_le_m : forall n m,
+  S n <= S m -> n <= m.
+Proof.
+  intros.
+  inversion H. apply le_n.
+  apply le_trans with (n:=S n).
+  apply le_S. apply le_n. apply H1.
+Qed.
+
+Theorem le_ble_nat : forall n m,
+  n <= m ->
+  ble_nat n m = true.
+Proof.
+  intros n m.
+  generalize n.
+  induction m.
+  intros. inversion H. reflexivity.
+  intros. destruct n0. reflexivity.
+  simpl. apply IHm. apply Sn_le_Sm__n_le_m.
+  apply H.
+Qed.
 
 Theorem ble_nat_false : forall n m,
   ble_nat n m = false -> ~(n <= m).
-(* An exercise in Logic.v *)
-Admitted.
+Proof.
+  intros.
+  unfold not.
+  intros.
+  apply le_ble_nat in H0. rewrite H in H0.
+  inversion H0.
+Qed.
 
 Inductive appears_in (n : nat) : list nat -> Prop :=
 | ai_here : forall l, appears_in n (n::l)
@@ -169,7 +251,13 @@ Theorem multi_trans :
       multi R y z ->
       multi R x z.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  intros X R x y z G H.
+  multi_cases (induction G) Case.
+    Case "multi_refl". assumption.
+    Case "multi_step".
+      apply multi_step with y. assumption.
+      apply IHG. assumption.
+Qed.
 
 (**  Identifiers and polymorphic partial maps. *)
 
@@ -198,7 +286,10 @@ Qed.
 Lemma neq_id : forall (T:Type) x y (p q:T), x <> y -> 
                (if eq_id_dec x y then p else q) = q. 
 Proof.
-  (* FILL IN HERE *) Admitted.
+  intros. destruct (eq_id_dec x y).
+  apply ex_falso_quodlibet. unfold not in H. apply H. apply e.
+  reflexivity.
+Qed.
 
 Definition partial_map (A:Type) := id -> option A.
 
