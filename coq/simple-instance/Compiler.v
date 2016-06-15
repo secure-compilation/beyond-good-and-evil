@@ -316,7 +316,7 @@ Definition program_diverges (P:Source.program) : Prop :=
 Definition cprogram_terminates (P:Target.program) : Prop :=
   match P with
   | (Is, mem, E) =>
-    exists cfg, (step Is E (LL_initial_cfg_of P) cfg)
+    exists cfg, (LV_multi_step Is E (LL_initial_cfg_of P) cfg)
       /\
     (state_irreducible Is E cfg) 
   end.
@@ -338,58 +338,83 @@ Proof.
   unfold cprogram_diverges in diverges.
   destruct terminates as [s H_terminates].
   destruct H_terminates as [H_term1 H_term2].
-  inversion H_term2. unfold not in H.
+  unfold state_irreducible in H_term2. unfold not in H_term2.
   specialize (diverges s).
   assert (LV_multi_step Is E 
     (LL_initial_cfg_of (Is, mem, E)) s) as H_assert.
-  { unfold LV_multi_step. eapply multi_step.
-    apply H_term1. apply multi_refl. }
+  { apply H_term1. }
   apply diverges in H_assert. destruct H_assert.
-  specialize (H x). apply H in H1. contradiction.
+  apply H_term2. exists x. apply H.
 Qed.
 
 Axiom excluded_middle :
   forall P, P \/ ~P.
 
-Lemma de_morgan_instance1 :
-  forall P Q, ~P /\ ~Q -> ~ (P \/ Q).
+Theorem not_exists_dist :
+  forall (X:Type) (P : X -> Prop),
+    ~ (exists x, ~ P x) -> (forall x, P x).
 Proof.
-  intros. intro contra. destruct H.
-  destruct contra.
-  - apply H in H1. contradiction.
-  - apply H0 in H1. contradiction.
+  pose excluded_middle as excl_mid.
+  intros X P H.
+  intros x.
+  assert ( P x \/ ~ P x).
+  apply excl_mid.
+  inversion H0.
+  apply H1.
+  apply ex_falso_quodlibet.
+  unfold not in H.
+  apply H.
+  unfold not in H1.
+  exists x.
+  apply H1.
+Qed.
+
+Lemma de_morgan_not_or_not :
+  forall P Q,
+  ~(~P \/ ~Q) -> P /\ Q.
+Proof.
+  intros. split.
+  - pose (excluded_middle P) as Ex_P.
+    destruct Ex_P.
+    + apply H0.
+    + exfalso. apply H. left. apply H0.
+  - pose (excluded_middle Q) as Ex_Q.
+    destruct Ex_Q.
+    + apply H0.
+    + exfalso. apply H. right. apply H0.
 Qed.
 
 Lemma LL_program_terminates_negation :
-  forall p,
-  match p with
-  | (Isp, mem, E) =>
-    ~(forall cfg,
-    ~LOW_LEVEL Isp; E |- LL_initial_cfg_of (Isp, mem, E) ⇒ cfg
-      \/
-    ~state_irreducible Isp E cfg)
+  forall Isp mem E,
+    ~(exists cfg,
+      LV_multi_step Isp E (LL_initial_cfg_of (Isp, mem, E)) cfg 
+      /\ state_irreducible Isp E cfg)
         ->
-    (exists cfg,
-    LOW_LEVEL Isp; E |- LL_initial_cfg_of (Isp, mem, E) ⇒ cfg
-      /\
-    state_irreducible Isp E cfg)
-  end.
+    (forall cfg,
+    ~(LV_multi_step Isp E (LL_initial_cfg_of (Isp, mem, E)) cfg)
+      \/
+     ~(state_irreducible Isp E cfg)).
 Proof.
-  destruct p as [[Isp] mem E].
-Admitted.
+  intros Isp mem E.
+  intro existence. apply not_exists_dist.
+  intro contra. destruct contra.
+  apply de_morgan_not_or_not in H.
+  apply existence. exists x.
+  apply H.
+Qed.
 
 Lemma LL_program_diverges_negation :
-  forall p,
-  match p with
-  | (Isp, mem, E) =>
-  ~(exists cfg,
-    ~LV_multi_step Isp E (LL_initial_cfg_of (Isp, mem, E)) cfg
-    /\ forall cfg', LOW_LEVEL Isp; E |- cfg ⇒ cfg')
-      ->
-  (forall cfg : state,
-    LV_multi_step Isp E (LL_initial_cfg_of (Isp, mem, E)) cfg ->
-    exists cfg' : state, LOW_LEVEL Isp; E |- cfg ⇒ cfg')
-  end.
+  forall Isp mem E,
+    ~(forall cfg : state,
+      LV_multi_step Isp E
+      (LL_initial_cfg_of (Isp, mem, E)) cfg ->
+      exists cfg' : state,
+      LOW_LEVEL Isp; E |- cfg ⇒ cfg')
+        ->
+    (exists cfg,
+     LV_multi_step Isp E (LL_initial_cfg_of (Isp, mem, E)) cfg
+     /\ ~(exists cfg' : state,
+      LOW_LEVEL Isp; E |- cfg ⇒ cfg')).
 Proof.
 Admitted.
 
@@ -399,10 +424,22 @@ Lemma LL_program_behavior_exclusion' :
     ~cprogram_diverges p
     -> False.
 Proof.
-  intros.
+  intros p doesnt_terminates doesnt_diverges.
   destruct p as [[Isp mem] E].
-  unfold cprogram_terminates in H.
-Admitted.
+  unfold cprogram_terminates in doesnt_terminates.
+  unfold cprogram_diverges in doesnt_diverges.
+  pose (LL_program_terminates_negation Isp mem E) as lemmaT.
+  pose (LL_program_diverges_negation Isp mem E) as lemmaD.
+  apply lemmaD in doesnt_diverges. clear lemmaD.
+  destruct doesnt_diverges as [cfg doesnt_diverges].
+  apply lemmaT with (cfg := cfg) in doesnt_terminates.
+  clear lemmaT.
+  destruct doesnt_diverges as [H_D1 H_D2].
+  destruct doesnt_terminates as [doesnt_terminates|doesnt_terminates].
+  - apply doesnt_terminates in H_D1. contradiction.
+  - unfold state_irreducible in doesnt_terminates.
+    apply doesnt_terminates in H_D2. contradiction.
+Qed.
 
 Theorem cterminates_cdiverges_opposition :
   forall p,
