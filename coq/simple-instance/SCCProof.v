@@ -159,16 +159,33 @@ Lemma shape_closed_under_compilation_context :
 Proof.
 Admitted.
 
+Definition is_a_prefix_of (u:trace) (t:trace) : Prop :=
+  exists v, u++v = t.
+
+Definition is_longest_prefix_of (u:trace)
+  (t:trace) (p: program) (s:shape) : Prop :=
+  (is_a_prefix_of u t /\ in_Traces_p u p s) /\
+  (forall v, is_a_prefix_of v t /\ in_Traces_p v p s ->
+               is_a_prefix_of v u).
+
+Hypothesis longest_prefix_of :
+  trace -> program -> shape -> trace.
+
+Hypothesis longest_prefix_of_spec :
+  forall t p s,
+    let u := longest_prefix_of t p s in
+    (is_longest_prefix_of u t p s).
+
 Lemma trace_sets_closed_under_prefix_program :
   forall t' t p s, (LL_PROGRAM_SHAPE p ∈• s) ->
-    incl t' t -> in_Traces_p t p s ->
+    is_a_prefix_of t' t -> in_Traces_p t p s ->
     in_Traces_p t' p s.
 Proof.
 Admitted.
 
 Lemma trace_sets_closed_under_prefix_context :
   forall t' t a s, (LL_CONTEXT_SHAPE a ∈∘ s) ->
-    incl t' t -> in_Traces_a t a s ->
+    is_a_prefix_of t' t -> in_Traces_a t a s ->
     in_Traces_p t' a s.
 Proof.
 Admitted.
@@ -277,23 +294,6 @@ Proof.
   contradiction.
 Qed.
 
-Definition is_a_prefix_of (u:trace) (t:trace) : Prop :=
-  exists v, u++v = t.
-
-Definition is_longest_prefix_of_satisfying (u:trace)
-  (t:trace) (P:trace -> Prop) : Prop :=
-  (is_a_prefix_of u t /\ P u) /\
-  (forall v, is_a_prefix_of v t /\ P v ->
-               is_a_prefix_of v u).
-
-Hypothesis longest_prefix_of_satisfying :
-  trace -> (trace -> Prop) -> trace.
-
-Hypothesis longest_prefix_of_satisfying_spec :
-  forall t P,
-    let u := longest_prefix_of_satisfying t P in
-    (is_longest_prefix_of_satisfying u t P).
-
 Theorem separate_compilation_correctness_proof :
   separate_compilation_correctness.
 Proof.
@@ -322,15 +322,19 @@ Proof.
     H_shp a H_sha ap_terminates) as t_decomposition.
   destruct t_decomposition as [ti H_decomposition].
   (* We call tp the longest prefix of ti such that tp ∈ Tr•s(a) *)
-  assert (exists tp, is_a_prefix_of tp ti /\
-    in_Traces_p tp (COMPILE_PROG Q↓) s) as tp_exists.
+  assert (exists tp, is_longest_prefix_of tp ti
+    (COMPILE_PROG Q↓) s) as tp_exists.
   Case "Proof of existence of tp".
-  { admit. }
-  destruct tp_exists as [tp H_tp]. destruct H_tp as [H_tp H_tp2].
+  { exists (longest_prefix_of ti (COMPILE_PROG Q↓) s).
+    apply longest_prefix_of_spec. }
+  destruct tp_exists as [tp H_tp].
+  unfold is_longest_prefix_of in H_tp.
+  destruct H_tp as [H_tp H_tp3].
+  destruct H_tp as [H_tp H_tp2].
   unfold is_a_prefix_of in H_tp. inversion H_tp as [v H_prefix].
-  assert (incl tp ti) as H_tp1.
-  { rewrite <- H_prefix. unfold incl. intros.
-    apply in_or_app. left; apply H. }
+  assert (is_a_prefix_of tp ti) as H_tp1.
+  { rewrite <- H_prefix. unfold is_a_prefix_of.
+    exists v. reflexivity. }
   destruct H_decomposition as [t' [o]].
   destruct H as [H_tEnd H_tSets].
   destruct H_tSets as [H_tSets1 H_tSets2].
@@ -354,8 +358,8 @@ Proof.
       ~(in_Traces_p (ti ++ [Ext Ea o]) COMPILE_PROG Q ↓ s /\
       in_Traces_a (ti ++ [Ext Ea o]) a s))) as Hassert.
     { intros. intro contra_assert. destruct contra_assert.
-      rewrite <- contra in H. apply (H_tp4 (Ext Ea o0)) in H.
-      contradiction. }
+      rewrite H_tEnd in H0. rewrite <- app_assoc in H0.
+      apply trace_post_terminaison in H0. contradiction. }
     pose (trace_composition ti s (COMPILE_PROG Q↓)
       H_shq a H_sha H_and Hassert) as t_composition.
     destruct t_composition as [t_compositionL t_compositionR].
@@ -371,16 +375,14 @@ Proof.
     split. apply H_absurd. apply aq_diverges.
     apply (LL_program_behavior_exclusion
       (LL_context_application a COMPILE_PROG Q ↓)) in absurd.
-    contradiction.
-  }
+    contradiction. }
   (* There exists Ea such that tp.Ea such that tp.Ea 
      is a prefix of ti *)
-  assert (exists Ea g1 o, incl (tp++Ea) ti /\ 
+  assert (exists Ea g1 o, is_a_prefix_of (tp++Ea) ti /\ 
     Ea = [Ext g1 o]) as Ea_exists.
   { admit.
     (* TODO : Use the fact that tp is a strict prefix
-      so there exists an other action following it *)
-  }
+      so there exists an other action following it *) }
   destruct Ea_exists as [Ea H_EaExists].
   destruct H_EaExists as [g1 H_EaExists].
   destruct H_EaExists as [origin_Ea H_EaExists].
@@ -398,14 +400,22 @@ Proof.
       as H_assert.
     { split. assumption. rewrite <- H_g1.
       apply (trace_sets_closed_under_prefix_context
-        (tp++Ea) ti a s H_sha H_EaExists H_tSets2).
-    }
+        (tp++Ea) ti a s H_sha H_EaExists H_tSets2). }
     apply t_ext1 in H_assert.
-    apply (H_tp4 (Ext g1 ContextOrigin)) in H_assert.
-    contradiction.
+    pose (H_tp3' := H_tp3).
+    specialize (H_tp3' (tp ++ [Ext g1 ContextOrigin])).
+    rewrite H_g1 in H_EaExists.
+    specialize (H_tp3' (conj H_EaExists H_assert)).
+    unfold is_a_prefix_of in H_tp3'. destruct H_tp3'.
+    rewrite <- app_assoc in H.
+    rewrite <- (app_nil_r tp) in H.
+    assert ((tp ++ []) ++ [Ext g1 ContextOrigin] ++ x
+      = tp ++ [Ext g1 ContextOrigin] ++ x) as H_a.
+    { rewrite (app_nil_r tp). reflexivity. }
+    rewrite H_a in H. clear H_a.
+    apply app_inv_head in H. inversion H.
     (* Ea is a program action *)
-    reflexivity.
-  }
+    reflexivity. }
   rewrite H_program_action in H_g1.
   (* Let tc be the canonicalization of tp *)
   pose (tc := zetaC_t tp).
@@ -417,8 +427,7 @@ Proof.
     as H_zeta.
   { apply (trace_sets_closed_under_prefix_program
       (tp++Ea) ti (COMPILE_PROG P↓) s H_shp H_EaExists
-      H_tSets1).
-  }
+      H_tSets1). }
   apply H_canon1 in H_zeta.
   (* Use of the definability assumption to build A *)
   pose (definability tc g1 s) as H_definability.
@@ -429,11 +438,9 @@ Proof.
   Case "Proof of premises of definability".
   { split.
     unfold tc. rewrite <- zetaC_t_idempotent. reflexivity.
-    exists (COMPILE_PROG P↓). intros H_def.
-    unfold tc.
+    exists (COMPILE_PROG P↓). intros H_def. unfold tc.
     rewrite <- (program_Ea_immuable_to_zeta tp g1).
-    rewrite <- H_g1. apply H_zeta.
-  }
+    rewrite <- H_g1. apply H_zeta. }
   specialize (H_definability H_definability_premises).
   destruct H_definability as 
     [A [H_shA [H_AFD [H_def1 [H_def2 H_def3]]]]].
@@ -471,8 +478,7 @@ Proof.
         rewrite H_g1 in H_zeta.
         rewrite program_Ea_immuable_to_zeta in H_zeta.
         apply H_zeta.
-        rewrite <- app_assoc. apply H_context_action.
-      }
+        rewrite <- app_assoc. apply H_context_action. }
       apply t_ext1 in ext_premise.
       (* Apply trace composition *)
       pose (trace_composition
@@ -488,8 +494,7 @@ Proof.
         [Ext ✓ ContextOrigin]) COMPILE_PROG A ↓ s)
         as t_composition_premise.
       { split. apply ext_premise.
-        rewrite <- app_assoc. apply H_context_action.
-      }
+        rewrite <- app_assoc. apply H_context_action. }
       specialize (t_composition t_composition_premise).
       assert ((forall (Ea : external_action) (o : origin),
         ~(in_Traces_p (((tc ++ [Ext (ExtCall c p r) ProgramOrigin]) ++
@@ -505,15 +510,13 @@ Proof.
           (Ext Ea0 o0) (COMPILE_PROG P↓) s ContextOrigin)
           as H_absurd.
         rewrite app_assoc in H_absurd.
-        apply H_absurd in H. contradiction.
-      }
+        apply H_absurd in H. contradiction. }
       specialize (t_composition t_composition_premise').
       clear t_composition_premise; clear t_composition_premise'.
       destruct t_composition as [t_comp1 t_comp2].
       apply t_comp2.
       exists (tc ++ [Ext (ExtCall c p r) ProgramOrigin]).
-      exists ContextOrigin. reflexivity.
-    }
+      exists ContextOrigin. reflexivity. }
     SCase "g1 = ExtRet".
     { assert (ExtRet r <> ✓) as Hassert.
       intro contra. inversion contra.
@@ -539,8 +542,7 @@ Proof.
         rewrite H_g1 in H_zeta.
         rewrite program_Ea_immuable_to_zeta in H_zeta.
         apply H_zeta.
-        rewrite <- app_assoc. apply H_context_action.
-      }
+        rewrite <- app_assoc. apply H_context_action. }
       apply t_ext1 in ext_premise.
       (* Apply trace composition *)
       pose (trace_composition
@@ -556,8 +558,7 @@ Proof.
         [Ext ✓ ContextOrigin]) COMPILE_PROG A ↓ s)
         as t_composition_premise.
       { split. apply ext_premise.
-        rewrite <- app_assoc. apply H_context_action. 
-      }
+        rewrite <- app_assoc. apply H_context_action. }
       specialize (t_composition t_composition_premise).
       assert ((forall (Ea : external_action) (o : origin),
         ~(in_Traces_p (((tc ++ [Ext (ExtRet r) ProgramOrigin]) ++
@@ -573,15 +574,13 @@ Proof.
           (Ext Ea0 o0) (COMPILE_PROG P↓) s ContextOrigin)
           as H_absurd.
         rewrite app_assoc in H_absurd.
-        apply H_absurd in H. contradiction.
-      }
+        apply H_absurd in H. contradiction. }
       specialize (t_composition t_composition_premise').
       clear t_composition_premise; clear t_composition_premise'.
       destruct t_composition as [t_comp1 t_comp2].
       apply t_comp2.
       exists (tc ++ [Ext (ExtRet r) ProgramOrigin]).
-      exists ContextOrigin. reflexivity.
-    }
+      exists ContextOrigin. reflexivity. }
     SCase "g1 = ✓".
     { (* We apply trace extensibility to A↓ *) 
       pose (trace_extensibility tc s g1 (COMPILE_PROG P↓)
@@ -593,8 +592,7 @@ Proof.
          COMPILE_PROG P ↓ s) as H_conj.
       { split. apply H_def1. unfold tc.
         rewrite <- program_Ea_immuable_to_zeta.
-        rewrite HD_g1. rewrite <- H_g1. apply H_zeta.
-      }
+        rewrite HD_g1. rewrite <- H_g1. apply H_zeta. }
       apply t_ext2 in H_conj.
       (* We apply trace composition *)
       pose (trace_composition (tc ++ Ea) s (COMPILE_PROG P↓)
@@ -604,8 +602,7 @@ Proof.
       { split. unfold tc. rewrite H_g1.
         rewrite <- program_Ea_immuable_to_zeta.
         rewrite <- H_g1. apply H_zeta.
-        rewrite H_g1. rewrite <- HD_g1. apply H_conj.
-      }
+        rewrite H_g1. rewrite <- HD_g1. apply H_conj. }
       specialize (t_composition H_or); clear H_or.
       assert (forall (Ea0 : external_action) (o : origin),
         ~(in_Traces_p ((tc ++ Ea) ++ [Ext Ea0 o]) COMPILE_PROG P ↓ s /\
@@ -617,13 +614,11 @@ Proof.
           tc (Ext Ea0 o0) (COMPILE_PROG P↓) s ProgramOrigin)
           as H_absurd.
         rewrite app_assoc in H_absurd.
-        apply H_absurd in H. contradiction.
-      }
+        apply H_absurd in H. contradiction. }
       specialize (t_composition H_premise); clear H_premise.
       destruct t_composition as [t_comp1 t_comp2].
       apply t_comp2. exists tc. exists ProgramOrigin.
-      rewrite H_g1. reflexivity.
-    }
+      rewrite H_g1. reflexivity. }
   }
   (* Now we prove that A↓[Q↓] diverges *)
   assert (cprogram_diverges (LL_context_application
@@ -633,24 +628,21 @@ Proof.
     (* a *)
     assert (in_Traces_p tc (COMPILE_PROG Q↓) s) as canon_a.
     { unfold tc. apply canonicalization in H_tp2.
-      apply H_tp2. apply H_shQ. apply H_QFD.
-    }
+      apply H_tp2. apply H_shQ. apply H_QFD. }
     (* b *)
     assert (in_Traces_p (zetaC_t (tp++[Ext End ProgramOrigin]))
      (COMPILE_PROG Q↓) s -> 
      in_Traces_p (tp++[Ext End ProgramOrigin]) (COMPILE_PROG Q↓) s)
      as canon_b.
     { intro. apply canonicalization in H. apply H.
-      apply H_shQ. apply H_QFD.
-    }
+      apply H_shQ. apply H_QFD. }
     (* c *)
     assert (in_Traces_p (zetaC_t (tp++[Ext g1 ProgramOrigin]))
      (COMPILE_PROG Q↓) s -> 
      in_Traces_p (tp++[Ext g1 ProgramOrigin]) (COMPILE_PROG Q↓) s)
      as canon_c.
     { intro. apply canonicalization in H. apply H.
-      apply H_shQ. apply H_QFD.
-    }
+      apply H_shQ. apply H_QFD. }
     (* Q↓ cannot perform (✓) nor (g1) nor any (γ?) *)
     (* We prove that Q↓ cannot perform (✓) *)
     assert (~(in_Traces_p (tc++[Ext ✓ ProgramOrigin])
@@ -667,8 +659,7 @@ Proof.
         (tp ++ [Ext ✓ ProgramOrigin]) COMPILE_PROG Q ↓ s)
         as ext_premise.
       { split. destruct H_tp_in_Pa as [H_tp_in_Pa1 H_tp_in_Pa2].
-        apply H_tp_in_Pa2. apply contra.
-      }
+        apply H_tp_in_Pa2. apply contra. }
       (* We use trace composition *)
       pose (trace_composition (tp ++ [Ext ✓ ProgramOrigin])
         s (COMPILE_PROG Q↓) H_shq a H_sha)
@@ -678,8 +669,7 @@ Proof.
         (tp ++ [Ext ✓ ProgramOrigin]) a s) as ext_premise'.
       { split. apply contra. apply t_ext2.
         split. apply (trace_sets_closed_under_prefix_context
-        tp ti a s H_sha H_tp1 H_tSets2). apply contra.
-      }
+        tp ti a s H_sha H_tp1 H_tSets2). apply contra. }
       specialize (t_composition ext_premise').
       assert ((forall (Ea : external_action) (o : origin),
         ~(in_Traces_p ((tp ++ [Ext ✓ ProgramOrigin]) ++
@@ -691,8 +681,7 @@ Proof.
           tp (Ext Ea0 o0) (COMPILE_PROG Q↓) s ProgramOrigin)
           as H_absurd.
         rewrite app_assoc in H_absurd.
-        apply H_absurd in H. contradiction.
-      }
+        apply H_absurd in H. contradiction. }
       specialize (t_composition ext_premise'').
       destruct t_composition as [t_comp1 t_comp2].
       (* We state that Q↓ terminates which is a contradiction *)
@@ -714,17 +703,24 @@ Proof.
     { intro contra. unfold tc in contra.
       rewrite <- program_Ea_immuable_to_zeta in contra.
       apply canon_c in contra.
-      specialize (H_tp4 (Ext g1 ProgramOrigin)).
-      unfold not in H_tp4. apply H_tp4 in contra.
-      contradiction.
-    }
+      pose (H_tp3' := H_tp3).
+      specialize (H_tp3' (tp ++ [Ext g1 ProgramOrigin])).
+      rewrite H_g1 in H_EaExists.
+      specialize (H_tp3' (conj H_EaExists contra)).
+      unfold is_a_prefix_of in H_tp3'. destruct H_tp3'.
+      rewrite <- app_assoc in H.
+      rewrite <- (app_nil_r tp) in H.
+      assert ((tp ++ []) ++ [Ext g1 ProgramOrigin] ++ x
+        = tp ++ [Ext g1 ProgramOrigin] ++ x) as H_a.
+      { rewrite (app_nil_r tp). reflexivity. }
+      rewrite H_a in H. clear H_a.
+      apply app_inv_head in H. inversion H. }
     (* We prove that Q↓ cannot perform any (γ?) *)
     assert (forall g gx, g <> End /\ g <> g1 -> ~(in_Traces_a 
       (tc++[Ext gx ProgramOrigin]++[Ext g ContextOrigin]) 
       (COMPILE_PROG A↓) s)) as cant_be_context.
     { intros g gx contra. destruct contra as [contra1 contra2].
-      admit. (* TODO : Stuck with the definition on the paper *)
-    }
+      admit. (* TODO : Stuck with the definition on the paper *) }
     (* We prove that Q↓ can perform any (ia+) *)
     assert ((in_Traces_p 
       tc (COMPILE_PROG Q↓) s) ->
@@ -748,8 +744,7 @@ Proof.
             in_Traces_p (tp++[Ext Ea0 ProgramOrigin]) (COMPILE_PROG Q↓) s)
             as canon_x.
         { intro. apply canonicalization in H2. apply H2.
-          apply H_shQ. apply H_QFD.
-        }
+          apply H_shQ. apply H_QFD. }
         destruct o0; destruct g1;
         try (
           rewrite <- program_Ea_immuable_to_zeta in H0;
@@ -760,8 +755,7 @@ Proof.
         ).
         (* TODO : use the fact that we can't have a
            context action *)
-        admit. admit. admit.
-      }
+        admit. admit. admit. admit. admit. admit. }
       specialize (t_composition comp_premise comp_premise').
       destruct t_composition as [t_comp1 t_comp2].
       apply contrapositive in t_comp1.
@@ -782,8 +776,7 @@ Proof.
     { (* TODO : tc has the same length as tp and thus is
         a strict prefix of ti. Since it's a strict prefix
         there's an action following it *)
-      admit.
-    }
+      admit. }
     (* TODO : How can we get an exhaustive list of cases ? *)
     destruct H_exists_alpha as [alpha H_alpha_inTracesQ].
     admit.
@@ -852,3 +845,4 @@ Proof.
   apply SCC_isomorphism.
   apply structured_full_abstraction_proof.
 Qed.
+
