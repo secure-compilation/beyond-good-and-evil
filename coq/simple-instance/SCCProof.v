@@ -176,12 +176,55 @@ Hypothesis longest_prefix_of_spec :
     let u := longest_prefix_of t p s in
     (is_longest_prefix_of u t p s).
 
+Lemma twolist_posibilities :
+  forall {X:Type} (t u : X) (t' u' : list X),
+  [t; u] = t' ++ u' ->
+  (t' = [] /\ u' = [t]++[u]) \/
+  (t' = [t]++[u] /\ u' = []) \/
+  (t' = [t] /\ u' = [u]).
+Proof.
+Admitted.
+
+Lemma reduction_eq :
+  forall Is E o o' t,
+  reduction Is E o o' t -> reduction_multi Is E o o' [t].
+Proof.
+  intros. inversion H.
+Admitted.
+
 Lemma trace_sets_closed_under_prefix_program :
   forall t' t p s, (LL_PROGRAM_SHAPE p ∈• s) ->
     is_a_prefix_of t' t -> in_Traces_p t p s ->
     in_Traces_p t' p s.
 Proof.
-Admitted.
+  intros.
+  destruct p as [[Isp mem] E].
+  destruct s as [Is comps].
+  unfold is_a_prefix_of in H0.
+  destruct H0 as [trace H_t].
+  rewrite <- H_t in H1. unfold in_Traces_p in H1.
+  destruct H1. inversion H0.
+  - unfold in_Traces_p. exists o'.
+    symmetry in H4. apply app_eq_nil in H4.
+    destruct H4. rewrite H3. constructor.
+  - unfold in_Traces_p. exists o'.
+    symmetry in H1. apply app_eq_nil in H1.
+    destruct H1. rewrite H1. constructor.
+  - unfold in_Traces_p. exists o'.
+    symmetry in H1. apply app_eq_unit in H1.
+    destruct H1.
+    + destruct H1. rewrite H1. constructor.
+    + destruct H1. rewrite H1. constructor.
+      rewrite H3. apply H4.
+  - unfold in_Traces_p. apply twolist_posibilities in H1.
+    destruct H1 as [H1 | H1].
+    + exists o'. destruct H1. rewrite H1. constructor.
+    + destruct H1.
+      * exists x. destruct H1. rewrite H6 in H0.
+        rewrite app_nil_r in H0. apply H0.
+      * exists o'. destruct H1. rewrite H1.
+        apply reduction_eq in H2. apply H2.
+Qed.
 
 Lemma trace_sets_closed_under_prefix_context :
   forall t' t a s, (LL_CONTEXT_SHAPE a ∈∘ s) ->

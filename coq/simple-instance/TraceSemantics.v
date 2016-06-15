@@ -88,7 +88,7 @@ Definition SetTop {A B : Type} (E:alt_list A B) (new:A)
    _____________________________________ *)
 
 Inductive reduction (Is:partial_program_interfaces) (E:entry_points) : 
-  state_partial_view -> state_partial_view -> action -> Prop :=
+  state_partial_view -> state_partial_view -> trace -> Prop :=
   (* T_CallRetTau+ *)
   | T_CallRetTauPlus :
     forall C C' d d' mem mem' reg reg' pc pc' o o' PE PE',
