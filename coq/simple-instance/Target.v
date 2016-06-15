@@ -331,12 +331,10 @@ Definition LV_multi_step
     (multi (step Is E) e e').
 
 (* ------- Definitions : Irreducibility ------- *)
-Inductive state_irreducible 
+Definition state_irreducible 
   (Is:partial_program_interfaces) (E:entry_points) 
-  : state -> Prop :=
-  | S_Irreducible : forall cfg,
-    (forall cfg', ~(step Is E cfg cfg')) ->
-    state_irreducible Is E cfg.
+  (cfg:state) : Prop :=
+  ~(exists cfg', (step Is E cfg cfg')).
 
 (* ------- Definitions : Special reduction state ------- *)
 Definition LL_initial_cfg_of (P:program) : state :=
