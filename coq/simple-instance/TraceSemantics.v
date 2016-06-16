@@ -220,7 +220,7 @@ Definition initial_trace_state (P:Target.program) :
             TRACE DUALIZATION
    _____________________________________ *)
 
-Definition dual_trace (t:trace) :=
+Definition dual_trace (T:full_trace) :=
   let f :=
     (fun alpha =>
      match alpha with
@@ -229,7 +229,7 @@ Definition dual_trace (t:trace) :=
      | Ext ea ProgramOrigin => Ext ea ContextOrigin
      | Ext ea ContextOrigin => Ext ea ProgramOrigin
      end) in
-  map f t.
+  map f T.
 
 
 (* _____________________________________ 
