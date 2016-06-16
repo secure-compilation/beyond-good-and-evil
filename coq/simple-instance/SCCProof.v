@@ -189,7 +189,6 @@ Lemma reduction_eq :
   forall Is E o o' t,
   reduction Is E o o' t -> reduction_multi Is E o o' [t].
 Proof.
-  intros. inversion H.
 Admitted.
 
 Lemma trace_sets_closed_under_prefix_program :
@@ -686,7 +685,6 @@ Proof.
      as canon_c.
     { intro. apply canonicalization in H. apply H.
       apply H_shQ. apply H_QFD. }
-    (* Q↓ cannot perform (✓) nor (g1) nor any (γ?) *)
     (* We prove that Q↓ cannot perform (✓) *)
     assert (~(in_Traces_p (tc++[Ext ✓ ProgramOrigin])
       (COMPILE_PROG Q↓) s)) as cant_be_End.
@@ -739,7 +737,6 @@ Proof.
       apply LL_program_behavior_exclusion in absurd'.
       contradiction.
     }
-    (* Now, following tc, Q↓ perform an action, which one ? *)
     (* We prove that Q↓ cannot perform (g1) *)
     assert (~(in_Traces_p (tc++[Ext g1 ProgramOrigin])
       (COMPILE_PROG Q↓) s)) as cant_be_g1.
@@ -758,47 +755,26 @@ Proof.
       { rewrite (app_nil_r tp). reflexivity. }
       rewrite H_a in H. clear H_a.
       apply app_inv_head in H. inversion H. }
-    (* We prove that Q↓ cannot perform any (γ?) *)
-    assert (forall g gx, g <> End /\ g <> g1 -> ~(in_Traces_a 
-      (tc++[Ext gx ProgramOrigin]++[Ext g ContextOrigin]) 
-      (COMPILE_PROG A↓) s)) as cant_be_context.
-    { intros g gx contra. destruct contra as [contra1 contra2].
-      admit. (* TODO : Stuck with the definition on the paper *) }
-    (* We prove that Q↓ can perform any (ia+) *)
-    assert ((in_Traces_p 
-      tc (COMPILE_PROG Q↓) s) ->
-      cprogram_diverges (LL_context_application 
-        COMPILE_PROG A ↓ COMPILE_PROG Q ↓))
-      as ia_implies_divergence.
-    { intros H.
-      pose (trace_composition tc s (COMPILE_PROG Q↓) H_shq
+    (* We have now two useful hypothesis *)
+    (* Either Q↓ produces an external action or it doesn't *)
+    (* We use the excluded middle law of classical logic *)
+    pose (excluded_middle
+      (forall g, ~in_Traces_p (tc++[Ext g ProgramOrigin])
+      (COMPILE_PROG Q↓) s)) as EX1.
+    destruct EX1 as [EX1 | EX1].
+    SCase "No external action produced by Q↓".
+    { pose (trace_composition tc s (COMPILE_PROG Q↓) H_shq
         (COMPILE_PROG A↓) H_sha') as t_composition.
       assert (in_Traces_p tc COMPILE_PROG Q ↓ s /\
         in_Traces_a tc COMPILE_PROG A ↓ s) as comp_premise.
-      { split. apply H. apply H_def1. }
+      { split; assumption. }
       assert ((forall (Ea : external_action) (o : origin),
          ~(in_Traces_p (tc ++ [Ext Ea o]) COMPILE_PROG Q ↓ s /\
          in_Traces_a (tc ++ [Ext Ea o]) COMPILE_PROG A ↓ s)))
           as comp_premise'.
-      { intros. intro contra_assert. destruct contra_assert.
-        unfold tc in H0. unfold tc in H1.
-        assert (in_Traces_p (zetaC_t (tp++[Ext Ea0 ProgramOrigin]))
-            (COMPILE_PROG Q↓) s -> 
-            in_Traces_p (tp++[Ext Ea0 ProgramOrigin]) (COMPILE_PROG Q↓) s)
-            as canon_x.
-        { intro. apply canonicalization in H2. apply H2.
-          apply H_shQ. apply H_QFD. }
-        destruct o0; destruct g1;
-        try (
-          rewrite <- program_Ea_immuable_to_zeta in H0;
-          apply canon_x in H0; clear canon_x;
-          specialize (H_tp4 (Ext Ea0 ProgramOrigin));
-          unfold not in H_tp4; apply H_tp4 in H0;
-          contradiction
-        ).
-        (* TODO : use the fact that we can't have a
-           context action *)
-        admit. admit. admit. admit. admit. admit. }
+      { intros. intro contra. destruct contra. destruct o0.
+        - admit.
+        - apply (EX1 Ea0) in H. contradiction. }
       specialize (t_composition comp_premise comp_premise').
       destruct t_composition as [t_comp1 t_comp2].
       apply contrapositive in t_comp1.
@@ -807,22 +783,43 @@ Proof.
       destruct contra as [t_contra contra].
       destruct contra as [o_contra contra].
       rewrite contra in comp_premise.
-      destruct o_contra.
-      destruct comp_premise as [comp1 comp2].
-      unfold tc in contra.
-      (* Q↓ can't have a terminating trace *)
-      admit. admit.
+      (* We can't have a terminating action *)
+      admit.
     }
-    (* There exists an action following tc for Q↓ *)
-    assert (exists alpha, in_Traces_p (tc++[alpha]) 
-      (COMPILE_PROG Q↓) s) as H_exists_alpha.
-    { (* TODO : tc has the same length as tp and thus is
-        a strict prefix of ti. Since it's a strict prefix
-        there's an action following it *)
-      admit. }
-    (* TODO : How can we get an exhaustive list of cases ? *)
-    destruct H_exists_alpha as [alpha H_alpha_inTracesQ].
-    admit.
+    SCase "External action performed by Q↓".
+    { apply not_forall_dist in EX1.
+      destruct EX1 as [g EX1].
+      apply (double_negation_elimination 
+        (in_Traces_p (tc ++ [Ext g ProgramOrigin])
+          COMPILE_PROG Q ↓ s)) in EX1.
+      (* Either the context produces an action or it doesn't *)
+      pose (excluded_middle (forall g', ~in_Traces_p
+        (tc++[Ext g ProgramOrigin]++[Ext g' ContextOrigin])
+        (COMPILE_PROG A↓) s)) as EX2.
+      destruct EX2 as [EX2 | EX2].
+      SSCase "No external action produced by the context".
+      { admit.
+      }
+      SSCase "External action procued by the context".
+      { apply not_forall_dist in EX2.
+        destruct EX2 as [g' EX2].
+        apply (double_negation_elimination 
+          (in_Traces_p (tc ++ [Ext g ProgramOrigin] ++
+          [Ext g' ContextOrigin]) (COMPILE_PROG A↓) s)) in EX2.
+        specialize (H_def3 g).
+        (* g = g1 or g <> g1 *)
+        pose (excluded_middle (g = g1)) as EX3.
+        destruct EX3.
+        SSSCase "g = g1".
+        { rewrite H in EX1. apply cant_be_g1 in EX1. contradiction. }
+        SSSCase "g <> g1".
+        { assert (g = zeta_gamma g /\ g1 = zeta_gamma g1) as Ha.
+          { admit. }
+          destruct Ha. rewrite H0 in H; rewrite H1 in H.
+          specialize (H_def3 H g').
+          apply H_def3 in EX2. contradiction. }
+      }
+    }
   }
   exists A. intros. constructor. left. split.
   pose (separate_compilation_correctness_proof) as CompCorrectP.

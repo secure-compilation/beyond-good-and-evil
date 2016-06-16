@@ -67,15 +67,16 @@ Proof.
   Case "b = true".
     reflexivity.
   Case "b = false".
-    rewrite <- H. reflexivity.  Qed.
+    rewrite <- H. reflexivity.
+Qed.
 
 Theorem andb_true_elim2 : forall b c,
   andb b c = true -> c = true.
 Proof.
   intros b c H.
   destruct b; simpl in H.
-  - apply H.
-  - inversion H.
+  apply H.
+  inversion H.
 Qed.
 
 Theorem beq_nat_sym : forall (n m : nat),
@@ -83,8 +84,8 @@ Theorem beq_nat_sym : forall (n m : nat),
 Proof.
   intro n.
   induction n as [|n'].
-  - destruct m. reflexivity. reflexivity.
-  - destruct m. reflexivity. simpl. apply IHn'.
+  destruct m. reflexivity. reflexivity.
+  destruct m. reflexivity. simpl. apply IHn'.
 Qed.
 
 (** * From Props.v *)
@@ -121,7 +122,8 @@ Theorem ex_falso_quodlibet : forall (P:Prop),
   False -> P.
 Proof.
   intros P contra.
-  inversion contra.  Qed.
+  inversion contra.
+Qed.
 
 Theorem ev_not_ev_S : forall n,
   ev n -> ~ ev (S n).
@@ -243,7 +245,8 @@ Theorem multi_R : forall (X:Type) (R:relation X) (x y : X),
        R x y -> multi R x y.
 Proof.
   intros X R x y r.
-  apply multi_step with y. apply r. apply multi_refl.   Qed.
+  apply multi_step with y. apply r. apply multi_refl.
+Qed.
 
 Theorem multi_trans :
   forall (X:Type) (R: relation X) (x y z : X),
@@ -272,8 +275,9 @@ Proof.
    Case "n1 = n2".
      left. rewrite Heq. reflexivity.
    Case "n1 <> n2".
-     right. intros contra. inversion contra. apply Hneq. apply H0.
-Defined. 
+     right. intros contra. 
+     inversion contra. apply Hneq. apply H0.
+Qed. 
 
 Lemma eq_id : forall (T:Type) x (p q:T), 
               (if eq_id_dec x x then p else q) = p. 
@@ -318,25 +322,6 @@ Lemma extend_shadow : forall A (ctxt: partial_map A) t1 t2 x1 x2,
 Proof with auto.
   intros. unfold extend. destruct (eq_id_dec x2 x1)...
 Qed.
-
-(** -------------------- *)
-
-(** * Some useful tactics *)
-
-Tactic Notation "solve_by_inversion_step" tactic(t) :=  
-  match goal with  
-  | H : _ |- _ => solve [ inversion H; subst; t ] 
-  end
-  || fail "because the goal is not solvable by inversion.".
-
-Tactic Notation "solve" "by" "inversion" "1" :=
-  solve_by_inversion_step idtac.
-Tactic Notation "solve" "by" "inversion" "2" :=
-  solve_by_inversion_step (solve by inversion 1).
-Tactic Notation "solve" "by" "inversion" "3" :=
-  solve_by_inversion_step (solve by inversion 2).
-Tactic Notation "solve" "by" "inversion" :=
-  solve by inversion 1.
 
 (** $Date: 2014-12-31 12:04:02 -0500 (Wed, 31 Dec 2014) $ *)
 

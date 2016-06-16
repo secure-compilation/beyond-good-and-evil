@@ -88,7 +88,7 @@ Definition SetTop {A B : Type} (E:alt_list A B) (new:A)
    _____________________________________ *)
 
 Inductive reduction (Is:partial_program_interfaces) (E:entry_points) : 
-  state_partial_view -> state_partial_view -> trace -> Prop :=
+  state_partial_view -> state_partial_view -> action -> Prop :=
   (* T_CallRetTau+ *)
   | T_CallRetTauPlus :
     forall C C' d d' mem mem' reg reg' pc pc' o o' PE PE',
@@ -96,7 +96,7 @@ Inductive reduction (Is:partial_program_interfaces) (E:entry_points) :
       match cfg with
       | (C,d,mem,reg,pc) =>
         match decode (fetch_mem C mem pc) with
-        | Some (Call C0 P0) => Int (IntCall C0 P0) ProgramOrigin
+        | Some (Target.Call C0 P0) => Int (IntCall C0 P0) ProgramOrigin
         | Some Return => Int IntRet ProgramOrigin 
         | _ => Int IntTau ProgramOrigin
         end
@@ -159,7 +159,7 @@ Inductive reduction (Is:partial_program_interfaces) (E:entry_points) :
       (Ext (ExtRet reg) ContextOrigin)
   (* T_Call! *)
   | T_CallPrg : forall C C' P' o PE PE' mem reg pc i,
-    (fetch_mem C mem pc = i) -> (decode i = Some (Call C' P')) ->
+    (fetch_mem C mem pc = i) -> (decode i = Some (Target.Call C' P')) ->
     (component_defined C (option interface) Is = true) ->
     (match (nth C Is None) with
     | Some i => (In (C',P') (get_import i))

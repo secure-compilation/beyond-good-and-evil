@@ -1,5 +1,6 @@
 Require Export Source.
 Require Export Target.
+Require Export ClassicalLogic.
 
 (* _____________________________________ 
         COMPARTMENT MEMORY LAYOUT
@@ -345,43 +346,6 @@ Proof.
   { apply H_term1. }
   apply diverges in H_assert. destruct H_assert.
   apply H_term2. exists x. apply H.
-Qed.
-
-Axiom excluded_middle :
-  forall P, P \/ ~P.
-
-Theorem not_exists_dist :
-  forall (X:Type) (P : X -> Prop),
-    ~ (exists x, ~ P x) -> (forall x, P x).
-Proof.
-  pose excluded_middle as excl_mid.
-  intros X P H.
-  intros x.
-  assert ( P x \/ ~ P x).
-  apply excl_mid.
-  inversion H0.
-  apply H1.
-  apply ex_falso_quodlibet.
-  unfold not in H.
-  apply H.
-  unfold not in H1.
-  exists x.
-  apply H1.
-Qed.
-
-Lemma de_morgan_not_or_not :
-  forall P Q,
-  ~(~P \/ ~Q) -> P /\ Q.
-Proof.
-  intros. split.
-  - pose (excluded_middle P) as Ex_P.
-    destruct Ex_P.
-    + apply H0.
-    + exfalso. apply H. left. apply H0.
-  - pose (excluded_middle Q) as Ex_Q.
-    destruct Ex_Q.
-    + apply H0.
-    + exfalso. apply H. right. apply H0.
 Qed.
 
 Lemma LL_program_terminates_negation :

@@ -1,4 +1,4 @@
-Require Export Source.
+Require Import Source.
 
 (* _____________________________________ 
                   SYNTAX  
