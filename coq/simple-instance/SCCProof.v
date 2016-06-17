@@ -53,6 +53,12 @@ Qed.
            LEMMAS & PROPERTIES
    _____________________________________ *)
 
+Lemma app_is_cons :
+  forall {X:Type} a (l:list X), a::l = [a]++l.
+Proof.
+  intros. reflexivity.
+Qed.
+
 (* ------- Canonicalization ------- *)
 (** Already proved **)
 Lemma canonicalization :
@@ -88,6 +94,39 @@ Lemma definability :
 Proof.
 Admitted.
 
+(* ---- Nothing can follows the terminal symbol ---- *)
+Lemma trace_post_terminaison :
+  forall t a p s o,
+  ~(in_Traces_p (t++[Ext End o]++[a]) p s).
+Proof.
+  intros. intro contra.
+  destruct s as [Is comps].
+  destruct p as [[Isp mem] E].
+  unfold in_Traces_p in contra. destruct contra.
+  inversion H.
+  - symmetry in H3. apply app_eq_nil in H3.
+    destruct H3. inversion H3.
+  - symmetry in H0. apply app_eq_nil in H0.
+    destruct H0. inversion H4.
+  - symmetry in H0. apply app_eq_unit in H0.
+    destruct H0. destruct H0. inversion H4.
+    destruct H0. inversion H4.
+  - symmetry in H0. rewrite app_is_cons in H0.
+    rewrite app_assoc in H0.
+    assert ([t0; u] = [t0]++[u]). reflexivity.
+    rewrite H5 in H0. apply app_inj_tail in H0.
+    destruct H0. apply app_eq_unit in H0.
+    destruct H0; destruct H0; inversion H7.
+    + rewrite H0 in H. rewrite app_nil_l in H.
+      rewrite <- H9 in H1. rewrite <- H6 in H4.
+      inversion H1. inversion H12.
+      destruct (decode (fetch_mem C mem0 pc)).
+      * destruct i; inversion H15.
+      * inversion H15.
+      * rewrite <- H14 in H4. inversion H4. inversion H20.
+      * rewrite <- H16 in H4. inversion H4. inversion H21.
+Qed.
+
 (* ---- Compiled fully defined k yield canonical actions ---- *)
 Lemma only_yield_canonical_actions :
   forall s A t,
@@ -95,6 +134,14 @@ Lemma only_yield_canonical_actions :
     context_fully_defined s A ->
     in_Traces_a t (COMPILE_PROG A↓) s ->
     t = zetaC_t t.
+Proof.
+Admitted.
+
+(* --- Zeta preserves program's ending --- *)
+Lemma zeta_preserves_end :
+  forall t ts' o o',
+    exists ts, t = ts++[Ext End o] ->
+       zetaC_t t = ts'++[Ext End o'].
 Proof.
 Admitted.
 
@@ -279,12 +326,6 @@ Proof.
         apply H2.
 Qed.
 
-Lemma app_is_cons :
-  forall {X:Type} a (l:list X), a::l = [a]++l.
-Proof.
-  intros. reflexivity.
-Qed.
-
 Lemma zeta_linear_program :
   forall t g,
   zetaC_t (t ++ [Ext g ProgramOrigin]) =
@@ -342,38 +383,6 @@ Proof.
   intros.
   rewrite zeta_linear_program.
   reflexivity.
-Qed.
-
-Lemma trace_post_terminaison :
-  forall t a p s o,
-  ~(in_Traces_p (t++[Ext End o]++[a]) p s).
-Proof.
-  intros. intro contra.
-  destruct s as [Is comps].
-  destruct p as [[Isp mem] E].
-  unfold in_Traces_p in contra. destruct contra.
-  inversion H.
-  - symmetry in H3. apply app_eq_nil in H3.
-    destruct H3. inversion H3.
-  - symmetry in H0. apply app_eq_nil in H0.
-    destruct H0. inversion H4.
-  - symmetry in H0. apply app_eq_unit in H0.
-    destruct H0. destruct H0. inversion H4.
-    destruct H0. inversion H4.
-  - symmetry in H0. rewrite app_is_cons in H0.
-    rewrite app_assoc in H0.
-    assert ([t0; u] = [t0]++[u]). reflexivity.
-    rewrite H5 in H0. apply app_inj_tail in H0.
-    destruct H0. apply app_eq_unit in H0.
-    destruct H0; destruct H0; inversion H7.
-    + rewrite H0 in H. rewrite app_nil_l in H.
-      rewrite <- H9 in H1. rewrite <- H6 in H4.
-      inversion H1. inversion H12.
-      destruct (decode (fetch_mem C mem0 pc)).
-      * destruct i; inversion H15.
-      * inversion H15.
-      * rewrite <- H14 in H4. inversion H4. inversion H20.
-      * rewrite <- H16 in H4. inversion H4. inversion H21.
 Qed.
 
 Theorem contrapositive : forall P Q : Prop, 
