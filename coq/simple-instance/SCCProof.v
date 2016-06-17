@@ -56,7 +56,7 @@ Qed.
 (* ------- Canonicalization ------- *)
 (** Already proved **)
 Lemma canonicalization :
-  forall t s,
+  forall t s, wellformed_shape s ->
   forall P, (PROGRAM_SHAPE P ∈• s) -> 
     (program_fully_defined s P) ->
     (in_Traces_p t (COMPILE_PROG P↓) s
@@ -68,7 +68,7 @@ Admitted.
 (* ------- Definability / Trace mappping algorithm ------- *)
 (** An OCaml algorithm is available **)
 Lemma definability :
-  forall t g1 s, 
+  forall t g1 s, wellformed_shape s ->
     t = zetaC_t t /\ (exists p, (LL_PROGRAM_SHAPE p ∈• s) -> 
     in_Traces_p (t++[Ext g1 ProgramOrigin]) p s)
       ->
@@ -99,7 +99,7 @@ Proof.
 Admitted.
 
 Definition structured_full_abstraction : Prop :=
-  forall s,
+  forall s, wellformed_shape s ->
   forall P Q, 
     (PROGRAM_SHAPE P ∈• s) ->
     (PROGRAM_SHAPE Q ∈• s) ->
@@ -120,6 +120,7 @@ Definition structured_full_abstraction : Prop :=
 Definition structured_full_abstraction_aux 
   (a : Target.program) (P Q : Source.partial_program)
   (s:shape) : Prop :=
+    wellformed_shape s ->
     (PROGRAM_SHAPE P ∈• s) ->
     (PROGRAM_SHAPE Q ∈• s) ->
     (program_fully_defined s P) ->
@@ -136,7 +137,7 @@ Definition structured_full_abstraction_aux
     HIGH_NEQ AP ≁H AQ).
 
 Definition separate_compilation_correctness : Prop :=
-  forall s,
+  forall s, wellformed_shape s ->
   forall A P, 
     (CONTEXT_SHAPE A ∈∘ s) ->
     (PROGRAM_SHAPE P ∈• s) ->
@@ -364,13 +365,15 @@ Proof.
     assert ([t0; u] = [t0]++[u]). reflexivity.
     rewrite H5 in H0. apply app_inj_tail in H0.
     destruct H0. apply app_eq_unit in H0.
-    destruct H0. destruct H0. inversion H7.
-      rewrite <- H9 in H1. inversion H1.
+    destruct H0; destruct H0; inversion H7.
+    + rewrite H0 in H. rewrite app_nil_l in H.
+      rewrite <- H9 in H1. rewrite <- H6 in H4.
+      inversion H1. inversion H12.
       destruct (decode (fetch_mem C mem0 pc)).
-      destruct i; inversion H10. inversion H10.
-      rewrite <- H8 in H4. inversion H4.
-      rewrite <- H11 in H4. inversion H4.
-    destruct H0. inversion H7.
+      * destruct i; inversion H15.
+      * inversion H15.
+      * rewrite <- H14 in H4. inversion H4. inversion H20.
+      * rewrite <- H16 in H4. inversion H4. inversion H21.
 Qed.
 
 Theorem contrapositive : forall P Q : Prop, 
@@ -397,7 +400,8 @@ Lemma structured_full_abstraction_aux_proof :
   structured_full_abstraction_aux a P Q s.
 Proof.
   unfold structured_full_abstraction_aux.
-  intros a P Q s ap_terminates aq_diverges H_shP H_shQ H_PFD H_QFD.
+  intros a P Q s ap_terminates aq_diverges WF_s
+    H_shP H_shQ H_PFD H_QFD.
   (* We consider a ∈∘ s distinguishing P ∈• s and Q ∈• s *)
   intros H_a. destruct H_a as [H_sha H_low_neq].
   inversion H_low_neq as [ap aq H_behavior ap_eq aq_eq].
@@ -509,7 +513,7 @@ Proof.
   (* Let tc be the canonicalization of tp *)
   pose (tc := zetaC_t tp).
   (* tc is a trace of P↓ *)
-  pose (canonicalization (tp++Ea) s P H_shP H_PFD)
+  pose (canonicalization (tp++Ea) s WF_s P H_shP H_PFD)
     as H_canonicalization.
   destruct H_canonicalization as [H_canon1 H_canon2].
   assert (in_Traces_p (tp ++ Ea) COMPILE_PROG P ↓ s)
@@ -530,7 +534,7 @@ Proof.
     exists (COMPILE_PROG P↓). intros H_def. unfold tc.
     rewrite <- (program_Ea_immuable_to_zeta tp g1).
     rewrite <- H_g1. apply H_zeta. }
-  specialize (H_definability H_definability_premises).
+  specialize (H_definability WF_s H_definability_premises).
   destruct H_definability as 
     [A [H_shA [H_AFD [H_def1 [H_def2 H_def3]]]]].
   assert (H_sha' := H_shA).
@@ -717,21 +721,21 @@ Proof.
     (* a *)
     assert (in_Traces_p tc (COMPILE_PROG Q↓) s) as canon_a.
     { unfold tc. apply canonicalization in H_tp2.
-      apply H_tp2. apply H_shQ. apply H_QFD. }
+      apply H_tp2. apply WF_s. apply H_shQ. apply H_QFD. }
     (* b *)
     assert (in_Traces_p (zetaC_t (tp++[Ext End ProgramOrigin]))
      (COMPILE_PROG Q↓) s -> 
      in_Traces_p (tp++[Ext End ProgramOrigin]) (COMPILE_PROG Q↓) s)
      as canon_b.
     { intro. apply canonicalization in H. apply H.
-      apply H_shQ. apply H_QFD. }
+      apply WF_s. apply H_shQ. apply H_QFD. }
     (* c *)
     assert (in_Traces_p (zetaC_t (tp++[Ext g1 ProgramOrigin]))
      (COMPILE_PROG Q↓) s -> 
      in_Traces_p (tp++[Ext g1 ProgramOrigin]) (COMPILE_PROG Q↓) s)
      as canon_c.
     { intro. apply canonicalization in H. apply H.
-      apply H_shQ. apply H_QFD. }
+      apply WF_s. apply H_shQ. apply H_QFD. }
     (* We prove that Q↓ cannot perform (✓) *)
     assert (~(in_Traces_p (tc++[Ext ✓ ProgramOrigin])
       (COMPILE_PROG Q↓) s)) as cant_be_End.
@@ -870,12 +874,12 @@ Proof.
   exists A. intros. constructor. left. split.
   pose (separate_compilation_correctness_proof) as CompCorrectP.
   unfold separate_compilation_correctness in CompCorrectP.
-  specialize (CompCorrectP s A P H_shA H_shP H_PFD H_AFD).
+  specialize (CompCorrectP s WF_s A P H_shA H_shP H_PFD H_AFD).
   destruct CompCorrectP.
   apply H0 in AP_terminates. apply AP_terminates.
   pose (separate_compilation_correctness_proof) as CompCorrectQ.
   unfold separate_compilation_correctness in CompCorrectQ.
-  specialize (CompCorrectQ s A Q H_shA H_shQ H_QFD H_AFD).
+  specialize (CompCorrectQ s WF_s A Q H_shA H_shQ H_QFD H_AFD).
   destruct CompCorrectQ.
   apply H1 in AQ_diverges. apply AQ_diverges.
 Admitted.
@@ -884,7 +888,7 @@ Theorem structured_full_abstraction_proof :
   structured_full_abstraction.
 Proof.
   unfold structured_full_abstraction.
-  intros s P Q H_shP H_shQ H_PFD H_QFD.
+  intros s WF_s P Q H_shP H_shQ H_PFD H_QFD.
   intro H_a. destruct H_a as [a [H_sha H_low_neq]].
   inversion H_low_neq as [ap aq H_behavior ap_eq aq_eq].
   destruct H_behavior as [H_behavior | H_behavior].
@@ -892,12 +896,12 @@ Proof.
     pose (structured_full_abstraction_aux_proof a P Q
       s ap_terminates aq_diverges) as lemma.
     unfold structured_full_abstraction_aux in lemma.
-    apply (lemma H_shP H_shQ H_PFD H_QFD (conj H_sha H_low_neq)).
+    apply (lemma WF_s H_shP H_shQ H_PFD H_QFD (conj H_sha H_low_neq)).
   - destruct H_behavior as [ap_diverges aq_terminates].
     pose (structured_full_abstraction_aux_proof a Q P
       s aq_terminates ap_diverges) as lemma.
     unfold structured_full_abstraction_aux in lemma.
-    specialize (lemma H_shQ H_shP H_QFD H_PFD).
+    specialize (lemma WF_s H_shQ H_shP H_QFD H_PFD).
     assert ((exists A : partial_program,
       CONTEXT_SHAPE A ∈∘ s /\ context_fully_defined s A ->
       HIGH_NEQ context_application A Q
