@@ -220,7 +220,7 @@ Definition initial_trace_state (P:Target.program) :
             TRACE DUALIZATION
    _____________________________________ *)
 
-Definition dual_trace (T:full_trace) :=
+Definition dual_trace (T:trace) :=
   let f :=
     (fun alpha =>
      match alpha with
@@ -251,8 +251,8 @@ Inductive reduction_multi (Is:partial_program_interfaces) (E:entry_points) :
     reduction_multi Is E o o' [Ext Ea origin]
   (* T_Trans *)
   | T_Trans : forall o o' o'' t u,
-    reduction Is E o o' t ->
-    reduction Is E o' o'' u ->
+    reduction_multi Is E o o' [t] ->
+    reduction_multi Is E o' o'' [u] ->
     reduction_multi Is E o o'' ([t]++[u]).
 
 

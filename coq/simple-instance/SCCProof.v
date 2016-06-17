@@ -88,6 +88,16 @@ Lemma definability :
 Proof.
 Admitted.
 
+(* ---- Compiled fully defined k yield canonical actions ---- *)
+Lemma only_yield_canonical_actions :
+  forall s A t,
+    wellformed_shape s /\ CONTEXT_SHAPE A ∈∘ s ->
+    context_fully_defined s A ->
+    in_Traces_a t (COMPILE_PROG A↓) s ->
+    t = zetaC_t t.
+Proof.
+Admitted.
+
 Definition structured_full_abstraction : Prop :=
   forall s,
   forall P Q, 
@@ -183,13 +193,22 @@ Lemma twolist_posibilities :
   (t' = [t]++[u] /\ u' = []) \/
   (t' = [t] /\ u' = [u]).
 Proof.
-Admitted.
-
-Lemma reduction_eq :
-  forall Is E o o' t,
-  reduction Is E o o' t -> reduction_multi Is E o o' [t].
-Proof.
-Admitted.
+  intros. generalize dependent u'.
+  induction t'.
+  - intros. left. split.
+    + reflexivity.
+    + rewrite app_nil_l in H. symmetry. apply H.
+  - intros. induction u'.
+    + simpl. right. left. split.
+      * symmetry. rewrite app_nil_r in H. apply H.
+      * reflexivity.
+    + simpl in *. inversion H. symmetry in H2.
+      apply app_eq_unit in H2. destruct H2.
+      * right. right. destruct H0. rewrite H0.
+        split. reflexivity. apply H2.
+      * destruct H0. right. left.
+        rewrite H0. split. reflexivity. apply H2. 
+Qed.
 
 Lemma trace_sets_closed_under_prefix_program :
   forall t' t p s, (LL_PROGRAM_SHAPE p ∈• s) ->
@@ -222,7 +241,7 @@ Proof.
       * exists x. destruct H1. rewrite H6 in H0.
         rewrite app_nil_r in H0. apply H0.
       * exists o'. destruct H1. rewrite H1.
-        apply reduction_eq in H2. apply H2.
+        apply H2.
 Qed.
 
 Lemma trace_sets_closed_under_prefix_context :
@@ -230,7 +249,34 @@ Lemma trace_sets_closed_under_prefix_context :
     is_a_prefix_of t' t -> in_Traces_a t a s ->
     in_Traces_p t' a s.
 Proof.
-Admitted.
+  intros.
+  destruct a as [[Isp mem] E].
+  destruct s as [Is comps].
+  unfold is_a_prefix_of in H0.
+  destruct H0 as [trace H_t].
+  rewrite <- H_t in H1. unfold in_Traces_a in H1.
+  destruct H1. inversion H0.
+  - unfold in_Traces_a. exists o'.
+    symmetry in H4. apply app_eq_nil in H4.
+    destruct H4. rewrite H3. constructor.
+  - unfold in_Traces_a. exists o'.
+    symmetry in H1. apply app_eq_nil in H1.
+    destruct H1. rewrite H1. constructor.
+  - unfold in_Traces_a. exists o'.
+    symmetry in H1. apply app_eq_unit in H1.
+    destruct H1.
+    + destruct H1. rewrite H1. constructor.
+    + destruct H1. rewrite H1. constructor.
+      rewrite H3. apply H4.
+  - unfold in_Traces_a. apply twolist_posibilities in H1.
+    destruct H1 as [H1 | H1].
+    + exists o'. destruct H1. rewrite H1. constructor.
+    + destruct H1.
+      * exists x. destruct H1. rewrite H6 in H0.
+        rewrite app_nil_r in H0. apply H0.
+      * exists o'. destruct H1. rewrite H1.
+        apply H2.
+Qed.
 
 Lemma app_is_cons :
   forall {X:Type} a (l:list X), a::l = [a]++l.
@@ -257,7 +303,8 @@ Lemma clear_regs_aux_idempotent :
 Proof.
   induction l.
   - auto.
-  - intros k n. simpl. rewrite <- IHl. destruct (eq_nat_dec n k); auto.
+  - intros k n. simpl.
+    rewrite <- IHl. destruct (eq_nat_dec n k); auto.
 Qed.
 
 Lemma clear_regs_idempotent : 
@@ -782,7 +829,6 @@ Proof.
       apply t_comp1. intro contra.
       destruct contra as [t_contra contra].
       destruct contra as [o_contra contra].
-      rewrite contra in comp_premise.
       (* We can't have a terminating action *)
       admit.
     }
@@ -804,7 +850,7 @@ Proof.
       { apply not_forall_dist in EX2.
         destruct EX2 as [g' EX2].
         apply (double_negation_elimination 
-          (in_Traces_p (tc ++ [Ext g ProgramOrigin] ++
+          (in_Traces_a (tc ++ [Ext g ProgramOrigin] ++
           [Ext g' ContextOrigin]) (COMPILE_PROG A↓) s)) in EX2.
         specialize (H_def3 g).
         (* g = g1 or g <> g1 *)
