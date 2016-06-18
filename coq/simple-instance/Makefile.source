@@ -1,5 +1,6 @@
 -R . SimpleInstance
 
+ClassicalLogic.v
 SfLib.v
 Source.v
 Target.v
