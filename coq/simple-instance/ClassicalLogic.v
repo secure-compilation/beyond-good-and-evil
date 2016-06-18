@@ -11,6 +11,14 @@ Proof.
   - apply H in H0. contradiction.
 Qed.
 
+Theorem double_negation_insertion :
+  forall P:Prop, P -> ~~P.
+Proof.
+  intros. unfold not.
+  intro contra. apply contra in H.
+  contradiction.
+Qed.
+
 Theorem not_exists_dist :
   forall (X:Type) (P : X -> Prop),
     ~ (exists x, ~ P x) -> (forall x, P x).
@@ -66,4 +74,14 @@ Proof.
   - assert (forall x : X, P x) as Ha.
     { apply not_exists_dist. apply H0. }
     apply H in Ha. contradiction.
+Qed.
+
+Theorem contrapositive : forall P Q : Prop, 
+  (P -> Q) -> (~Q -> ~P).
+Proof.
+  intros.
+  intro contra.
+  apply H in contra.
+  apply H0 in contra.
+  contradiction.
 Qed.

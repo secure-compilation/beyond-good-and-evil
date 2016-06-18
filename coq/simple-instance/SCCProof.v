@@ -94,57 +94,6 @@ Lemma definability :
 Proof.
 Admitted.
 
-(* ---- Nothing can follows the terminal symbol ---- *)
-Lemma trace_post_terminaison :
-  forall t a p s o,
-  ~(in_Traces_p (t++[Ext End o]++[a]) p s).
-Proof.
-  intros. intro contra.
-  destruct s as [Is comps].
-  destruct p as [[Isp mem] E].
-  unfold in_Traces_p in contra. destruct contra.
-  inversion H.
-  - symmetry in H3. apply app_eq_nil in H3.
-    destruct H3. inversion H3.
-  - symmetry in H0. apply app_eq_nil in H0.
-    destruct H0. inversion H4.
-  - symmetry in H0. apply app_eq_unit in H0.
-    destruct H0. destruct H0. inversion H4.
-    destruct H0. inversion H4.
-  - symmetry in H0. rewrite app_is_cons in H0.
-    rewrite app_assoc in H0.
-    assert ([t0; u] = [t0]++[u]). reflexivity.
-    rewrite H5 in H0. apply app_inj_tail in H0.
-    destruct H0. apply app_eq_unit in H0.
-    destruct H0; destruct H0; inversion H7.
-    + rewrite H0 in H. rewrite app_nil_l in H.
-      rewrite <- H9 in H1. rewrite <- H6 in H4.
-      inversion H1. inversion H12.
-      destruct (decode (fetch_mem C mem0 pc)).
-      * destruct i; inversion H15.
-      * inversion H15.
-      * rewrite <- H14 in H4. inversion H4. inversion H20.
-      * rewrite <- H16 in H4. inversion H4. inversion H21.
-Qed.
-
-(* ---- Compiled fully defined k yield canonical actions ---- *)
-Lemma only_yield_canonical_actions :
-  forall s A t,
-    wellformed_shape s /\ CONTEXT_SHAPE A ∈∘ s ->
-    context_fully_defined s A ->
-    in_Traces_a t (COMPILE_PROG A↓) s ->
-    t = zetaC_t t.
-Proof.
-Admitted.
-
-(* --- Zeta preserves program's ending --- *)
-Lemma zeta_preserves_end :
-  forall t ts' o o',
-    exists ts, t = ts++[Ext End o] ->
-       zetaC_t t = ts'++[Ext End o'].
-Proof.
-Admitted.
-
 Definition structured_full_abstraction : Prop :=
   forall s, wellformed_shape s ->
   forall P Q, 
@@ -233,6 +182,82 @@ Hypothesis longest_prefix_of_spec :
   forall t p s,
     let u := longest_prefix_of t p s in
     (is_longest_prefix_of u t p s).
+
+(* ---- Nothing can follows the terminal symbol ---- *)
+Lemma action_post_terminaison :
+  forall t a p s o,
+  ~(in_Traces_p (t++[Ext End o]++[a]) p s).
+Proof.
+  intros. intro contra.
+  destruct s as [Is comps].
+  destruct p as [[Isp mem] E].
+  unfold in_Traces_p in contra. destruct contra.
+  inversion H.
+  - symmetry in H3. apply app_eq_nil in H3.
+    destruct H3. inversion H3.
+  - symmetry in H0. apply app_eq_nil in H0.
+    destruct H0. inversion H4.
+  - symmetry in H0. apply app_eq_unit in H0.
+    destruct H0. destruct H0. inversion H4.
+    destruct H0. inversion H4.
+  - symmetry in H0. rewrite app_is_cons in H0.
+    rewrite app_assoc in H0.
+    assert ([t0; u] = [t0]++[u]). reflexivity.
+    rewrite H5 in H0. apply app_inj_tail in H0.
+    destruct H0. apply app_eq_unit in H0.
+    destruct H0; destruct H0; inversion H7.
+    + rewrite H0 in H. rewrite app_nil_l in H.
+      rewrite <- H9 in H1. rewrite <- H6 in H4.
+      inversion H1. inversion H12.
+      destruct (decode (fetch_mem C mem0 pc)).
+      * destruct i; inversion H15.
+      * inversion H15.
+      * rewrite <- H14 in H4. inversion H4. inversion H20.
+      * rewrite <- H16 in H4. inversion H4. inversion H21.
+Qed.
+
+(* ---- Compiled fully defined k yield canonical actions ---- *)
+Lemma only_yield_canonical_actions :
+  forall s A t,
+    wellformed_shape s /\ CONTEXT_SHAPE A ∈∘ s ->
+    context_fully_defined s A ->
+    in_Traces_a t (COMPILE_PROG A↓) s ->
+    t = zetaC_t t.
+Proof.
+Admitted.
+
+Definition is_turn_of_program (t:trace) (s:shape) :=
+  match s with 
+  | (Is, comps) =>
+    (In (Some main_cid) comps /\ ev (length t))
+      \/
+    (~(In (Some main_cid) comps) /\ ~(ev (length t)))
+  end.
+
+Lemma programs_turn_contradiction :
+  forall t p s,
+  is_turn_of_program t s ->
+  (forall g, ~in_Traces_p (t++[Ext g ProgramOrigin]) p s) ->
+  (forall Ea, ~in_Traces_p (t++Ea) p s).
+Proof.
+Admitted.
+
+(*Lemma trace_sets_incoherence :
+  forall tc a b p s,
+  a <> b ->
+  in_Traces_p (tc ++ [a]) p s ->
+  in_Traces_p (tc ++ [b]) p s ->
+  False.
+Proof.
+  intros tc a b p s H_diff H_a H_b.
+  destruct p as [[Isp mem] E].
+  destruct s as [Is comps].
+  unfold in_Traces_p in H_a. unfold in_Traces_p in H_b.
+  destruct H_a as [OA H_a]. destruct H_b as [OB H_b].
+  inversion H_a; inversion H_b.
+  admit. admit. admit. admit. admit. admit. admit. admit.
+  admit. admit. 
+Admitted.*)
 
 Lemma twolist_posibilities :
   forall {X:Type} (t u : X) (t' u' : list X),
@@ -385,16 +410,6 @@ Proof.
   reflexivity.
 Qed.
 
-Theorem contrapositive : forall P Q : Prop, 
-  (P -> Q) -> (~Q -> ~P).
-Proof.
-  intros.
-  intro contra.
-  apply H in contra.
-  apply H0 in contra.
-  contradiction.
-Qed.
-
 Theorem separate_compilation_correctness_proof :
   separate_compilation_correctness.
 Proof.
@@ -461,7 +476,7 @@ Proof.
       in_Traces_a (ti ++ [Ext Ea o]) a s))) as Hassert.
     { intros. intro contra_assert. destruct contra_assert.
       rewrite H_tEnd in H0. rewrite <- app_assoc in H0.
-      apply trace_post_terminaison in H0. contradiction. }
+      apply action_post_terminaison in H0. contradiction. }
     pose (trace_composition ti s (COMPILE_PROG Q↓)
       H_shq a H_sha H_and Hassert) as t_composition.
     destruct t_composition as [t_compositionL t_compositionR].
@@ -607,7 +622,7 @@ Proof.
           [Ext Ea o]) COMPILE_PROG A ↓ s)))
         as t_composition_premise'.
       { intros. intro contra_assert. destruct contra_assert.
-        pose (trace_post_terminaison 
+        pose (action_post_terminaison 
           (tc ++ [Ext (ExtCall c p r) ProgramOrigin])
           (Ext Ea0 o0) (COMPILE_PROG P↓) s ContextOrigin)
           as H_absurd.
@@ -671,7 +686,7 @@ Proof.
           [Ext Ea o]) COMPILE_PROG A ↓ s)))
         as t_composition_premise'.
       { intros. intro contra_assert. destruct contra_assert.
-        pose (trace_post_terminaison 
+        pose (action_post_terminaison 
           (tc ++ [Ext (ExtRet r) ProgramOrigin])
           (Ext Ea0 o0) (COMPILE_PROG P↓) s ContextOrigin)
           as H_absurd.
@@ -712,7 +727,7 @@ Proof.
         as H_premise.
       { intros. intro contra_assert. destruct contra_assert.
         rewrite H_g1 in H.
-        pose (trace_post_terminaison 
+        pose (action_post_terminaison 
           tc (Ext Ea0 o0) (COMPILE_PROG P↓) s ProgramOrigin)
           as H_absurd.
         rewrite app_assoc in H_absurd.
@@ -778,7 +793,7 @@ Proof.
         ((tp ++ [Ext ✓ ProgramOrigin]) ++ [Ext Ea o]) a s)))
         as ext_premise''.
       { intros. intro contra_assert. destruct contra_assert.
-        pose (trace_post_terminaison 
+        pose (action_post_terminaison 
           tp (Ext Ea0 o0) (COMPILE_PROG Q↓) s ProgramOrigin)
           as H_absurd.
         rewrite app_assoc in H_absurd.
@@ -833,7 +848,8 @@ Proof.
          in_Traces_a (tc ++ [Ext Ea o]) COMPILE_PROG A ↓ s)))
           as comp_premise'.
       { intros. intro contra. destruct contra. destruct o0.
-        - admit.
+        - 
+            programs_turn_contradiction 
         - apply (EX1 Ea0) in H. contradiction. }
       specialize (t_composition comp_premise comp_premise').
       destruct t_composition as [t_comp1 t_comp2].
@@ -843,7 +859,12 @@ Proof.
       destruct contra as [t_contra contra].
       destruct contra as [o_contra contra].
       (* We can't have a terminating action *)
-      admit.
+      unfold tc in contra. rewrite H_g1 in H_zeta.
+      rewrite program_Ea_immuable_to_zeta in H_zeta.
+      rewrite contra in H_zeta. rewrite <- app_assoc in H_zeta.
+      apply (action_post_terminaison t_contra (Ext g1 ProgramOrigin) 
+        (COMPILE_PROG P↓) s o_contra) in H_zeta.
+      contradiction.
     }
     SCase "External action performed by Q↓".
     { apply not_forall_dist in EX1.
