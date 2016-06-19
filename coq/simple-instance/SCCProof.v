@@ -240,26 +240,10 @@ Lemma programs_turn_contradiction :
   (forall g, ~in_Traces_p (t++[Ext g ProgramOrigin]) p s) ->
   (forall Ea, ~in_Traces_p (t++Ea) p s).
 Proof.
+  intros. intro contra.
 Admitted.
 
-(*Lemma trace_sets_incoherence :
-  forall tc a b p s,
-  a <> b ->
-  in_Traces_p (tc ++ [a]) p s ->
-  in_Traces_p (tc ++ [b]) p s ->
-  False.
-Proof.
-  intros tc a b p s H_diff H_a H_b.
-  destruct p as [[Isp mem] E].
-  destruct s as [Is comps].
-  unfold in_Traces_p in H_a. unfold in_Traces_p in H_b.
-  destruct H_a as [OA H_a]. destruct H_b as [OB H_b].
-  inversion H_a; inversion H_b.
-  admit. admit. admit. admit. admit. admit. admit. admit.
-  admit. admit. 
-Admitted.*)
-
-Lemma twolist_posibilities :
+Lemma twolist_possibilities :
   forall {X:Type} (t u : X) (t' u' : list X),
   [t; u] = t' ++ u' ->
   (t' = [] /\ u' = [t]++[u]) \/
@@ -281,6 +265,40 @@ Proof.
         split. reflexivity. apply H2.
       * destruct H0. right. left.
         rewrite H0. split. reflexivity. apply H2. 
+Qed.
+
+Lemma strict_prefix_continuation :
+  forall tp ti s p,
+  is_a_prefix_of tp ti -> tp <> ti ->
+  in_Traces_p ti p s -> 
+  exists g o, is_a_prefix_of (tp++[Ext g o]) ti.
+Proof.
+  intros. unfold is_a_prefix_of in H.
+  destruct H. destruct x.
+  - rewrite app_nil_r in H. apply H0 in H. contradiction.
+  - destruct a. rewrite app_is_cons in H.
+    + exists e. exists o. unfold is_a_prefix_of.
+      exists x. rewrite app_assoc in H. apply H.
+    + destruct p as [[Isp mem] E]. destruct s as [Is comps].
+      unfold in_Traces_p in H1. destruct H1.
+      rewrite <- H in H1. rewrite app_is_cons in H1.
+      inversion H1.
+      * symmetry in H5. apply app_eq_nil in H5.
+        destruct H5. inversion H5.
+      * symmetry in H2. apply app_eq_nil in H2.
+        destruct H2. inversion H6.
+      * symmetry in H2. apply app_eq_unit in H2.
+        destruct H2.
+        { destruct H2. inversion H6. }
+        { destruct H2. inversion H6. }
+      * apply twolist_possibilities in H2.
+        destruct H2.
+        { destruct H2. rewrite H2 in H1.
+          rewrite app_nil_l in H1. inversion H1.
+          inversion H12. }
+        { destruct H2. destruct H2. inversion H7.
+          destruct H2. inversion H7. rewrite <- H9 in H6.
+          inversion H6. }
 Qed.
 
 Lemma trace_sets_closed_under_prefix_program :
@@ -307,7 +325,7 @@ Proof.
     + destruct H1. rewrite H1. constructor.
     + destruct H1. rewrite H1. constructor.
       rewrite H3. apply H4.
-  - unfold in_Traces_p. apply twolist_posibilities in H1.
+  - unfold in_Traces_p. apply twolist_possibilities in H1.
     destruct H1 as [H1 | H1].
     + exists o'. destruct H1. rewrite H1. constructor.
     + destruct H1.
@@ -341,7 +359,7 @@ Proof.
     + destruct H1. rewrite H1. constructor.
     + destruct H1. rewrite H1. constructor.
       rewrite H3. apply H4.
-  - unfold in_Traces_a. apply twolist_posibilities in H1.
+  - unfold in_Traces_a. apply twolist_possibilities in H1.
     destruct H1 as [H1 | H1].
     + exists o'. destruct H1. rewrite H1. constructor.
     + destruct H1.
@@ -351,7 +369,7 @@ Proof.
         apply H2.
 Qed.
 
-Lemma zeta_linear_program :
+Lemma program_Ea_immuable_to_zeta:
   forall t g,
   zetaC_t (t ++ [Ext g ProgramOrigin]) =
   zetaC_t t ++ [Ext g ProgramOrigin].
@@ -390,6 +408,24 @@ Proof.
   simpl. reflexivity.
 Qed.
 
+Lemma zetaC_t_linear :
+  forall t1 t2,
+    zetaC_t (t1++t2) = (zetaC_t t1) ++ (zetaC_t t2).
+Proof.
+  intros. induction t1.
+  - simpl. reflexivity.
+  - destruct a; destruct o;
+    simpl; rewrite IHt1; reflexivity.
+Qed.
+
+Lemma zetaC_t_decomposition :
+  forall t1 t2,
+    t1++t2 = (zetaC_t t1) ++ (zetaC_t t2) ->
+    t1 = zetaC_t t1 /\ t2 = zetaC_t t2.
+Proof.
+  intros. 
+Admitted.
+
 Lemma zetaC_t_idempotent :
   forall t, zetaC_t t = zetaC_t (zetaC_t t).
 Proof.
@@ -400,14 +436,17 @@ Proof.
     rewrite <- IHt; reflexivity.
 Qed.
 
-Lemma program_Ea_immuable_to_zeta :
-  forall t g1,
-  zetaC_t (t ++ [Ext g1 ProgramOrigin])
-  = zetaC_t (t) ++ [Ext g1 ProgramOrigin].
+Lemma zeta_gamma_injective :
+  forall g g',
+  zeta_gamma g <> zeta_gamma g' -> g <> g'.
 Proof.
   intros.
-  rewrite zeta_linear_program.
-  reflexivity.
+  intro contra.
+  destruct g; destruct g'; simpl in H;
+  try (inversion contra; rewrite H1 in H; rewrite H2 in H;
+  rewrite H3 in H; destruct H; reflexivity).
+  - inversion contra. rewrite H1 in H. destruct H. trivial.
+  - apply H in contra. contradiction.
 Qed.
 
 Theorem separate_compilation_correctness_proof :
@@ -495,15 +534,16 @@ Proof.
     contradiction. }
   (* There exists Ea such that tp.Ea such that tp.Ea 
      is a prefix of ti *)
-  assert (exists Ea g1 o, is_a_prefix_of (tp++Ea) ti /\ 
-    Ea = [Ext g1 o]) as Ea_exists.
-  { admit.
-    (* TODO : Use the fact that tp is a strict prefix
-      so there exists an other action following it *) }
-  destruct Ea_exists as [Ea H_EaExists].
-  destruct H_EaExists as [g1 H_EaExists].
+  assert (exists g1 o, is_a_prefix_of (tp++[Ext g1 o]) ti) as Ea_exists.
+  { pose (strict_prefix_continuation tp ti s (COMPILE_PROG P↓)
+      H_tp1 strict_prefix H_tSets1) as lemma.
+    destruct lemma as [g1 [o_origin [H_prefix']]].
+    exists g1. exists o_origin. unfold is_a_prefix_of.
+    exists H_prefix'. apply H. }
+  destruct Ea_exists as [g1 H_EaExists].
   destruct H_EaExists as [origin_Ea H_EaExists].
-  destruct H_EaExists as [H_EaExists H_g1].
+  remember [Ext g1 origin_Ea] as Ea.
+  rename HeqEa into H_g1.
   (* Ea is a program action *)
   assert (origin_Ea = ProgramOrigin)
     as H_program_action.
@@ -848,8 +888,12 @@ Proof.
          in_Traces_a (tc ++ [Ext Ea o]) COMPILE_PROG A ↓ s)))
           as comp_premise'.
       { intros. intro contra. destruct contra. destruct o0.
-        - 
-            programs_turn_contradiction 
+        - assert (is_turn_of_program tc s) as Ha.
+          { destruct s as [Is comps]. unfold is_turn_of_program.
+            admit. }
+          pose (programs_turn_contradiction tc (COMPILE_PROG Q↓) s Ha
+            EX1 [Ext Ea0 ContextOrigin]) as lemma.
+          apply lemma in H. contradiction.
         - apply (EX1 Ea0) in H. contradiction. }
       specialize (t_composition comp_premise comp_premise').
       destruct t_composition as [t_comp1 t_comp2].
@@ -894,10 +938,31 @@ Proof.
         { rewrite H in EX1. apply cant_be_g1 in EX1. contradiction. }
         SSSCase "g <> g1".
         { assert (g = zeta_gamma g /\ g1 = zeta_gamma g1) as Ha.
-          { admit. }
+          { split.
+            - pose (only_yield_canonical_actions s A
+              (tc ++ [Ext g ProgramOrigin] ++ [Ext g' ContextOrigin])
+              (conj WF_s H_shA) H_AFD) as lemma.
+              pose (zetaC_t_linear) as lemma'.
+              specialize (lemma' tc).
+              specialize (lemma' ([Ext g ProgramOrigin]++[Ext g' ContextOrigin])).
+              rewrite lemma' in lemma. clear lemma'.
+              pose (zetaC_t_linear) as lemma'.
+              specialize (lemma' [Ext g ProgramOrigin] [Ext g' ContextOrigin]).
+              rewrite lemma' in lemma. clear lemma'.
+              specialize (lemma EX2).
+              apply zetaC_t_decomposition in lemma.
+              destruct lemma as [H1 lemma]. clear H1.
+              apply zetaC_t_decomposition in lemma.
+              destruct lemma.
+              simpl in H1.
+              admit.
+            - admit.
+              (** TODO **)
+            }
           destruct Ha. rewrite H0 in H; rewrite H1 in H.
           specialize (H_def3 H g').
-          apply H_def3 in EX2. contradiction. }
+          apply H_def3 in EX2. contradiction. in contra.          
+        }
       }
     }
   }
