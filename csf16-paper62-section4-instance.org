@@ -33,16 +33,23 @@ buffers are 2nd class
 
 ** Example components that compute a factorial
 
+Examples below are provided in a human-readable syntax that best
+matches the actual syntax of the language. Please note that there is
+no formalisation of this human-readable syntax.
+
 *** Recursive computation
 
 component factorial {
+  (* every component has at least one buffer, here called "vars" *)
   buff vars = { 0 }
 
   proc main {
-    (* argument goes in vars[0] *)
+    (* procedure call argument goes in vars[0] *)
     if vars[0] <= 1 then
       1
     else
+      (* vars[0] is changed upon call but restored upon return,
+         so these updates are transparent to the programmer *)
       factorial.main(vars[0] - 1) * vars[0]
   }
 }
@@ -54,25 +61,29 @@ component factorial_buff {
 
   proc main {
     (* argument goes in vars[0] *)
-    vars[1] := 1;
+    (* we use vars[1] as an accumulator variable storing (n * ... * i) *)
+    vars[1] := vars[0];
     factorial_buff.aux(vars[0])
   }
 
   private proc aux {
-    vars[1] := vars[1] * vars[0];
-    vars[0] := vars[0] - 1;
     if vars[0] <= 1 then
       vars[1]
     else
-      factorial_buff.aux(vars[0])
+      begin
+        vars[1] := vars[1] * (vars[0] - 1);
+        factorial_buff.aux(vars[0] - 1)
+      end
   }
 }
 
 *** Integration in an actual program
 
+(* the starting component has a special name "main" *)
 component main {
   buff vars = { 0 }
 
+  (* execution starts in the first procedure, here called "main" *)
   proc main {
     (* argument goes in vars[0] *)
     factorial_buff.main(2)
@@ -80,7 +91,7 @@ component main {
 }
 
 ** Encoding variables with buffers
-- vars = 0                 – the first buffer used to store variables
+- vars =def 0              – the first buffer used to store variables
 - x  =def  vars[x]         – variable lookup becomes buffer lookup
 - x:=e  =def  vars[x] := e – variable assignment becomes buffer update
 
@@ -321,11 +332,6 @@ I(φ) ::= (main, s[main,0,0 ↦ 0], [], [], φ[main].procs[0])
         s = { κ₀.name,b ↦ κ₀.bufs[b] | b ∈ dom(κ₀.bufs) } ⊎ ... ⊎
               { κₙ.name,b ↦ κₙ.bufs[b] | b ∈ dom(κₙ.bufs) }
 
-AAA: Why do we have to initialize the argument of main to zero here?
-Couldn't we just assume that main initializes its own argument?
-YJ: Yes we could. Do you think that would be simpler? Doesn't make a
-big difference to me.
-
 Final configurations:
   (C,s, σ, K, exit) final  (Final_Exit)
   (C,s,[],[],    i) final  (Final_Value)
@@ -366,17 +372,6 @@ i ≠ 0
 
 Δ ⊢ (C, s, (C',iₐ,K) :: σ, [], i) → (C', s[C',0,0 ↦ iₐ], σ, K, i)   (S_Return)
 
-AAA: This last rule seems wrong. Shouldn't the final state be s[C,0,0 ↦ iₐ]
-instead (that is, replacing C' by C)? In the current version, we
-restore the argument slot of the caller, but C_Call_Pop saves the
-argument slot of the callee. It is also inconsistent with the use of
-S_Return in the factorial example below.
-YJ: No, C is the callee and C' is the caller (contrary to the previous
-rule). We are giving back control to the caller and restoring its
-argument.
-YJ: In S_Call_Pop C denotes the caller, so this rule saves the
-argument slot of the caller, not the callee: s[C,0,0].
-
 Note: At this level we don't need to enforce interfaces in the
 operational semantics. The interface is syntactically extracted from
 the code, so the code trivially respects the interface (this can be
@@ -401,100 +396,6 @@ the left of ⊢).
 *** Lemma (Determinism)
 ∀ cfg Δ.
   Δ ⊢ cfg → cfg₁ ∧ Δ ⊢ cfg → cfg₂ ⇒ cfg₁ = cfg₂
-
-** Examples : operational semantics reductions
-
-*** Small-step reduction
-
-Initial configuration:
-(main, s, [], [], factorial_buff.main(2))
-  where s[main,0] = [ 0 ]
-        s[factorial_buff,0] = [ 0, 0 ]
-
-Then:
-
-S_Call_Push
-(main, s, [], factorial_buff.main(□) :: [], 2)
-
-S_Call_Pop
-(factorial_buff, s', (main,0,[]) :: [], [],
-  (vars[1] := 1; factorial_buff.aux(vars[0])))
-  where s'[main,0] = [ 0 ]
-        s'[factorial_buff,0] = [ 2, 0 ]
-
-S_BinOp_Push
-(factorial_buff, s', (main,0,[]) :: [],
-(□;factorial_buff.aux(vars[0])) :: [], vars[1] := 1)
-
-S_Write_Push
-(factorial_buff, s', (main,0,[]) :: [],
-vars[□] := 1 :: (□;factorial_buff.aux(vars[0])) :: [], 1)
-
-S_Write_Swap
-(factorial_buff, s', (main,0,[]) :: [],
-vars[1] := □ :: (□;factorial_buff.aux(vars[0])) :: [], 1)
-
-S_Write_Pop
-(factorial_buff, s'', (main,0,[]) :: [],
-(□;factorial_buff.aux(vars[0])) :: [], 1)
-  where s'' = s'[factorial_buff,vars,1 ↦ 1]
-     ie s''[main,0] = [ 0 ]
-        s''[factorial_buff,0] = [ 2, 1 ]
-
-S_BinOp_Switch
-(factorial_buff, s'', (main,0,[]) :: [],
-(1;□) :: [], factorial_buff.aux(vars[0]))
-
-S_Call_Push
-(factorial_buff, s'', (main,0,[]) :: [],
-(factorial_buff.aux(□)) :: (1;□) :: [], vars[0])
-
-S_Read_Push
-(factorial_buff, s'', (main,0,[]) :: [],
-(vars[□]) :: (factorial_buff.aux(□) :: (1;□) :: [], 0)
-
-S_Read_Pop
-(factorial_buff, s'', (main,0,[]) :: [],
-(factorial_buff.aux(□) :: (1;□) :: [], s''[factorial_buff, vars, 0])
-    where s''[factorial_buff, vars, 0] = 2
-
-S_Call_Pop
-(factorial_buff, s'',
- (factorial_buff,0,(1;□) :: [])) ::
-   (main,0,[]) ::
-   [], [], e)
-where e =
-    (vars[1] := vars[1] * vars[0];
-    vars[0] := vars[0] - 1;
-    if vars[0] <= 1 then
-      vars[1]
-    else
-      factorial_buff.aux(vars[0]))
-
-      .
-      .
-      .
-
-(factorial_buff, s''',
- (factorial_buff,0,(1;□) :: [])) ::
-   (main,0,[]) ::
-   [], [], 2)
-   where s'''[main,0] = [ 0 ]
-         s'''[factorial_buff,0] = [ 1, 2 ]
-
-Finally:
-
-S_Return
-(factorial_buff, s4, (main,0,[]) :: [], (1;□) :: [], 2)
-where s4[main,0] = [ 0 ]
-      s4[factorial_buff,0] = [ 0, 2 ]
-
-S_Binop_Pop
-(factorial_buff, s4, (main,0,[]) :: [], [], 2)
-    since (1;2) = 2
-
-S_Return
-(main, s4, [], [], 2)
 
 ** Preservation and partial progress
 
@@ -577,14 +478,14 @@ bufsin(E) ⊆ [0,η.bnum)                           – all used buffers are def
 —————————————————————————————————————————————————
 ψ; Γ ⊢ (C, s, σ, K, e) well formed
 
-*** Lemma I(φ) produces well-formed configuration if φ is well-formed.
+*** Lemma: I(φ) produces well-formed configuration if φ is well-formed.
 
 ∀φ.  φ well formed ⇒
   let ψ = interfaceof(φ) in
   let Γ = wfinv(φ) in
   ψ; Γ ⊢ I(φ) well formed
 
-*** Assumption (partial progress)
+*** Lemma: Partial progress (proved in Coq auxiliary material)
 
 For any well-formed configuration cfg one of the following holds:
 1. cfg is a final configuration (value or exit)
@@ -611,7 +512,7 @@ i ∉ {0, ..., n}
 ——————————————————————————————————— Undef_Store
 (C, s, σ, b[i] := □ :: K, i') undef
 
-*** Assumption (preservation)
+*** Lemma: Preservation (proved in Coq auxiliary material)
 
 Formally:
   ∀ φ. φ well formed ⇒
@@ -818,7 +719,6 @@ Here are all stuck states:
 They all correspond to easily detectable errors
 - they could lead to error states if needed
 
-
 * Structured full abstraction instance
 ** Cross-level shapes
 
@@ -945,7 +845,7 @@ Let P A. Assume A[P] is undefined, i.e. I(A[P]) →* cfg where cfg is a
 stuck state. The current component in cfg must be in either A or P;
 however, by full definedness, neither case is possible. Contradiction.
 
-**** Lemma: Fully-defined opponents are enough to trigger any undefined behavior
+**** Assumption: Fully-defined opponents are enough to trigger any undefined behavior
 
 ∀ s,
 ∀ P ∈• s, ∀ A ∈∘ s,
@@ -961,7 +861,11 @@ however, by full definedness, neither case is possible. Contradiction.
      P' ∈• s ∧ P' fully defined wrt. contexts of shape ∘s ∧
        I(A[P']) →* cfg' ∧ cfg' stuck
 
-Proof of first property (second is symmetric):
+Proof sketch for first property (second is symmetric):
+
+  Note: the simulation relation proposed below doesn't work. We
+  provide the sketch for intuition only, but it cannot prove the
+  property as is.
 
 We defined a mapping FD(A) that takes and arbirtrary context A to a
 fully defined context and a statement "φ ⊢ cfg rewrites to cfg'" that
@@ -1103,6 +1007,12 @@ BUFADDR(κ,b) when b < κ.bnum = BUFADDR(κ,b-1) + length(κ.bufs[b-1])
 EXTERNALENTRY(κ,0) = BUFADDR(κ, κ.bnum-1) + length(κ.bufs[κ.bnum-1])
 EXTERNALENTRY(κ,P) when P < κ.pnum = EXTERNALENTRY(κ,P-1) + length(code)
   where code = (κ, P - 1)↓
+
+  Note: length(code((κ, P)↓)) should be computed without actually
+        compiling the code. The length of the code does not depend on
+        the values provided by macro functions. The actual code
+        however does, and an attempt to compute it here would lead to
+        an infinite recursion.
 
 INTERNALENTRY(κ,P) when P < κ.pnum = EXTERNALENTRY(κ,P) + 3
 
@@ -1333,12 +1243,6 @@ We define a labeled reduction of the form:
 E — external entry points for the *program components* only
 ψ – interfaces for *all components* (both player and opponent)
 both defined as in the low-level semantics
-
-AAA: I am a little bit confused by the type of E. Is it a set of
-procedure identifiers C.P? Or is it a set of component identifiers C?
-YJ: Neither. It is morally a map from procedure identifiers C.P to
-integers. Currently, it is formally a map from Cs to maps from Ps to
-integers (not sure why; could change this).
 
 Note: the set of program components is dom(E)
                  context components is dom(ψ)∖dom(E)
@@ -1912,11 +1816,6 @@ in which t = erase(T).
                     Eα                   Eα⁻¹
      ∃Eα. ψ; Eₚ ⊢ Pθ → Aθ'  ∧  ψ; Eₐ ⊢ Aθ → Pθ'
        ∧  Eₚ ⊢ Aθ' well formed  ∧  Eₐ ⊢ Pθ' well formed)
-
-AAA: Same here; would it be possible to recover one side of the lemma
-from the other by symmetry?
-YJ: For this one I would need further detail on where you see a
-symmetry here.
 
 **** Proof
 
@@ -2526,22 +2425,6 @@ Qed.
 **** Proofs
 
 ***** Intermediate and terminating trace composition lemmas
-
-Apply internal trace recovery to
-             t
-  ψ; Eₚ ⊢ Pθ ⇒ θ'ₚ
-and
-            t⁻¹
-  ψ; Eₚ ⊢ Aθ ⇒ θ'ₐ
-to get
-  (Tₚ=αₚ₁...αₚₙ) (θₚ₀...θₚₙ₊₁) (Tₐ=αₐ₁...αₐₘ) (θₐ₀...θₐₘ₊₁)
-such that
-    θₚ₀ = Pθ ∧ θₚₙ₊₁ = θ'ₚ ∧ erase(Tₚ) = t ∧
-    θₐ₀ = Pθ ∧ θₐₘ₊₁ = θ'ₐ ∧ erase(Tₐ) = t⁻¹ ∧
-                  αₚᵢ
-    ∀i.  ψ; E ⊢ θᵢ → θᵢ₊₁
-                  αₐⱼ
-    ∀j.  ψ; E ⊢ θⱼ → θⱼ₊₁
 
 *** Trace decomposition lemma
 
