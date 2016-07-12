@@ -417,6 +417,18 @@ Proof.
     H H0). contradiction.
 Qed.
 
+Theorem cdiverges_cterminates_opposition :
+  forall p,
+  (~cprogram_diverges p) -> (cprogram_terminates p).
+Proof.
+  intros.
+  pose (excluded_middle (cprogram_terminates p)) as EM.
+  destruct EM.
+  - apply H0.
+  - pose (LL_program_behavior_exclusion' p
+    H0 H). contradiction.
+Qed.
+
 
 (* _____________________________________ 
           PROOF : CORRECTNESS

@@ -7,7 +7,7 @@
     all the examples and false starts in those files. *)
 
 (** Some proofs are taken from the GitHub page of
-    Blob, BlindFS and Haklabbeograd **)
+    BlindFS and Haklabbeograd **)
 
 (** * From the Coq Standard Library *)
 

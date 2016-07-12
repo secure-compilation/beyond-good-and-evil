@@ -234,6 +234,24 @@ Definition is_turn_of_program (t:trace) (s:shape) :=
     (~(In (Some main_cid) comps) /\ ~(ev (length t)))
   end.
 
+Lemma program_turn_lead_to_programs_origin :
+  forall t p s,
+  LL_PROGRAM_SHAPE p ∈• s ->
+  is_turn_of_program t s ->
+  in_Traces_p t p s ->
+  (forall g o, in_Traces_p (t++[Ext g o]) p s ->
+  o = ProgramOrigin).
+Proof.
+Admitted.
+
+Lemma program_turn :
+  forall t p s,
+  LL_PROGRAM_SHAPE p ∈• s ->
+  (exists g, in_Traces_p (t++[Ext g ContextOrigin]) p s) ->
+  is_turn_of_program t s.
+Proof.
+Admitted.
+
 Lemma programs_turn_contradiction :
   forall t p s,
   is_turn_of_program t s ->
@@ -241,6 +259,20 @@ Lemma programs_turn_contradiction :
   (forall Ea, ~in_Traces_p (t++Ea) p s).
 Proof.
   intros. intro contra.
+Admitted.
+
+Lemma origin_repetition_contradiction :
+  forall p t g g' o s,
+  LL_PROGRAM_SHAPE p ∈• s ->
+  ~in_Traces_p (t++[Ext g o]++[Ext g' o]) p s.
+Proof.
+Admitted.
+
+Lemma zeta_preserves_turn :
+  forall t s,
+  is_turn_of_program t s <->
+  is_turn_of_program (zetaC_t t) s.
+Proof.
 Admitted.
 
 Lemma twolist_possibilities :
@@ -417,14 +449,6 @@ Proof.
   - destruct a; destruct o;
     simpl; rewrite IHt1; reflexivity.
 Qed.
-
-Lemma zetaC_t_decomposition :
-  forall t1 t2,
-    t1++t2 = (zetaC_t t1) ++ (zetaC_t t2) ->
-    t1 = zetaC_t t1 /\ t2 = zetaC_t t2.
-Proof.
-  intros. 
-Admitted.
 
 Lemma zetaC_t_idempotent :
   forall t, zetaC_t t = zetaC_t (zetaC_t t).
@@ -889,8 +913,9 @@ Proof.
           as comp_premise'.
       { intros. intro contra. destruct contra. destruct o0.
         - assert (is_turn_of_program tc s) as Ha.
-          { destruct s as [Is comps]. unfold is_turn_of_program.
-            admit. }
+          { pose (program_turn tc (COMPILE_PROG Q↓) s H_shq) as lemma.
+            apply lemma. exists Ea0. apply H.
+          }
           pose (programs_turn_contradiction tc (COMPILE_PROG Q↓) s Ha
             EX1 [Ext Ea0 ContextOrigin]) as lemma.
           apply lemma in H. contradiction.
@@ -917,14 +942,48 @@ Proof.
         (in_Traces_p (tc ++ [Ext g ProgramOrigin])
           COMPILE_PROG Q ↓ s)) in EX1.
       (* Either the context produces an action or it doesn't *)
-      pose (excluded_middle (forall g', ~in_Traces_p
+      pose (excluded_middle (forall g', ~in_Traces_a
         (tc++[Ext g ProgramOrigin]++[Ext g' ContextOrigin])
         (COMPILE_PROG A↓) s)) as EX2.
       destruct EX2 as [EX2 | EX2].
       SSCase "No external action produced by the context".
-      { admit.
+      { pose (trace_composition (tc ++ [Ext g ProgramOrigin])) as t_comp.
+        specialize (t_comp s (COMPILE_PROG Q↓) H_shq).
+        specialize (t_comp (COMPILE_PROG A↓) H_sha').
+        assert (in_Traces_p (tc ++ [Ext g ProgramOrigin]) COMPILE_PROG Q ↓ s /\
+          in_Traces_a (tc ++ [Ext g ProgramOrigin]) COMPILE_PROG A ↓ s) as t_comp_pre.
+        { split.
+          - apply EX1.
+          - pose (trace_extensibility tc s g (COMPILE_PROG Q↓) H_shq
+              (COMPILE_PROG A↓) H_sha') as t_ext.
+            destruct t_ext as [t_ext1 t_ext2].
+            clear t_ext1.
+            specialize (t_ext2 (conj H_def1 EX1)).
+            apply t_ext2.
+        }
+        specialize (t_comp t_comp_pre).
+        destruct t_comp as [t_comp1 t_comp2].
+        { intros Ea0 o0. intro contra. destruct contra.
+          destruct o0.
+          - rewrite <- app_assoc in H0. apply (EX2 Ea0) in H0.
+            contradiction.
+          - rewrite <- app_assoc in H.
+            apply (origin_repetition_contradiction (COMPILE_PROG Q↓)
+              tc g Ea0 ProgramOrigin s H_shq) in H.
+            contradiction.
+        }
+        clear t_comp2.
+        apply contrapositive in t_comp1.
+        - apply cterminates_cdiverges_opposition in t_comp1.
+          apply t_comp1.
+        - intro contra. destruct contra as [t'' [o'' H_contra]].
+          apply app_inj_tail in H_contra. destruct H_contra.
+          inversion H0.
+          rewrite H2 in EX1.
+          apply cant_be_End in EX1.
+          contradiction.
       }
-      SSCase "External action procued by the context".
+      SSCase "External action produced by the context".
       { apply not_forall_dist in EX2.
         destruct EX2 as [g' EX2].
         apply (double_negation_elimination 
@@ -939,29 +998,12 @@ Proof.
         SSSCase "g <> g1".
         { assert (g = zeta_gamma g /\ g1 = zeta_gamma g1) as Ha.
           { split.
-            - pose (only_yield_canonical_actions s A
-              (tc ++ [Ext g ProgramOrigin] ++ [Ext g' ContextOrigin])
-              (conj WF_s H_shA) H_AFD) as lemma.
-              pose (zetaC_t_linear) as lemma'.
-              specialize (lemma' tc).
-              specialize (lemma' ([Ext g ProgramOrigin]++[Ext g' ContextOrigin])).
-              rewrite lemma' in lemma. clear lemma'.
-              pose (zetaC_t_linear) as lemma'.
-              specialize (lemma' [Ext g ProgramOrigin] [Ext g' ContextOrigin]).
-              rewrite lemma' in lemma. clear lemma'.
-              specialize (lemma EX2).
-              apply zetaC_t_decomposition in lemma.
-              destruct lemma as [H1 lemma]. clear H1.
-              apply zetaC_t_decomposition in lemma.
-              destruct lemma.
-              simpl in H1.
-              admit.
-            - admit.
-              (** TODO **)
-            }
+            admit.
+            admit.
+          }
           destruct Ha. rewrite H0 in H; rewrite H1 in H.
           specialize (H_def3 H g').
-          apply H_def3 in EX2. contradiction. in contra.          
+          apply H_def3 in EX2. contradiction.
         }
       }
     }
