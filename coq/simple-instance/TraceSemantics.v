@@ -350,7 +350,7 @@ Fixpoint zetaP_t (t:trace) : trace :=
   | [] => []
   | (Ext g ProgramOrigin)::t' => 
     (zetaP_Ea (Ext g ProgramOrigin))::(zetaP_t t')
-  | h::t' => h :: (zetaC_t t')
+  | h::t' => h :: (zetaP_t t')
   end.
 
 Fixpoint zetaP_T (T:trace) : trace :=
