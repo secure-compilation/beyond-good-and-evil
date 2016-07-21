@@ -53,6 +53,20 @@ Proof.
     + exfalso. apply H. right. apply H0.
 Qed.
 
+Lemma de_morgan_not_or_not' :
+  forall P Q,
+  ~(P \/ Q) -> ~P /\ ~Q.
+Proof.
+  intros. unfold not in H.
+  split.
+  - intro contra.
+    assert (P \/ Q). left; apply contra.
+    apply H in H0; contradiction.
+  - intro contra.
+    assert (P \/ Q). right; apply contra.
+    apply H in H0. contradiction.
+Qed.
+
 Theorem dist_not_exists : forall (X:Type) (P : X -> Prop),
   (forall x, P x) -> ~ (exists x, ~ P x).
 Proof.
