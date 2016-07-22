@@ -217,12 +217,21 @@ Proof.
 Qed.
 
 (* ---- Compiled fully defined k yield canonical actions ---- *)
-Lemma only_yield_canonical_actions :
+Lemma only_yield_canonical_actions_context :
   forall s A t,
     wellformed_shape s /\ CONTEXT_SHAPE A ∈∘ s ->
     context_fully_defined s A ->
     in_Traces_a t (COMPILE_PROG A↓) s ->
     t = zetaC_t t.
+Proof.
+Admitted.
+
+Lemma only_yield_canonical_actions_program :
+  forall s P t,
+    wellformed_shape s /\ PROGRAM_SHAPE P ∈• s ->
+    program_fully_defined s P ->
+    in_Traces_p t (COMPILE_PROG P↓) s ->
+    t = zetaP_t t.
 Proof.
 Admitted.
 
@@ -247,7 +256,7 @@ Admitted.
 Lemma program_turn :
   forall t p s,
   LL_PROGRAM_SHAPE p ∈• s ->
-  (exists g, in_Traces_p (t++[Ext g ContextOrigin]) p s) ->
+  (exists g, in_Traces_p (t++[Ext g ProgramOrigin]) p s) ->
   is_turn_of_program t s.
 Proof.
 Admitted.
@@ -446,8 +455,18 @@ Lemma zetaC_t_linear :
 Proof.
   intros. induction t1.
   - simpl. reflexivity.
-  - destruct a; destruct o;
-    simpl; rewrite IHt1; reflexivity.
+  - destruct a; destruct o; simpl;
+    rewrite IHt1; reflexivity.
+Qed.
+
+Lemma zetaP_t_linear :
+  forall t1 t2,
+    zetaP_t (t1++t2) = (zetaP_t t1) ++ (zetaP_t t2).
+Proof.
+  intros. induction t1.
+  - simpl. reflexivity.
+  - destruct a; destruct o; simpl;
+    rewrite IHt1; reflexivity.
 Qed.
 
 Lemma zetaC_t_idempotent :
@@ -471,6 +490,19 @@ Proof.
   rewrite H3 in H; destruct H; reflexivity).
   - inversion contra. rewrite H1 in H. destruct H. trivial.
   - apply H in contra. contradiction.
+Qed.
+
+Lemma zetaP_t_gamma_extraction :
+  forall t1 g,
+  zetaP_t (t1++[Ext g ProgramOrigin]) = t1 ++ [Ext g ProgramOrigin] ->
+  zeta_gamma g = g.
+Proof.
+  intros.
+  rewrite zetaP_t_linear in H.
+  simpl in H. apply app_inj_tail in H.
+  destruct H. inversion H0.
+  rewrite <- zeta_gamma_idempotent.
+  reflexivity.
 Qed.
 
 Theorem separate_compilation_correctness_proof :
@@ -913,8 +945,12 @@ Proof.
           as comp_premise'.
       { intros. intro contra. destruct contra. destruct o0.
         - assert (is_turn_of_program tc s) as Ha.
-          { pose (program_turn tc (COMPILE_PROG Q↓) s H_shq) as lemma.
-            apply lemma. exists Ea0. apply H.
+          { apply H_canon2 in H_zeta. rewrite H_g1 in H_zeta.
+            pose (program_turn tp (COMPILE_PROG P↓) s H_shp) as lemma.
+            pose (zeta_preserves_turn tp s) as lemma2.
+            destruct lemma2 as [lemma2 lemma2'].
+            unfold tc. apply lemma2.
+            apply lemma. exists g1. apply H_zeta.
           }
           pose (programs_turn_contradiction tc (COMPILE_PROG Q↓) s Ha
             EX1 [Ext Ea0 ContextOrigin]) as lemma.
@@ -991,17 +1027,41 @@ Proof.
           [Ext g' ContextOrigin]) (COMPILE_PROG A↓) s)) in EX2.
         specialize (H_def3 g).
         (* g = g1 or g <> g1 *)
-        pose (excluded_middle (g = g1)) as EX3.
-        destruct EX3.
+        pose (excluded_middle (g = g1 \/ g = End \/ g1 = End)) as EX3.
+        destruct EX3 as [EX3 | EX3].
         SSSCase "g = g1".
-        { rewrite H in EX1. apply cant_be_g1 in EX1. contradiction. }
+        { destruct EX3.
+          - rewrite H in EX1. apply cant_be_g1 in EX1. contradiction.
+          - destruct H.
+            + rewrite H in EX2.
+              apply (action_post_terminaison tc (Ext g' ContextOrigin) 
+                (COMPILE_PROG A↓) s ProgramOrigin) in EX2.
+              contradiction.
+            + rewrite H_g1 in H_zeta. rewrite H in H_zeta.
+              rewrite program_Ea_immuable_to_zeta in H_zeta.
+              fold tc in H_zeta.
+              admit.
+        }
         SSSCase "g <> g1".
-        { assert (g = zeta_gamma g /\ g1 = zeta_gamma g1) as Ha.
+        { apply de_morgan_not_or_not' in EX3. destruct EX3.
+          apply de_morgan_not_or_not' in H0. destruct H0.
+          assert (g = zeta_gamma g /\ g1 = zeta_gamma g1) as Ha.
           { split.
-            admit.
-            admit.
+            - pose (only_yield_canonical_actions_program s Q
+                (tc ++ [Ext g ProgramOrigin]) (conj WF_s H_shQ)
+                H_QFD EX1) as lemma.
+              symmetry in lemma.
+              apply zetaP_t_gamma_extraction in lemma.
+              symmetry. apply lemma.
+            - apply H_def2 in H1. apply H_canon2 in H_zeta.
+              rewrite H_g1 in H_zeta.
+              pose (only_yield_canonical_actions_program s P
+                (tp ++ [Ext g1 ProgramOrigin]) (conj WF_s H_shP) H_PFD H_zeta) as lemma.
+              symmetry in lemma.
+              apply zetaP_t_gamma_extraction in lemma.
+              symmetry. apply lemma.
           }
-          destruct Ha. rewrite H0 in H; rewrite H1 in H.
+          destruct Ha. rewrite H2 in H; rewrite H3 in H.
           specialize (H_def3 H g').
           apply H_def3 in EX2. contradiction.
         }
