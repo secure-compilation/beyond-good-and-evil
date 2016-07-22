@@ -1027,24 +1027,18 @@ Proof.
           [Ext g' ContextOrigin]) (COMPILE_PROG A↓) s)) in EX2.
         specialize (H_def3 g).
         (* g = g1 or g <> g1 *)
-        pose (excluded_middle (g = g1 \/ g = End \/ g1 = End)) as EX3.
+        pose (excluded_middle (g = g1 \/ g = End)) as EX3.
         destruct EX3 as [EX3 | EX3].
         SSSCase "g = g1".
         { destruct EX3.
           - rewrite H in EX1. apply cant_be_g1 in EX1. contradiction.
-          - destruct H.
-            + rewrite H in EX2.
-              apply (action_post_terminaison tc (Ext g' ContextOrigin) 
-                (COMPILE_PROG A↓) s ProgramOrigin) in EX2.
+          - rewrite H in EX2.
+            apply (action_post_terminaison tc (Ext g' ContextOrigin) 
+              (COMPILE_PROG A↓) s ProgramOrigin) in EX2.
               contradiction.
-            + rewrite H_g1 in H_zeta. rewrite H in H_zeta.
-              rewrite program_Ea_immuable_to_zeta in H_zeta.
-              fold tc in H_zeta.
-              admit.
         }
         SSSCase "g <> g1".
         { apply de_morgan_not_or_not' in EX3. destruct EX3.
-          apply de_morgan_not_or_not' in H0. destruct H0.
           assert (g = zeta_gamma g /\ g1 = zeta_gamma g1) as Ha.
           { split.
             - pose (only_yield_canonical_actions_program s Q
@@ -1053,7 +1047,7 @@ Proof.
               symmetry in lemma.
               apply zetaP_t_gamma_extraction in lemma.
               symmetry. apply lemma.
-            - apply H_def2 in H1. apply H_canon2 in H_zeta.
+            - apply H_canon2 in H_zeta.
               rewrite H_g1 in H_zeta.
               pose (only_yield_canonical_actions_program s P
                 (tp ++ [Ext g1 ProgramOrigin]) (conj WF_s H_shP) H_PFD H_zeta) as lemma.
@@ -1061,7 +1055,7 @@ Proof.
               apply zetaP_t_gamma_extraction in lemma.
               symmetry. apply lemma.
           }
-          destruct Ha. rewrite H2 in H; rewrite H3 in H.
+          destruct Ha. rewrite H1 in H; rewrite H2 in H.
           specialize (H_def3 H g').
           apply H_def3 in EX2. contradiction.
         }
@@ -1079,7 +1073,7 @@ Proof.
   specialize (CompCorrectQ s WF_s A Q H_shA H_shQ H_QFD H_AFD).
   destruct CompCorrectQ.
   apply H1 in AQ_diverges. apply AQ_diverges.
-Admitted.
+Qed.
 
 Theorem structured_full_abstraction_proof :
   structured_full_abstraction.
