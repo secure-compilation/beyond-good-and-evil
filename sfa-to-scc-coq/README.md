@@ -2,7 +2,7 @@
 A Coq proof accompanying the "Beyond Good and Evil" paper
 =========================================================
 
-This proof shows that Structured Full Abstraction instantiated to
+This Coq proof shows that Structured Full Abstraction instantiated to
 components implies Secure Compartmentalizing Compilation (Theorem 3.4
 in the "Beyond Good and Evil" paper).
 
