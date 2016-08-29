@@ -10,7 +10,8 @@ This repository contains auxiliary materials for the following paper:
 In particular, these materials include:
 - `sfa-to-scc-coq`: a Coq proof for Theorem 3.4 showing that structured full abstraction
   instantiated to components implies Secure Compartmentalizing Compilation (SCC)
-- `simple-instance.org`and `simple-instance-coq`:
-  technical details and proofs for the SCC instance from Section 4, both on paper and in Coq
+- `simple-instance.org`and `simple-instance-coq`: technical details
+  and proofs showing that the simple compiler from Section 4 satisfies SCC
+  (both on paper and in Coq)
 - `trace-mapping-testing`: a trace mapping algorithm in OCaml using property-based testing
   to check the Definability assumption from Section 4
