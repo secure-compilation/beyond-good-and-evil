@@ -8,7 +8,7 @@ This repository contains auxiliary materials for the following paper:
   IEEE Computer Society Press, July 2016. Technical report https://arxiv.org/abs/1602.04503
 
 In particular, these materials include:
-- `sfa-to-scc-coq`: a Coq proof for Theorem 3.4 showing that structured full abstraction
+- `sfa-to-scc-coq`: a Coq proof for Theorem 3.4 showing that Structured Full Abstraction
   instantiated to components implies Secure Compartmentalizing Compilation (SCC)
 - `simple-instance.org`and `simple-instance-coq`: technical details
   and proofs showing that the simple compiler from Section 4 satisfies SCC
