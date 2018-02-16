@@ -15,3 +15,5 @@ In particular, these materials include:
   (both on paper and in Coq)
 - `trace-mapping-testing`: a trace mapping algorithm in OCaml using property-based testing
   to check the Definability assumption from Section 4
+
+The code in this repository is licensed under the Apache License, Version 2.0 (see `LICENSE`)
